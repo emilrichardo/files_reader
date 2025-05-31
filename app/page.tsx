@@ -4,23 +4,27 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Plus, FileText, Clock, ArrowRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { useApp } from "@/contexts/app-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { mockDocuments } from "@/lib/mock-data"
 import type { Document } from "@/lib/types"
 
 export default function HomePage() {
   const { user } = useAuth()
+  const { documents } = useApp()
   const [recentDocuments, setRecentDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Simular carga de documentos recientes
+    // Simular carga y obtener documentos recientes
     setTimeout(() => {
-      setRecentDocuments(mockDocuments.slice(0, 3))
+      const recent = documents
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 3)
+      setRecentDocuments(recent)
       setLoading(false)
-    }, 800)
-  }, [])
+    }, 500)
+  }, [documents])
 
   if (!user) {
     return (
@@ -78,7 +82,7 @@ export default function HomePage() {
               <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{mockDocuments.length} Documentos</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{documents.length} Documentos</h3>
               <p className="text-gray-600 text-sm">Total de documentos en tu espacio de trabajo</p>
             </CardContent>
           </Card>
@@ -89,7 +93,9 @@ export default function HomePage() {
                 <Clock className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Actividad Reciente</h3>
-              <p className="text-gray-600 text-sm">Última actualización hoy</p>
+              <p className="text-gray-600 text-sm">
+                {documents.length > 0 ? "Última actualización hoy" : "Sin actividad reciente"}
+              </p>
             </CardContent>
           </Card>
         </div>
