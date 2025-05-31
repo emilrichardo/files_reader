@@ -20,7 +20,7 @@ import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
 export default function CreateDocumentPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { addDocument, addTemplate, templates } = useApp()
+  const { addDocument, addTemplate, templates, addRowToDocument } = useApp()
   const { user } = useAuth()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
 
@@ -236,13 +236,30 @@ export default function CreateDocumentPage() {
     try {
       setIsSaving(true)
 
-      const documentId = addDocument({
+      // Asegurarse de que todos los campos tengan IDs válidos
+      const processedFields = fields.map((field, index) => ({
+        ...field,
+        id: field.id || Date.now().toString() + index,
+        order: index,
+      }))
+
+      // Crear el documento en la base de datos
+      const documentId = await addDocument({
         name: documentTitle,
         description,
         user_id: user?.id || "demo-user",
-        fields: fields.map((field, index) => ({ ...field, order: index })),
-        rows,
+        fields: processedFields,
       })
+
+      // Si hay filas, agregarlas una por una
+      if (rows.length > 0) {
+        for (const row of rows) {
+          await addRowToDocument(documentId, {
+            ...row,
+            document_id: documentId,
+          })
+        }
+      }
 
       toast({
         title: "Documento creado",

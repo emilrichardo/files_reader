@@ -22,19 +22,22 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
+// Mejorar la función updateUserSettings para asegurar que los cambios de color persistan
+
+// Reemplazar la función updateUserSettings actual con esta versión mejorada:
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>) => {
   try {
     console.log("Updating user settings for user:", userId, settings)
 
-    const { data, error } = await supabase
-      .from("user_settings")
-      .upsert({
-        user_id: userId,
-        ...settings,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+    // Asegurarse de que el objeto de configuración tenga la estructura correcta
+    const settingsToUpdate = {
+      user_id: userId,
+      ...settings,
+      updated_at: new Date().toISOString(),
+    }
+
+    // Usar upsert para crear o actualizar según sea necesario
+    const { data, error } = await supabase.from("user_settings").upsert(settingsToUpdate).select()
 
     if (error) {
       console.error("Supabase error updating user settings:", error)

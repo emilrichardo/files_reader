@@ -240,6 +240,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme_settings", JSON.stringify(settings))
   }, [settings, isLoaded])
 
+  // Modificar la función updateSettings para asegurar que los cambios persistan en Supabase
+
+  // Reemplazar la función updateSettings actual con esta versión mejorada:
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("Updating settings:", updates)
     const updatedSettings = { ...settings, ...updates, updated_at: new Date().toISOString() }
