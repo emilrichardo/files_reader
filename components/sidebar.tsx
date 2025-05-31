@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, FileText, Plus, Layout, Settings, LogIn, LogOut, Menu, X } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { useTheme } from "@/contexts/theme-context"
 import { Button } from "@/components/ui/button"
 
 const navigation = [
@@ -19,6 +20,32 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const { user, signIn, signOut } = useAuth()
+  const { companyLogo, logoType, primaryColor, isDark, projectName } = useTheme()
+
+  const renderLogo = () => {
+    if (companyLogo) {
+      return (
+        <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-white">
+          <img
+            src={companyLogo || "/placeholder.svg"}
+            alt="Company Logo"
+            className="w-full h-full object-contain"
+            onError={(e) => {
+              // Si hay error cargando la imagen, mostrar el logo por defecto
+              console.error("Error loading logo:", e)
+            }}
+          />
+        </div>
+      )
+    } else {
+      // Logo por defecto
+      return (
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+          <FileText className="w-5 h-5 text-white" />
+        </div>
+      )
+    }
+  }
 
   return (
     <>
@@ -32,19 +59,19 @@ export default function Sidebar() {
       {/* Sidebar */}
       <div
         className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-40 w-64 bg-background border-r border-border transform transition-transform duration-300 ease-in-out
         lg:translate-x-0 lg:static lg:inset-0
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
+          <div className="flex items-center justify-center h-16 px-4 border-b border-border">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-black to-gray-800 rounded-lg flex items-center justify-center">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">DocManager</span>
+              {renderLogo()}
+              <span className="text-xl font-bold text-foreground truncate" title={projectName}>
+                {projectName}
+              </span>
             </div>
           </div>
 
@@ -58,8 +85,11 @@ export default function Sidebar() {
                   href={item.href}
                   className={`
                     flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                    ${isActive ? "bg-black text-white shadow-sm" : "text-gray-700 hover:bg-gray-100"}
+                    ${
+                      isActive ? "text-white shadow-sm" : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    }
                   `}
+                  style={isActive ? { backgroundColor: primaryColor } : {}}
                   onClick={() => setIsOpen(false)}
                 >
                   <item.icon className="w-5 h-5 mr-3" />
@@ -70,18 +100,18 @@ export default function Sidebar() {
           </nav>
 
           {/* User section */}
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-border">
             {user ? (
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-gray-700">{user.email?.[0]?.toUpperCase()}</span>
+                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-muted-foreground">{user.email?.[0]?.toUpperCase()}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {user.user_metadata?.name || user.email}
                     </p>
-                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={signOut} className="w-full">
@@ -90,7 +120,7 @@ export default function Sidebar() {
                 </Button>
               </div>
             ) : (
-              <Button onClick={signIn} className="w-full bg-black hover:bg-gray-800 text-white">
+              <Button onClick={signIn} className="w-full text-white" style={{ backgroundColor: primaryColor }}>
                 <LogIn className="w-4 h-4 mr-2" />
                 Sign In with Google
               </Button>

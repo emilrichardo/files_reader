@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/contexts/auth-context"
 import { AppProvider } from "@/contexts/app-context"
+import { ThemeProvider } from "@/contexts/theme-context"
 import Sidebar from "@/components/sidebar"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -23,17 +24,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider>
-          <AppProvider>
-            <div className="flex h-screen bg-gray-50">
-              <Sidebar />
-              <main className="flex-1 overflow-auto lg:ml-0">
-                <div className="lg:pl-0 pl-0">{children}</div>
-              </main>
-            </div>
-            <Toaster />
-          </AppProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <AppProvider>
+              <div className="flex h-screen bg-background">
+                <Sidebar />
+                <main className="flex-1 overflow-auto lg:ml-0">
+                  <div className="lg:pl-0 pl-0">{children}</div>
+                </main>
+              </div>
+              <Toaster />
+            </AppProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

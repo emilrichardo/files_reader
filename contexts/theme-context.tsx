@@ -1,0 +1,273 @@
+"use client"
+
+import type React from "react"
+import { createContext, useContext, useEffect, useState } from "react"
+import type { UserSettings } from "@/lib/types"
+
+interface ThemeContextType {
+  settings: UserSettings
+  updateSettings: (updates: Partial<UserSettings>) => void
+  isDark: boolean
+  toggleTheme: () => void
+  primaryColor: string
+  companyLogo: string | null
+  logoType: string | null
+  projectName: string
+  updateProjectName: (name: string) => void
+  updateLogo: (file: File) => Promise<void>
+  removeLogo: () => void
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
+
+const STORAGE_KEY = "docmanager_user_settings"
+
+const defaultSettings: UserSettings = {
+  id: "1",
+  user_id: "demo-user",
+  project_name: "DocManager",
+  api_endpoint: "",
+  api_keys: {
+    openai: "",
+    google_vision: "",
+    supabase: "",
+  },
+  theme: "light",
+  color_scheme: "black",
+  company_logo: "",
+  company_logo_type: undefined,
+  updated_at: new Date().toISOString(),
+}
+
+const colorSchemes = {
+  black: "#000000",
+  blue: "#3b82f6",
+  green: "#10b981",
+  purple: "#8b5cf6",
+  red: "#ef4444",
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings)
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  // Cargar configuraciones del localStorage al inicializar
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem(STORAGE_KEY)
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings)
+        // Asegurar que el project_name existe para configuraciones antiguas
+        if (!parsed.project_name) {
+          parsed.project_name = "DocManager"
+        }
+        setSettings(parsed)
+      }
+    } catch (error) {
+      console.error("Error loading theme settings:", error)
+    }
+    setIsLoaded(true)
+  }, [])
+
+  // Aplicar tema cuando cambie
+  useEffect(() => {
+    if (!isLoaded) return
+
+    const root = document.documentElement
+
+    // Aplicar tema oscuro/claro
+    if (settings.theme === "dark") {
+      root.classList.add("dark")
+    } else {
+      root.classList.remove("dark")
+    }
+
+    // Aplicar color primario
+    const primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
+
+    // Actualizar variables CSS personalizadas
+    root.style.setProperty("--primary-color", primaryColor)
+    root.style.setProperty("--primary-rgb", hexToRgb(primaryColor))
+
+    // Actualizar variables CSS de shadcn/ui para el color primario
+    if (settings.theme === "dark") {
+      root.style.setProperty("--primary", rgbToHsl(hexToRgb(primaryColor)))
+      root.style.setProperty("--primary-foreground", "0 0% 98%")
+    } else {
+      root.style.setProperty("--primary", rgbToHsl(hexToRgb(primaryColor)))
+      root.style.setProperty("--primary-foreground", "0 0% 98%")
+    }
+
+    // Actualizar el título de la página
+    document.title = `${settings.project_name} - Document Management System`
+
+    // Guardar configuraciones en localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+  }, [settings, isLoaded])
+
+  const updateSettings = (updates: Partial<UserSettings>) => {
+    setSettings((prev) => ({
+      ...prev,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }))
+  }
+
+  const toggleTheme = () => {
+    updateSettings({
+      theme: settings.theme === "light" ? "dark" : "light",
+    })
+  }
+
+  const updateLogo = async (file: File): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // Validar tipo de archivo
+      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/svg+xml"]
+      if (!allowedTypes.includes(file.type)) {
+        reject(new Error("Formato de archivo no soportado. Use JPG, PNG o SVG."))
+        return
+      }
+
+      // Validar tamaño (máximo 5MB)
+      const maxSize = 5 * 1024 * 1024 // 5MB
+      if (file.size > maxSize) {
+        reject(new Error("El archivo es demasiado grande. Máximo 5MB."))
+        return
+      }
+
+      const reader = new FileReader()
+
+      reader.onload = (e) => {
+        const result = e.target?.result as string
+        if (result) {
+          // Determinar el tipo de logo basado en el tipo MIME
+          let logoType: "jpg" | "png" | "svg"
+          switch (file.type) {
+            case "image/jpeg":
+            case "image/jpg":
+              logoType = "jpg"
+              break
+            case "image/png":
+              logoType = "png"
+              break
+            case "image/svg+xml":
+              logoType = "svg"
+              break
+            default:
+              logoType = "png"
+          }
+
+          setSettings((prev) => ({
+            ...prev,
+            company_logo: result,
+            company_logo_type: logoType,
+            updated_at: new Date().toISOString(),
+          }))
+          resolve()
+        } else {
+          reject(new Error("Error al leer el archivo"))
+        }
+      }
+
+      reader.onerror = () => {
+        reject(new Error("Error al leer el archivo"))
+      }
+
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const updateProjectName = (name: string) => {
+    const newName = name.trim() || "DocManager"
+    setSettings((prev) => ({
+      ...prev,
+      project_name: newName,
+      updated_at: new Date().toISOString(),
+    }))
+  }
+
+  const removeLogo = () => {
+    setSettings((prev) => ({
+      ...prev,
+      company_logo: "",
+      company_logo_type: undefined,
+      updated_at: new Date().toISOString(),
+    }))
+  }
+
+  const isDark = settings.theme === "dark"
+  const primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
+  const companyLogo = settings.company_logo || null
+  const logoType = settings.company_logo_type || null
+  const projectName = settings.project_name || "DocManager"
+
+  return (
+    <ThemeContext.Provider
+      value={{
+        settings,
+        updateSettings,
+        isDark,
+        toggleTheme,
+        primaryColor,
+        companyLogo,
+        logoType,
+        projectName,
+        updateProjectName,
+        updateLogo,
+        removeLogo,
+      }}
+    >
+      {children}
+    </ThemeContext.Provider>
+  )
+}
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext)
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider")
+  }
+  return context
+}
+
+// Funciones auxiliares para conversión de colores
+function hexToRgb(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return "0, 0, 0"
+
+  const r = Number.parseInt(result[1], 16)
+  const g = Number.parseInt(result[2], 16)
+  const b = Number.parseInt(result[3], 16)
+
+  return `${r}, ${g}, ${b}`
+}
+
+function rgbToHsl(rgb: string): string {
+  const [r, g, b] = rgb.split(", ").map((x) => Number.parseInt(x) / 255)
+
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  let h = 0
+  let s = 0
+  const l = (max + min) / 2
+
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0)
+        break
+      case g:
+        h = (b - r) / d + 2
+        break
+      case b:
+        h = (r - g) / d + 4
+        break
+    }
+    h /= 6
+  }
+
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
+}

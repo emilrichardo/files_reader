@@ -55,10 +55,12 @@ export interface Template {
 export interface UserSettings {
   id: string
   user_id: string
+  project_name: string // Nuevo campo para el nombre del proyecto
   api_endpoint?: string
   api_keys: Record<string, string>
   theme: "light" | "dark"
   color_scheme: string
   company_logo?: string
+  company_logo_type?: "jpg" | "png" | "svg" // Nuevo campo para el tipo de logo
   updated_at: string
 }

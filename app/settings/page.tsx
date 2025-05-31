@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Save, Upload, X, Plus, Eye, EyeOff } from "lucide-react"
+import { useState } from "react"
+import { Save, Upload, X, Plus, Eye, EyeOff, Edit, Check, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,24 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import type { UserSettings } from "@/lib/types"
-
-const STORAGE_KEY = "docmanager_user_settings"
-
-const defaultSettings: UserSettings = {
-  id: "1",
-  user_id: "demo-user",
-  api_endpoint: "",
-  api_keys: {
-    openai: "",
-    google_vision: "",
-    supabase: "",
-  },
-  theme: "light",
-  color_scheme: "black",
-  company_logo: "",
-  updated_at: new Date().toISOString(),
-}
+import { useTheme } from "@/contexts/theme-context"
+import DebugTheme from "@/components/debug-theme"
 
 const colorSchemes = [
   { value: "black", label: "Negro", color: "#000000" },
@@ -43,57 +26,33 @@ const colorSchemes = [
 export default function SettingsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [settings, setSettings] = useState<UserSettings>(defaultSettings)
+  const {
+    settings,
+    updateSettings,
+    isDark,
+    toggleTheme,
+    primaryColor,
+    projectName,
+    updateProjectName,
+    updateLogo,
+    removeLogo,
+    companyLogo,
+    logoType,
+  } = useTheme()
+
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({})
   const [newApiKeyName, setNewApiKeyName] = useState("")
   const [newApiKeyValue, setNewApiKeyValue] = useState("")
   const [isAddingApiKey, setIsAddingApiKey] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isEditingProjectName, setIsEditingProjectName] = useState(false)
+  const [tempProjectName, setTempProjectName] = useState(projectName)
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
-  // Cargar configuraciones del localStorage
-  useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem(STORAGE_KEY)
-      if (savedSettings) {
-        setSettings(JSON.parse(savedSettings))
-        toast({
-          title: "Configuraciones cargadas",
-          description: "Se han cargado tus configuraciones guardadas.",
-        })
-      }
-    } catch (error) {
-      console.error("Error loading settings:", error)
-    }
-  }, [toast])
-
-  // Aplicar tema cuando cambie
-  useEffect(() => {
-    // Aplicar tema oscuro/claro al documento
-    if (settings.theme === "dark") {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
-
-    // Aplicar esquema de colores (esto requeriría actualizar las variables CSS)
-    // Esta es una implementación simplificada
-    const root = document.documentElement
-    const scheme = colorSchemes.find((s) => s.value === settings.color_scheme)
-    if (scheme) {
-      root.style.setProperty("--primary", scheme.color)
-    }
-  }, [settings.theme, settings.color_scheme])
-
-  // Guardar configuraciones en localStorage
+  // Guardar configuraciones
   const saveSettings = async () => {
     try {
       setIsSaving(true)
-      const updatedSettings = {
-        ...settings,
-        updated_at: new Date().toISOString(),
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSettings))
-      setSettings(updatedSettings)
 
       // Simular una operación asíncrona
       await new Promise((resolve) => setTimeout(resolve, 500))
@@ -114,21 +73,28 @@ export default function SettingsPage() {
     }
   }
 
-  const updateSetting = (key: keyof UserSettings, value: any) => {
-    setSettings((prev) => ({
-      ...prev,
-      [key]: value,
-    }))
+  const handleProjectNameSave = () => {
+    console.log("Saving project name:", tempProjectName)
+    updateProjectName(tempProjectName)
+    setIsEditingProjectName(false)
+    toast({
+      title: "Nombre actualizado",
+      description: "El nombre del proyecto ha sido actualizado.",
+    })
+  }
+
+  const handleProjectNameCancel = () => {
+    setTempProjectName(projectName)
+    setIsEditingProjectName(false)
   }
 
   const updateApiKey = (keyName: string, value: string) => {
-    setSettings((prev) => ({
-      ...prev,
+    updateSettings({
       api_keys: {
-        ...prev.api_keys,
+        ...settings.api_keys,
         [keyName]: value,
       },
-    }))
+    })
   }
 
   const addNewApiKey = () => {
@@ -154,10 +120,9 @@ export default function SettingsPage() {
   const removeApiKey = (keyName: string) => {
     const newApiKeys = { ...settings.api_keys }
     delete newApiKeys[keyName]
-    setSettings((prev) => ({
-      ...prev,
+    updateSettings({
       api_keys: newApiKeys,
-    }))
+    })
     toast({
       title: "API Key eliminada",
       description: `La API key "${keyName}" ha sido eliminada.`,
@@ -171,19 +136,59 @@ export default function SettingsPage() {
     }))
   }
 
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("handleLogoUpload called")
     const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        updateSetting("company_logo", result)
-        toast({
-          title: "Logo subido",
-          description: "El logo de la empresa ha sido actualizado.",
-        })
+    if (!file) {
+      console.log("No file selected")
+      return
+    }
+
+    console.log("File selected:", file.name, file.type, file.size)
+
+    try {
+      setIsUploadingLogo(true)
+      console.log("Starting logo upload...")
+      await updateLogo(file)
+      console.log("Logo upload successful")
+      toast({
+        title: "Logo actualizado",
+        description: `El logo ha sido actualizado exitosamente (${file.type}).`,
+      })
+    } catch (error) {
+      console.error("Logo upload error:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al subir el logo.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploadingLogo(false)
+      // Limpiar el input para permitir subir el mismo archivo nuevamente
+      if (event.target) {
+        event.target.value = ""
       }
-      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveLogo = () => {
+    removeLogo()
+    toast({
+      title: "Logo eliminado",
+      description: "El logo de la empresa ha sido eliminado.",
+    })
+  }
+
+  const getLogoTypeLabel = (type: string | null) => {
+    switch (type) {
+      case "jpg":
+        return "JPG"
+      case "png":
+        return "PNG"
+      case "svg":
+        return "SVG"
+      default:
+        return "Imagen"
     }
   }
 
@@ -192,11 +197,132 @@ export default function SettingsPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración</h1>
-          <p className="text-gray-600">Personaliza tu experiencia y configura integraciones</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Configuración</h1>
+          <p className="text-muted-foreground">Personaliza tu experiencia y configura integraciones</p>
         </div>
 
+        {/* Debug component - remove in production */}
+        <DebugTheme />
+
         <div className="space-y-8">
+          {/* Project Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Configuración del Proyecto</CardTitle>
+              <CardDescription>Personaliza la información básica de tu proyecto</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Project Name */}
+              <div>
+                <Label>Nombre del Proyecto</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Este nombre aparecerá en el sidebar y título de la página
+                </p>
+                <div className="flex items-center space-x-2">
+                  {isEditingProjectName ? (
+                    <>
+                      <Input
+                        value={tempProjectName}
+                        onChange={(e) => setTempProjectName(e.target.value)}
+                        placeholder="Nombre del proyecto..."
+                        className="flex-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleProjectNameSave()
+                          if (e.key === "Escape") handleProjectNameCancel()
+                        }}
+                        autoFocus
+                      />
+                      <Button size="icon" variant="outline" onClick={handleProjectNameSave}>
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="outline" onClick={handleProjectNameCancel}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1 p-2 border border-border rounded-md bg-muted/50">
+                        <span className="text-foreground font-medium">{projectName}</span>
+                      </div>
+                      <Button size="icon" variant="outline" onClick={() => setIsEditingProjectName(true)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Company Logo */}
+              <div>
+                <Label>Logo de la Empresa</Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Sube el logo de tu empresa (JPG, PNG o SVG - máximo 5MB)
+                </p>
+                <div className="flex items-start space-x-4">
+                  {companyLogo && (
+                    <div className="flex flex-col items-center space-y-2">
+                      <div className="w-20 h-20 border border-border rounded-lg overflow-hidden bg-white flex items-center justify-center">
+                        <ImageIcon
+                          src={companyLogo || "/placeholder.svg"}
+                          alt="Company Logo"
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                      <div className="text-xs text-muted-foreground text-center">{getLogoTypeLabel(logoType)}</div>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="flex flex-wrap gap-2">
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/svg+xml"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                          id="logo-upload"
+                          disabled={isUploadingLogo}
+                          key={Date.now()} // Forzar re-render del input
+                        />
+                        <label htmlFor="logo-upload">
+                          <Button
+                            variant="outline"
+                            className="cursor-pointer"
+                            disabled={isUploadingLogo}
+                            type="button"
+                            asChild
+                          >
+                            <span>
+                              <Upload className="w-4 h-4 mr-2" />
+                              {isUploadingLogo ? "Subiendo..." : companyLogo ? "Cambiar Logo" : "Subir Logo"}
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+                      {companyLogo && (
+                        <Button
+                          variant="ghost"
+                          onClick={handleRemoveLogo}
+                          className="text-red-600 hover:text-red-700"
+                          disabled={isUploadingLogo}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Eliminar
+                        </Button>
+                      )}
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      <p>• Formatos soportados: JPG, PNG, SVG</p>
+                      <p>• Tamaño máximo: 5MB</p>
+                      <p>• Recomendado: 200x200px o mayor</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Profile Section */}
           <Card>
             <CardHeader>
@@ -205,12 +331,12 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gray-300 rounded-full flex items-center justify-center">
-                  <span className="text-xl font-medium text-gray-700">{user?.email?.[0]?.toUpperCase()}</span>
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+                  <span className="text-xl font-medium text-muted-foreground">{user?.email?.[0]?.toUpperCase()}</span>
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{user?.name || user?.email}</h3>
-                  <p className="text-sm text-gray-600">{user?.email}</p>
+                  <h3 className="font-medium text-foreground">{user?.name || user?.email}</h3>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
             </CardContent>
@@ -229,11 +355,11 @@ export default function SettingsPage() {
                 <Input
                   id="api-endpoint"
                   value={settings.api_endpoint}
-                  onChange={(e) => updateSetting("api_endpoint", e.target.value)}
+                  onChange={(e) => updateSettings({ api_endpoint: e.target.value })}
                   placeholder="https://api.ejemplo.com/process"
                   className="mt-1"
                 />
-                <p className="text-sm text-gray-500 mt-1">URL del endpoint POST para procesar archivos</p>
+                <p className="text-sm text-muted-foreground mt-1">URL del endpoint POST para procesar archivos</p>
               </div>
 
               <Separator />
@@ -241,7 +367,7 @@ export default function SettingsPage() {
               {/* API Keys */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium text-gray-900">API Keys</h4>
+                  <h4 className="font-medium text-foreground">API Keys</h4>
                   <Button variant="outline" size="sm" onClick={() => setIsAddingApiKey(true)} className="text-sm">
                     <Plus className="w-4 h-4 mr-1" />
                     Agregar API Key
@@ -288,7 +414,7 @@ export default function SettingsPage() {
 
                   {/* Add new API key form */}
                   {isAddingApiKey && (
-                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <div className="p-4 border border-border rounded-lg bg-muted/50">
                       <div className="space-y-3">
                         <div>
                           <Label htmlFor="new-api-name">Nombre de la API</Label>
@@ -312,7 +438,12 @@ export default function SettingsPage() {
                           />
                         </div>
                         <div className="flex space-x-2">
-                          <Button size="sm" onClick={addNewApiKey} className="bg-black hover:bg-gray-800 text-white">
+                          <Button
+                            size="sm"
+                            onClick={addNewApiKey}
+                            className="text-white"
+                            style={{ backgroundColor: primaryColor }}
+                          >
                             Agregar
                           </Button>
                           <Button
@@ -346,12 +477,9 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Modo Oscuro</Label>
-                  <p className="text-sm text-gray-500">Activa el tema oscuro de la aplicación</p>
+                  <p className="text-sm text-muted-foreground">Activa el tema oscuro de la aplicación</p>
                 </div>
-                <Switch
-                  checked={settings.theme === "dark"}
-                  onCheckedChange={(checked) => updateSetting("theme", checked ? "dark" : "light")}
-                />
+                <Switch checked={isDark} onCheckedChange={toggleTheme} />
               </div>
 
               <Separator />
@@ -359,8 +487,11 @@ export default function SettingsPage() {
               {/* Color Scheme */}
               <div>
                 <Label>Esquema de Colores</Label>
-                <p className="text-sm text-gray-500 mb-3">Selecciona el color principal de la aplicación</p>
-                <Select value={settings.color_scheme} onValueChange={(value) => updateSetting("color_scheme", value)}>
+                <p className="text-sm text-muted-foreground mb-3">Selecciona el color principal de la aplicación</p>
+                <Select
+                  value={settings.color_scheme}
+                  onValueChange={(value) => updateSettings({ color_scheme: value })}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -376,57 +507,17 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <Separator />
-
-              {/* Company Logo */}
-              <div>
-                <Label>Logo de la Empresa</Label>
-                <p className="text-sm text-gray-500 mb-3">Sube el logo de tu empresa</p>
-                <div className="flex items-center space-x-4">
-                  {settings.company_logo && (
-                    <div className="w-16 h-16 border border-gray-200 rounded-lg overflow-hidden">
-                      <img
-                        src={settings.company_logo || "/placeholder.svg"}
-                        alt="Company Logo"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                      id="logo-upload"
-                    />
-                    <label htmlFor="logo-upload">
-                      <Button variant="outline" className="cursor-pointer">
-                        <Upload className="w-4 h-4 mr-2" />
-                        {settings.company_logo ? "Cambiar Logo" : "Subir Logo"}
-                      </Button>
-                    </label>
-                    {settings.company_logo && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => updateSetting("company_logo", "")}
-                        className="ml-2 text-red-600"
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Eliminar
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
 
           {/* Save Button */}
           <div className="flex justify-end">
-            <Button onClick={saveSettings} className="bg-black hover:bg-gray-800 text-white" disabled={isSaving}>
+            <Button
+              onClick={saveSettings}
+              className="text-white"
+              style={{ backgroundColor: primaryColor }}
+              disabled={isSaving}
+            >
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Guardando..." : "Guardar Configuración"}
             </Button>
