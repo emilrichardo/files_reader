@@ -18,31 +18,33 @@ import { useAuth } from "@/contexts/auth-context"
 interface AppContextType {
   documents: Document[]
   templates: Template[]
-  addDocument: (doc: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => string
+  addDocument: (doc: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => Promise<string>
   getDocument: (id: string) => Document | undefined
-  updateDocument: (id: string, updates: Partial<Document>) => void
-  deleteDocument: (id: string) => void
-  addRowToDocument: (documentId: string, row: DocumentRow) => void
-  updateDocumentRow: (documentId: string, rowId: string, data: Record<string, any>) => void
-  deleteDocumentRow: (documentId: string, rowId: string) => void
+  updateDocument: (id: string, updates: Partial<Document>) => Promise<void>
+  deleteDocument: (id: string) => Promise<void>
+  addRowToDocument: (documentId: string, row: DocumentRow) => Promise<void>
+  updateDocumentRow: (documentId: string, rowId: string, data: Record<string, any>) => Promise<void>
+  deleteDocumentRow: (documentId: string, rowId: string) => Promise<void>
   addTemplate: (template: Omit<Template, "id" | "created_at">) => string
   deleteTemplate: (id: string) => void
   loading: boolean
+  refreshDocuments: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextType>({
   documents: [],
   templates: [],
-  addDocument: () => "",
+  addDocument: async () => "",
   getDocument: () => undefined,
-  updateDocument: () => {},
-  deleteDocument: () => {},
-  addRowToDocument: () => {},
-  updateDocumentRow: () => {},
-  deleteDocumentRow: () => {},
+  updateDocument: async () => {},
+  deleteDocument: async () => {},
+  addRowToDocument: async () => {},
+  updateDocumentRow: async () => {},
+  deleteDocumentRow: async () => {},
   addTemplate: () => "",
   deleteTemplate: () => {},
   loading: true,
+  refreshDocuments: async () => {},
 })
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -51,37 +53,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [templates, setTemplates] = useState<Template[]>(mockTemplates)
   const [loading, setLoading] = useState(true)
 
+  // Función para refrescar documentos
+  const refreshDocuments = async () => {
+    if (user) {
+      try {
+        const { data, error } = await getDocuments(user.id)
+        if (error) {
+          console.error("Error loading documents:", error)
+          setDocuments(mockDocuments)
+        } else if (data) {
+          console.log("Documents refreshed:", data)
+          setDocuments(data)
+        }
+      } catch (error) {
+        console.error("Error in refreshDocuments:", error)
+        setDocuments(mockDocuments)
+      }
+    } else {
+      setDocuments(mockDocuments)
+    }
+  }
+
   // Cargar documentos cuando el usuario cambia
   useEffect(() => {
     const loadDocuments = async () => {
-      if (user) {
-        setLoading(true)
-        try {
-          const { data, error } = await getDocuments(user.id)
-          if (error) {
-            console.error("Error loading documents:", error)
-            setDocuments(mockDocuments)
-          } else if (data) {
-            console.log("Documents loaded:", data)
-            setDocuments(data)
-          }
-        } catch (error) {
-          console.error("Error in loadDocuments:", error)
-          setDocuments(mockDocuments)
-        } finally {
-          setLoading(false)
-        }
-      } else {
-        // Usuario no autenticado, usar datos mock
-        setDocuments(mockDocuments)
-        setLoading(false)
-      }
+      setLoading(true)
+      await refreshDocuments()
+      setLoading(false)
     }
 
     loadDocuments()
   }, [user])
 
-  const addDocument = async (docData: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => {
+  const addDocument = async (docData: Omit<Document, "id" | "created_at" | "updated_at" | "rows">): Promise<string> => {
     const now = new Date().toISOString()
 
     try {
@@ -111,6 +115,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         setDocuments((prev) => [newDoc, ...prev])
+        console.log("Document created successfully:", newDoc)
         return newDoc.id
       } else {
         // Modo offline/demo
@@ -166,6 +171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : doc,
         ),
       )
+      console.log("Document updated successfully")
     } catch (error) {
       console.error("Error in updateDocument:", error)
       // Actualizar solo en el estado local como fallback
@@ -196,6 +202,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // Eliminar del estado local
       setDocuments((prev) => prev.filter((doc) => doc.id !== id))
+      console.log("Document deleted successfully")
     } catch (error) {
       console.error("Error in deleteDocument:", error)
       // Eliminar solo del estado local como fallback
@@ -206,7 +213,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addRowToDocument = async (documentId: string, row: DocumentRow) => {
     try {
       const document = getDocument(documentId)
-      if (!document) return
+      if (!document) {
+        console.error("Document not found:", documentId)
+        return
+      }
+
+      let finalRow = { ...row }
 
       if (user) {
         // Guardar en la base de datos
@@ -222,7 +234,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         // Usar el ID devuelto por la base de datos
         if (data) {
-          row = { ...row, id: data.id }
+          finalRow = { ...row, id: data.id }
         }
       }
 
@@ -230,15 +242,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setDocuments((prev) =>
         prev.map((doc) => {
           if (doc.id === documentId) {
-            return {
+            const updatedDoc = {
               ...doc,
-              rows: [...doc.rows, row],
+              rows: [...doc.rows, finalRow],
               updated_at: new Date().toISOString(),
             }
+            console.log("Row added to document:", updatedDoc)
+            return updatedDoc
           }
           return doc
         }),
       )
+      console.log("Row added successfully to document:", documentId)
     } catch (error) {
       console.error("Error in addRowToDocument:", error)
       // Actualizar solo en el estado local como fallback
@@ -263,8 +278,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!document) return
 
       if (user) {
-        // Actualizar en la base de datos
-        // Implementar la función en lib/database.ts si es necesario
+        // Actualizar en la base de datos si es necesario
+        // Implementar función en lib/database.ts si se requiere
       }
 
       // Actualizar en el estado local
@@ -280,6 +295,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return doc
         }),
       )
+      console.log("Row updated successfully")
     } catch (error) {
       console.error("Error in updateDocumentRow:", error)
       // Actualizar solo en el estado local como fallback
@@ -325,6 +341,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return doc
         }),
       )
+      console.log("Row deleted successfully")
     } catch (error) {
       console.error("Error in deleteDocumentRow:", error)
       // Eliminar solo del estado local como fallback
@@ -373,6 +390,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addTemplate,
         deleteTemplate,
         loading,
+        refreshDocuments,
       }}
     >
       {children}

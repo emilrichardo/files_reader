@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Save, Plus, Trash2, Upload, FileText, Edit, Check, X } from "lucide-react"
+import { Save, Plus, Trash2, Upload, FileText, Edit, Check, X, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,8 +20,8 @@ import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
 export default function CreateDocumentPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { addDocument, addTemplate, templates, addRowToDocument } = useApp()
-  const { user } = useAuth()
+  const { addDocument, addRowToDocument, templates } = useApp()
+  const { user, signInWithGoogle } = useAuth()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
 
   // Estados principales
@@ -47,6 +47,7 @@ export default function CreateDocumentPage() {
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
   // Funciones para el título
   const handleTitleSave = () => {
@@ -213,6 +214,12 @@ export default function CreateDocumentPage() {
   const saveDocument = async () => {
     if (isSaving || isSaved) return
 
+    // Verificar si el usuario está autenticado
+    if (!user) {
+      setShowLoginPrompt(true)
+      return
+    }
+
     // Validaciones
     if (!documentTitle.trim() || documentTitle === "Nuevo Documento") {
       toast({
@@ -244,21 +251,33 @@ export default function CreateDocumentPage() {
       }))
 
       // Crear el documento en la base de datos
-      const documentId = await addDocument({
+      console.log("Creating document with data:", {
         name: documentTitle,
         description,
-        user_id: user?.id || "demo-user",
+        user_id: user.id,
         fields: processedFields,
       })
 
+      const documentId = await addDocument({
+        name: documentTitle,
+        description,
+        user_id: user.id,
+        fields: processedFields,
+      })
+
+      console.log("Document created with ID:", documentId)
+
       // Si hay filas, agregarlas una por una
       if (rows.length > 0) {
+        console.log("Adding rows to document:", rows.length)
         for (const row of rows) {
+          console.log("Adding row:", row)
           await addRowToDocument(documentId, {
             ...row,
             document_id: documentId,
           })
         }
+        console.log("All rows added successfully")
       }
 
       toast({
@@ -280,6 +299,24 @@ export default function CreateDocumentPage() {
         variant: "destructive",
       })
       setIsSaving(false)
+    }
+  }
+
+  const handleLogin = async () => {
+    try {
+      await signInWithGoogle()
+      setShowLoginPrompt(false)
+      // Después del login, intentar guardar automáticamente
+      setTimeout(() => {
+        saveDocument()
+      }, 1000)
+    } catch (error) {
+      console.error("Error logging in:", error)
+      toast({
+        title: "Error",
+        description: "Error al iniciar sesión.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -611,6 +648,32 @@ export default function CreateDocumentPage() {
           fileMetadata={fileMetadata}
           extractedData={extractedData}
         />
+
+        {/* Modal de login prompt */}
+        {showLoginPrompt && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Iniciar Sesión Requerido
+                </CardTitle>
+                <CardDescription>
+                  Necesitas iniciar sesión para guardar el documento. Tus datos se mantendrán seguros.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button onClick={handleLogin} className="w-full bg-black hover:bg-gray-800 text-white">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Iniciar Sesión con Google
+                </Button>
+                <Button variant="outline" onClick={() => setShowLoginPrompt(false)} className="w-full">
+                  Cancelar
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

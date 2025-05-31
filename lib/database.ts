@@ -22,9 +22,6 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Mejorar la función updateUserSettings para asegurar que los cambios de color persistan
-
-// Reemplazar la función updateUserSettings actual con esta versión mejorada:
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>) => {
   try {
     console.log("Updating user settings for user:", userId, settings)
@@ -37,7 +34,12 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
     }
 
     // Usar upsert para crear o actualizar según sea necesario
-    const { data, error } = await supabase.from("user_settings").upsert(settingsToUpdate).select()
+    const { data, error } = await supabase
+      .from("user_settings")
+      .upsert(settingsToUpdate, {
+        onConflict: "user_id",
+      })
+      .select()
 
     if (error) {
       console.error("Supabase error updating user settings:", error)
@@ -104,6 +106,8 @@ export const deleteTemplate = async (id: string) => {
 // Servicios para Documents
 export const getDocuments = async (userId: string) => {
   try {
+    console.log("Getting documents for user:", userId)
+
     const { data, error } = await supabase
       .from("documents")
       .select(`
@@ -113,7 +117,10 @@ export const getDocuments = async (userId: string) => {
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
 
-    if (error) return { data: null, error }
+    if (error) {
+      console.error("Error getting documents:", error)
+      return { data: null, error }
+    }
 
     // Transformar los datos para que coincidan con el tipo Document
     const documents =
@@ -122,6 +129,7 @@ export const getDocuments = async (userId: string) => {
         rows: doc.document_rows || [],
       })) || []
 
+    console.log("Documents retrieved successfully:", documents)
     return { data: documents, error: null }
   } catch (error) {
     console.error("Error getting documents:", error)
@@ -157,9 +165,17 @@ export const getDocument = async (id: string) => {
 
 export const createDocument = async (document: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => {
   try {
+    console.log("Creating document:", document)
+
     const { data, error } = await supabase.from("documents").insert(document).select().single()
 
-    return { data, error }
+    if (error) {
+      console.error("Error creating document:", error)
+      return { data: null, error }
+    }
+
+    console.log("Document created successfully:", data)
+    return { data, error: null }
   } catch (error) {
     console.error("Error creating document:", error)
     return { data: null, error }
@@ -199,9 +215,17 @@ export const deleteDocument = async (id: string) => {
 // Servicios para Document Rows
 export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_at">) => {
   try {
+    console.log("Creating document row:", row)
+
     const { data, error } = await supabase.from("document_rows").insert(row).select().single()
 
-    return { data, error }
+    if (error) {
+      console.error("Error creating document row:", error)
+      return { data: null, error }
+    }
+
+    console.log("Document row created successfully:", data)
+    return { data, error: null }
   } catch (error) {
     console.error("Error creating document row:", error)
     return { data: null, error }

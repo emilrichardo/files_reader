@@ -7,7 +7,7 @@ import type { UserSettings } from "@/lib/types"
 
 interface ThemeContextType {
   settings: UserSettings
-  updateSettings: (updates: Partial<UserSettings>) => void
+  updateSettings: (updates: Partial<UserSettings>) => Promise<void>
   isDark: boolean
   toggleTheme: () => void
   primaryColor: string
@@ -31,7 +31,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 const defaultSettings: UserSettings = {
   id: "1",
   user_id: "demo-user",
-  project_name: "DocManager",
+  project_name: "Invitu",
   api_endpoint: "",
   api_keys: {
     openai: "",
@@ -99,12 +99,14 @@ const fontFamilies = [
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(() => {
-    // Intentar cargar desde localStorage al inicio
+    // Cargar desde localStorage al inicio
     if (typeof window !== "undefined") {
-      const savedSettings = localStorage.getItem("theme_settings")
+      const savedSettings = localStorage.getItem("invitu_theme_settings")
       if (savedSettings) {
         try {
-          return JSON.parse(savedSettings)
+          const parsed = JSON.parse(savedSettings)
+          console.log("Loaded settings from localStorage:", parsed)
+          return { ...defaultSettings, ...parsed }
         } catch (e) {
           console.error("Error parsing saved settings:", e)
         }
@@ -114,28 +116,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   })
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Initialize with default settings
+  // Initialize
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  // Escuchar evento de usuario cargado
-  useEffect(() => {
-    const handleUserLoaded = (event: CustomEvent) => {
-      const { userId } = event.detail
-      if (userId) {
-        loadUserSettings(userId)
-      }
-    }
-
-    window.addEventListener("userLoaded" as any, handleUserLoaded as EventListener)
-
-    return () => {
-      window.removeEventListener("userLoaded" as any, handleUserLoaded as EventListener)
-    }
-  }, [])
-
-  // Function to load user settings (called from AuthProvider when user is available)
+  // Function to load user settings
   const loadUserSettings = async (userId: string) => {
     try {
       console.log("Loading user settings for:", userId)
@@ -143,8 +129,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error("Error loading user settings:", error)
-        // Fallback: cargar desde localStorage
-        const localSettings = localStorage.getItem("theme_settings")
+        // Mantener configuraciones locales
+        const localSettings = localStorage.getItem("invitu_theme_settings")
         if (localSettings) {
           const parsed = JSON.parse(localSettings)
           setSettings({ ...parsed, user_id: userId })
@@ -153,37 +139,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (data) {
         console.log("User settings loaded from database:", data)
-        setSettings({
+        const mergedSettings = {
           ...defaultSettings,
           ...data,
           api_keys: data.api_keys || {},
-        })
-        // Actualizar localStorage con los datos de la base de datos
-        localStorage.setItem(
-          "theme_settings",
-          JSON.stringify({
-            ...defaultSettings,
-            ...data,
-            api_keys: data.api_keys || {},
-          }),
-        )
+        }
+        setSettings(mergedSettings)
+        // Actualizar localStorage
+        localStorage.setItem("invitu_theme_settings", JSON.stringify(mergedSettings))
       } else {
         // No hay configuraciones, crear las por defecto
         const newSettings = { ...defaultSettings, user_id: userId }
         try {
           await updateUserSettings(userId, newSettings)
           setSettings(newSettings)
-          localStorage.setItem("theme_settings", JSON.stringify(newSettings))
+          localStorage.setItem("invitu_theme_settings", JSON.stringify(newSettings))
         } catch (createError) {
           console.error("Error creating default settings:", createError)
           setSettings(newSettings)
-          localStorage.setItem("theme_settings", JSON.stringify(newSettings))
+          localStorage.setItem("invitu_theme_settings", JSON.stringify(newSettings))
         }
       }
     } catch (error) {
       console.error("Error in loadUserSettings:", error)
-      // Fallback completo a localStorage
-      const localSettings = localStorage.getItem("theme_settings")
+      // Fallback a localStorage
+      const localSettings = localStorage.getItem("invitu_theme_settings")
       if (localSettings) {
         const parsed = JSON.parse(localSettings)
         setSettings({ ...parsed, user_id: userId })
@@ -206,7 +186,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove("dark")
     }
 
-    // Aplicar color primario (usar color personalizado si existe)
+    // Aplicar color primario
     const primaryColor =
       settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
 
@@ -214,11 +194,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty("--primary-color", primaryColor)
     root.style.setProperty("--primary-rgb", hexToRgb(primaryColor))
 
-    // Aplicar color de texto óptimo como variable CSS
+    // Aplicar color de texto óptimo
     const optimalTextColor = getOptimalTextColor(primaryColor)
     root.style.setProperty("--optimal-text-color", optimalTextColor)
 
-    // Aplicar el modo de estilo al elemento raíz
+    // Aplicar el modo de estilo
     root.setAttribute("data-style-mode", settings.style_mode)
 
     // Aplicar fuente
@@ -227,7 +207,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Actualizar el título de la página
     document.title = `${settings.project_name} - Document Management System`
 
-    // Cargar la fuente de Google si no es Inter (que ya está incluida)
+    // Cargar la fuente de Google si no es Inter
     if (settings.font_family !== "Inter" && !document.getElementById(`google-font-${settings.font_family}`)) {
       const link = document.createElement("link")
       link.id = `google-font-${settings.font_family}`
@@ -236,13 +216,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.head.appendChild(link)
     }
 
-    // Guardar en localStorage
-    localStorage.setItem("theme_settings", JSON.stringify(settings))
+    // Guardar en localStorage SIEMPRE
+    localStorage.setItem("invitu_theme_settings", JSON.stringify(settings))
+    console.log("Settings applied and saved to localStorage:", settings)
   }, [settings, isLoaded])
 
-  // Modificar la función updateSettings para asegurar que los cambios persistan en Supabase
-
-  // Reemplazar la función updateSettings actual con esta versión mejorada:
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("Updating settings:", updates)
     const updatedSettings = { ...settings, ...updates, updated_at: new Date().toISOString() }
@@ -250,8 +228,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Actualizar estado local inmediatamente
     setSettings(updatedSettings)
 
-    // Guardar en localStorage siempre
-    localStorage.setItem("theme_settings", JSON.stringify(updatedSettings))
+    // Guardar en localStorage inmediatamente
+    localStorage.setItem("invitu_theme_settings", JSON.stringify(updatedSettings))
+    console.log("Settings updated locally:", updatedSettings)
 
     // Intentar guardar en la base de datos si hay usuario autenticado
     if (settings.user_id && settings.user_id !== "demo-user") {
@@ -296,7 +275,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       reader.onload = async (e) => {
         const result = e.target?.result as string
         if (result) {
-          // Determinar el tipo de logo basado en el tipo MIME
+          // Determinar el tipo de logo
           let logoType: "jpg" | "png" | "svg"
           switch (file.type) {
             case "image/jpeg":
@@ -332,7 +311,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateProjectName = (name: string) => {
-    const newName = name.trim() || "DocManager"
+    const newName = name.trim() || "Invitu"
     updateSettings({ project_name: newName })
   }
 
@@ -348,7 +327,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
   const companyLogo = settings.company_logo || null
   const logoType = settings.company_logo_type || null
-  const projectName = settings.project_name || "DocManager"
+  const projectName = settings.project_name || "Invitu"
 
   const isLightColor = (color: string): boolean => {
     return getLuminance(color) > 0.5
@@ -398,7 +377,7 @@ export const useTheme = () => {
   return context
 }
 
-// Funciones auxiliares para conversión de colores
+// Funciones auxiliares
 function hexToRgb(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
   if (!result) return "0, 0, 0"
@@ -410,7 +389,6 @@ function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`
 }
 
-// Función para calcular la luminosidad de un color
 function getLuminance(hex: string): number {
   const rgb = hexToRgb(hex)
     .split(", ")
