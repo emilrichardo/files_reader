@@ -29,10 +29,20 @@ export const getUser = async () => {
 export const signInWithGoogle = async () => {
   try {
     console.log("Attempting Google sign in...")
+    // Usar la URL de producción para el callback
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/callback`
+        : "https://v0-invitu.vercel.app/auth/callback"
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     })
 
@@ -52,10 +62,16 @@ export const signInWithGoogle = async () => {
 export const signInWithGitHub = async () => {
   try {
     console.log("Attempting GitHub sign in...")
+    // Usar la URL de producción para el callback
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/callback`
+        : "https://v0-invitu.vercel.app/auth/callback"
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo,
       },
     })
 
