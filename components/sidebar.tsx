@@ -11,13 +11,40 @@ import { useTheme } from "@/contexts/theme-context"
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signInWithGoogle, signOut, loading } = useAuth()
-  const { projectName, companyLogo, primaryColor, getOptimalTextColor } = useTheme()
+  const { projectName, companyLogo, primaryColor } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
 
   // Cerrar el sidebar en dispositivos móviles cuando cambia la ruta
   useEffect(() => {
     setIsOpen(false)
   }, [pathname])
+
+  // Función auxiliar para determinar si un color es oscuro
+  const getOptimalTextColor = (bgColor: string) => {
+    // Si no hay color, usar blanco por defecto
+    if (!bgColor) return "#ffffff"
+
+    // Convertir hex a RGB
+    let r = 0,
+      g = 0,
+      b = 0
+
+    // Verificar formato #RRGGBB
+    if (bgColor.startsWith("#") && bgColor.length === 7) {
+      r = Number.parseInt(bgColor.slice(1, 3), 16)
+      g = Number.parseInt(bgColor.slice(3, 5), 16)
+      b = Number.parseInt(bgColor.slice(5, 7), 16)
+    } else {
+      // Color por defecto si el formato no es válido
+      return "#ffffff"
+    }
+
+    // Calcular luminosidad
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+    // Retornar blanco para colores oscuros, negro para colores claros
+    return luminance > 0.5 ? "#000000" : "#ffffff"
+  }
 
   const optimalTextColor = getOptimalTextColor(primaryColor)
 

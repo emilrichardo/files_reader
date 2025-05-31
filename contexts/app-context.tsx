@@ -220,10 +220,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       let finalRow = { ...row }
 
+      // Asegurar que el ID sea único si no viene de la base de datos
+      if (!finalRow.id) {
+        finalRow.id = `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      }
+
       if (user) {
         // Guardar en la base de datos
         const { data, error } = await createDocumentRow({
-          ...row,
+          ...finalRow,
           document_id: documentId,
         })
 
@@ -233,8 +238,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Usar el ID devuelto por la base de datos
-        if (data) {
-          finalRow = { ...row, id: data.id }
+        if (data && data.id) {
+          finalRow = { ...finalRow, id: data.id }
+          console.log("Row created in database with ID:", data.id)
         }
       }
 
@@ -244,25 +250,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (doc.id === documentId) {
             const updatedDoc = {
               ...doc,
-              rows: [...doc.rows, finalRow],
+              rows: [...(doc.rows || []), finalRow],
               updated_at: new Date().toISOString(),
             }
-            console.log("Row added to document:", updatedDoc)
+            console.log("Row added to document:", finalRow)
+            console.log("Updated document:", updatedDoc)
             return updatedDoc
           }
           return doc
         }),
       )
+
+      // Forzar un refresco de documentos para asegurar sincronización
+      if (user) {
+        setTimeout(() => refreshDocuments(), 500)
+      }
+
       console.log("Row added successfully to document:", documentId)
     } catch (error) {
       console.error("Error in addRowToDocument:", error)
       // Actualizar solo en el estado local como fallback
+      const localRow = { ...row, id: row.id || `local-${Date.now()}` }
       setDocuments((prev) =>
         prev.map((doc) => {
           if (doc.id === documentId) {
             return {
               ...doc,
-              rows: [...doc.rows, row],
+              rows: [...(doc.rows || []), localRow],
               updated_at: new Date().toISOString(),
             }
           }
