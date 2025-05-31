@@ -4,7 +4,6 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import type { Document, Template, DocumentRow } from "@/lib/types"
 import { useAuth } from "./auth-context"
-import { mockDocuments, mockTemplates } from "@/lib/mock-data"
 
 interface AppContextType {
   documents: Document[]
@@ -30,69 +29,106 @@ const AppContext = createContext<AppContextType | undefined>(undefined)
 const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [documents, setDocuments] = useState<Document[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
 
-  // Cargar datos al inicializar
+  // Cargar datos cuando cambia el estado de autenticación
   useEffect(() => {
-    loadData()
-  }, [])
+    if (!authLoading) {
+      loadData()
+    }
+  }, [user, authLoading])
 
-  // Guardar datos cuando cambien
+  // Guardar datos cuando cambien (solo si hay datos)
   useEffect(() => {
-    if (!loading) {
+    if (initialized && (documents.length > 0 || templates.length > 0)) {
       saveToLocalStorage()
     }
-  }, [documents, templates, loading])
+  }, [documents, templates, initialized])
 
   const loadData = () => {
     try {
       setLoading(true)
 
-      // Cargar desde localStorage
-      const savedDocuments = localStorage.getItem("app_documents")
-      const savedTemplates = localStorage.getItem("app_templates")
+      if (user) {
+        // Usuario logueado: cargar desde localStorage o inicializar vacío
+        console.log("Loading data for authenticated user:", user.email)
+        const savedDocuments = localStorage.getItem(`app_documents_${user.id}`)
+        const savedTemplates = localStorage.getItem(`app_templates_${user.id}`)
 
-      if (savedDocuments) {
-        try {
-          const parsedDocs = JSON.parse(savedDocuments)
-          setDocuments(Array.isArray(parsedDocs) ? parsedDocs : mockDocuments)
-        } catch (e) {
-          console.error("Error parsing saved documents:", e)
-          setDocuments(mockDocuments)
+        if (savedDocuments) {
+          try {
+            const parsedDocs = JSON.parse(savedDocuments)
+            setDocuments(Array.isArray(parsedDocs) ? parsedDocs : [])
+          } catch (e) {
+            console.error("Error parsing saved documents:", e)
+            setDocuments([])
+          }
+        } else {
+          setDocuments([])
+        }
+
+        if (savedTemplates) {
+          try {
+            const parsedTemplates = JSON.parse(savedTemplates)
+            setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : [])
+          } catch (e) {
+            console.error("Error parsing saved templates:", e)
+            setTemplates([])
+          }
+        } else {
+          setTemplates([])
         }
       } else {
-        setDocuments(mockDocuments)
-      }
+        // Usuario no logueado: cargar desde localStorage general o inicializar vacío
+        console.log("Loading data for anonymous user")
+        const savedDocuments = localStorage.getItem("app_documents_anonymous")
+        const savedTemplates = localStorage.getItem("app_templates_anonymous")
 
-      if (savedTemplates) {
-        try {
-          const parsedTemplates = JSON.parse(savedTemplates)
-          setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : mockTemplates)
-        } catch (e) {
-          console.error("Error parsing saved templates:", e)
-          setTemplates(mockTemplates)
+        if (savedDocuments) {
+          try {
+            const parsedDocs = JSON.parse(savedDocuments)
+            setDocuments(Array.isArray(parsedDocs) ? parsedDocs : [])
+          } catch (e) {
+            console.error("Error parsing saved documents:", e)
+            setDocuments([])
+          }
+        } else {
+          setDocuments([])
         }
-      } else {
-        setTemplates(mockTemplates)
+
+        if (savedTemplates) {
+          try {
+            const parsedTemplates = JSON.parse(savedTemplates)
+            setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : [])
+          } catch (e) {
+            console.error("Error parsing saved templates:", e)
+            setTemplates([])
+          }
+        } else {
+          setTemplates([])
+        }
       }
 
       console.log("Data loaded successfully")
     } catch (error) {
       console.error("Error loading data:", error)
-      setDocuments(mockDocuments)
-      setTemplates(mockTemplates)
+      setDocuments([])
+      setTemplates([])
     } finally {
       setLoading(false)
+      setInitialized(true)
     }
   }
 
   const saveToLocalStorage = () => {
     try {
-      localStorage.setItem("app_documents", JSON.stringify(documents))
-      localStorage.setItem("app_templates", JSON.stringify(templates))
+      const key = user ? `_${user.id}` : "_anonymous"
+      localStorage.setItem(`app_documents${key}`, JSON.stringify(documents))
+      localStorage.setItem(`app_templates${key}`, JSON.stringify(templates))
       console.log("Data saved to localStorage")
     } catch (error) {
       console.error("Error saving to localStorage:", error)
