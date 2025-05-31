@@ -113,7 +113,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error("Error loading user settings:", error)
-        setSettings({ ...defaultSettings, user_id: userId })
+        // Fallback: cargar desde localStorage
+        const localSettings = localStorage.getItem("user_settings")
+        if (localSettings) {
+          const parsed = JSON.parse(localSettings)
+          setSettings({ ...defaultSettings, ...parsed, user_id: userId })
+        } else {
+          setSettings({ ...defaultSettings, user_id: userId })
+        }
       } else if (data) {
         setSettings({
           ...defaultSettings,
@@ -123,12 +130,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       } else {
         // No hay configuraciones, crear las por defecto
         const newSettings = { ...defaultSettings, user_id: userId }
-        await updateUserSettings(userId, newSettings)
-        setSettings(newSettings)
+        try {
+          await updateUserSettings(userId, newSettings)
+          setSettings(newSettings)
+        } catch (createError) {
+          console.error("Error creating default settings:", createError)
+          setSettings(newSettings)
+          localStorage.setItem("user_settings", JSON.stringify(newSettings))
+        }
       }
     } catch (error) {
       console.error("Error in loadUserSettings:", error)
-      setSettings({ ...defaultSettings, user_id: userId })
+      // Fallback completo a localStorage
+      const localSettings = localStorage.getItem("user_settings")
+      if (localSettings) {
+        const parsed = JSON.parse(localSettings)
+        setSettings({ ...defaultSettings, ...parsed, user_id: userId })
+      } else {
+        setSettings({ ...defaultSettings, user_id: userId })
+      }
     }
   }
 
@@ -178,15 +198,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
     const updatedSettings = { ...settings, ...updates, updated_at: new Date().toISOString() }
+
+    // Actualizar estado local inmediatamente
     setSettings(updatedSettings)
 
-    // Si hay usuario, guardar en la base de datos
+    // Intentar guardar en la base de datos si hay usuario autenticado
     if (settings.user_id && settings.user_id !== "demo-user") {
       try {
-        await updateUserSettings(settings.user_id, updates)
+        const { error } = await updateUserSettings(settings.user_id, updates)
+        if (error) {
+          console.error("Error updating settings in database:", error)
+          // Fallback: guardar en localStorage
+          localStorage.setItem("user_settings", JSON.stringify(updatedSettings))
+        }
       } catch (error) {
         console.error("Error updating settings:", error)
+        // Fallback: guardar en localStorage
+        localStorage.setItem("user_settings", JSON.stringify(updatedSettings))
       }
+    } else {
+      // Si no hay usuario o es demo, guardar en localStorage
+      localStorage.setItem("user_settings", JSON.stringify(updatedSettings))
     }
   }
 

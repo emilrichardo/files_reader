@@ -4,7 +4,16 @@ import type { Document, Template, DocumentRow, UserSettings } from "./types"
 // Servicios para User Settings
 export const getUserSettings = async (userId: string) => {
   try {
+    console.log("Getting user settings for user:", userId)
+
     const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", userId).single()
+
+    if (error && error.code !== "PGRST116") {
+      // PGRST116 = no rows returned
+      console.error("Supabase error getting user settings:", error)
+    } else if (!error) {
+      console.log("User settings retrieved successfully:", data)
+    }
 
     return { data, error }
   } catch (error) {
@@ -15,6 +24,8 @@ export const getUserSettings = async (userId: string) => {
 
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>) => {
   try {
+    console.log("Updating user settings for user:", userId, settings)
+
     const { data, error } = await supabase
       .from("user_settings")
       .upsert({
@@ -24,6 +35,12 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
       })
       .select()
       .single()
+
+    if (error) {
+      console.error("Supabase error updating user settings:", error)
+    } else {
+      console.log("User settings updated successfully:", data)
+    }
 
     return { data, error }
   } catch (error) {

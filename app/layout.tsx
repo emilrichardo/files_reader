@@ -9,6 +9,7 @@ import { AppProvider } from "@/contexts/app-context"
 import { ThemeLoader } from "@/components/theme-loader"
 import Sidebar from "@/components/sidebar"
 import { Toaster } from "@/components/ui/toaster"
+import DebugPanel from "@/components/debug-panel"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -37,6 +38,7 @@ export default function RootLayout({
                   </main>
                 </div>
                 <Toaster />
+                <DebugPanel />
               </AppProvider>
             </ThemeLoader>
           </AuthProvider>

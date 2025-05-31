@@ -66,8 +66,8 @@ export default function SettingsPage() {
     try {
       setIsSaving(true)
 
-      // Simular una operación asíncrona
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // Simular una operación asíncrona más corta
+      await new Promise((resolve) => setTimeout(resolve, 200))
 
       toast({
         title: "Configuración guardada",
@@ -77,7 +77,7 @@ export default function SettingsPage() {
       console.error("Error saving settings:", error)
       toast({
         title: "Error",
-        description: "Error al guardar las configuraciones.",
+        description: "Error al guardar las configuraciones, pero se han aplicado localmente.",
         variant: "destructive",
       })
     } finally {
@@ -211,11 +211,16 @@ export default function SettingsPage() {
 
   // Agregar función para aplicar el color personalizado
   const applyCustomColor = () => {
+    console.log("Applying custom color:", customColor)
     updateSettings({
       custom_color: customColor,
       color_scheme: "custom",
     })
     setShowColorPicker(false)
+    toast({
+      title: "Color aplicado",
+      description: "El color personalizado ha sido aplicado.",
+    })
   }
 
   return (

@@ -89,42 +89,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!user) return null
 
     try {
+      console.log("Creating document:", documentData)
+
       const { data, error } = await createDocumentInDB({
         ...documentData,
         user_id: user.id,
       })
 
-      if (error || !data) {
-        console.error("Error creating document:", error)
-        return null
+      if (error) {
+        console.error("Error creating document in DB:", error)
+        // Fallback: crear documento localmente
+        const localDoc = {
+          ...documentData,
+          id: Date.now().toString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          rows: [],
+        }
+        setDocuments((prev) => [localDoc, ...prev])
+        return localDoc.id
       }
 
-      // Agregar a la lista local
-      const newDocument = { ...data, rows: [] }
-      setDocuments((prev) => [newDocument, ...prev])
+      if (data) {
+        const newDocument = { ...data, rows: [] }
+        setDocuments((prev) => [newDocument, ...prev])
+        return data.id
+      }
 
-      return data.id
+      return null
     } catch (error) {
       console.error("Error in addDocument:", error)
-      return null
+      // Fallback: crear documento localmente
+      const localDoc = {
+        ...documentData,
+        id: Date.now().toString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        rows: [],
+      }
+      setDocuments((prev) => [localDoc, ...prev])
+      return localDoc.id
     }
   }
 
   const updateDocument = async (id: string, updates: Partial<Document>) => {
     try {
-      const { error } = await updateDocumentInDB(id, updates)
+      console.log("Updating document:", id, updates)
 
-      if (error) {
-        console.error("Error updating document:", error)
-        return
-      }
-
-      // Actualizar en la lista local
+      // Actualizar en la lista local inmediatamente
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === id ? { ...doc, ...updates, updated_at: new Date().toISOString() } : doc)),
       )
+
+      // Intentar actualizar en la base de datos
+      const { error } = await updateDocumentInDB(id, updates)
+
+      if (error) {
+        console.error("Error updating document in DB:", error)
+        // El estado local ya se actualizó, solo mostrar warning
+      }
     } catch (error) {
       console.error("Error in updateDocument:", error)
+      // El estado local ya se actualizó
     }
   }
 
