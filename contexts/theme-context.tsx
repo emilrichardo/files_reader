@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
+import { getUserSettings, updateUserSettings } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
 
 interface ThemeContextType {
@@ -21,11 +22,11 @@ interface ThemeContextType {
   isLightColor: (color: string) => boolean
   getOptimalTextColor: (backgroundColor: string) => string
   getContrastColor: (hex: string, lightColor?: string, darkColor?: string) => string
+  isLoaded: boolean
+  loadUserSettings: (userId: string) => Promise<void>
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
-
-const STORAGE_KEY = "docmanager_user_settings"
 
 const defaultSettings: UserSettings = {
   id: "1",
@@ -100,23 +101,36 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Cargar configuraciones del localStorage al inicializar
+  // Initialize with default settings
   useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem(STORAGE_KEY)
-      if (savedSettings) {
-        const parsed = JSON.parse(savedSettings)
-        // Asegurar que el project_name existe para configuraciones antiguas
-        if (!parsed.project_name) {
-          parsed.project_name = "DocManager"
-        }
-        setSettings(parsed)
-      }
-    } catch (error) {
-      console.error("Error loading theme settings:", error)
-    }
     setIsLoaded(true)
   }, [])
+
+  // Function to load user settings (called from AuthProvider when user is available)
+  const loadUserSettings = async (userId: string) => {
+    try {
+      const { data, error } = await getUserSettings(userId)
+
+      if (error) {
+        console.error("Error loading user settings:", error)
+        setSettings({ ...defaultSettings, user_id: userId })
+      } else if (data) {
+        setSettings({
+          ...defaultSettings,
+          ...data,
+          api_keys: data.api_keys || {},
+        })
+      } else {
+        // No hay configuraciones, crear las por defecto
+        const newSettings = { ...defaultSettings, user_id: userId }
+        await updateUserSettings(userId, newSettings)
+        setSettings(newSettings)
+      }
+    } catch (error) {
+      console.error("Error in loadUserSettings:", error)
+      setSettings({ ...defaultSettings, user_id: userId })
+    }
+  }
 
   // Aplicar tema cuando cambie
   useEffect(() => {
@@ -146,25 +160,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Aplicar el modo de estilo al elemento raíz
     root.setAttribute("data-style-mode", settings.style_mode)
 
-    // Aplicar variables CSS adicionales para los estilos
-    root.style.setProperty("--primary-color", primaryColor)
-    root.style.setProperty("--primary-rgb", hexToRgb(primaryColor))
-    root.style.setProperty("--optimal-text-color", optimalTextColor)
-
-    // Actualizar variables CSS de shadcn/ui para el color primario
-    if (settings.theme === "dark") {
-      root.style.setProperty("--primary", rgbToHsl(hexToRgb(primaryColor)))
-      root.style.setProperty("--primary-foreground", "0 0% 98%")
-    } else {
-      root.style.setProperty("--primary", rgbToHsl(hexToRgb(primaryColor)))
-      root.style.setProperty("--primary-foreground", "0 0% 98%")
-    }
-
     // Aplicar fuente
     document.body.style.fontFamily = `"${settings.font_family}", sans-serif`
-
-    // Aplicar estilo visual
-    root.setAttribute("data-style-mode", settings.style_mode)
 
     // Actualizar el título de la página
     document.title = `${settings.project_name} - Document Management System`
@@ -177,17 +174,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       link.href = `https://fonts.googleapis.com/css2?family=${settings.font_family.replace(/\s+/g, "+")}:wght@400;500;600;700&display=swap`
       document.head.appendChild(link)
     }
-
-    // Guardar configuraciones en localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
   }, [settings, isLoaded])
 
-  const updateSettings = (updates: Partial<UserSettings>) => {
-    setSettings((prev) => ({
-      ...prev,
-      ...updates,
-      updated_at: new Date().toISOString(),
-    }))
+  const updateSettings = async (updates: Partial<UserSettings>) => {
+    const updatedSettings = { ...settings, ...updates, updated_at: new Date().toISOString() }
+    setSettings(updatedSettings)
+
+    // Si hay usuario, guardar en la base de datos
+    if (settings.user_id && settings.user_id !== "demo-user") {
+      try {
+        await updateUserSettings(settings.user_id, updates)
+      } catch (error) {
+        console.error("Error updating settings:", error)
+      }
+    }
   }
 
   const toggleTheme = () => {
@@ -214,7 +214,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       const reader = new FileReader()
 
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const result = e.target?.result as string
         if (result) {
           // Determinar el tipo de logo basado en el tipo MIME
@@ -234,12 +234,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
               logoType = "png"
           }
 
-          setSettings((prev) => ({
-            ...prev,
+          await updateSettings({
             company_logo: result,
             company_logo_type: logoType,
-            updated_at: new Date().toISOString(),
-          }))
+          })
           resolve()
         } else {
           reject(new Error("Error al leer el archivo"))
@@ -256,20 +254,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateProjectName = (name: string) => {
     const newName = name.trim() || "DocManager"
-    setSettings((prev) => ({
-      ...prev,
-      project_name: newName,
-      updated_at: new Date().toISOString(),
-    }))
+    updateSettings({ project_name: newName })
   }
 
   const removeLogo = () => {
-    setSettings((prev) => ({
-      ...prev,
+    updateSettings({
       company_logo: "",
       company_logo_type: undefined,
-      updated_at: new Date().toISOString(),
-    }))
+    })
   }
 
   const isDark = settings.theme === "dark"
@@ -310,6 +302,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         isLightColor,
         getOptimalTextColor,
         getContrastColor,
+        isLoaded,
+        loadUserSettings,
       }}
     >
       {children}
@@ -337,38 +331,6 @@ function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`
 }
 
-function rgbToHsl(rgb: string): string {
-  const [r, g, b] = rgb.split(", ").map((x) => Number.parseInt(x) / 255)
-
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  let h = 0
-  let s = 0
-  const l = (max + min) / 2
-
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-
-    switch (max) {
-      case r:
-        h = (g - b) / d + (g < b ? 6 : 0)
-        break
-      case g:
-        h = (b - r) / d + 2
-        break
-      case b:
-        h = (r - g) / d + 4
-        break
-    }
-    h /= 6
-  }
-
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
-}
-
-// Agregar estas funciones auxiliares después de las funciones existentes de conversión de colores
-
 // Función para calcular la luminosidad de un color
 function getLuminance(hex: string): number {
   const rgb = hexToRgb(hex)
@@ -379,19 +341,4 @@ function getLuminance(hex: string): number {
     return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
   })
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-// Función para determinar si un color es claro u oscuro
-function isLightColorFn(hex: string): boolean {
-  return getLuminance(hex) > 0.5
-}
-
-// Función para obtener el color de texto óptimo basado en el fondo
-function getOptimalTextColorFn(backgroundColor: string): string {
-  return isLightColorFn(backgroundColor) ? "#000000" : "#ffffff"
-}
-
-// Función para obtener un color de contraste
-function getContrastColorFn(hex: string, lightColor = "#ffffff", darkColor = "#000000"): string {
-  return isLightColorFn(hex) ? darkColor : lightColor
 }

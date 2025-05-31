@@ -1,9 +1,17 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
+import {
+  supabase,
+  signInWithGoogle,
+  signInWithGitHub,
+  signOut as supabaseSignOut,
+  getUserProfile,
+} from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
 
-interface MockUser {
+interface AuthUser {
   id: string
   email: string
   name: string
@@ -11,34 +19,141 @@ interface MockUser {
 }
 
 interface AuthContextType {
-  user: MockUser | null
+  user: AuthUser | null
   loading: boolean
-  signIn: () => void
-  signOut: () => void
+  signInWithGoogle: () => Promise<void>
+  signInWithGitHub: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Usuario mock para demostración
-const mockUser: MockUser = {
-  id: "mock-user-1",
-  email: "demo@docmanager.com",
-  name: "Demo User",
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<MockUser | null>(mockUser)
-  const [loading] = useState(false)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const signIn = () => {
-    setUser(mockUser)
+  useEffect(() => {
+    // Obtener sesión inicial
+    const getInitialSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (session?.user) {
+          await loadUserProfile(session.user)
+        }
+      } catch (error) {
+        console.error("Error getting initial session:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getInitialSession()
+
+    // Escuchar cambios de autenticación
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session?.user?.email)
+
+      if (session?.user) {
+        await loadUserProfile(session.user)
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const loadUserProfile = async (authUser: User) => {
+    try {
+      const { data: profile, error } = await getUserProfile(authUser.id)
+
+      if (error) {
+        console.error("Error loading user profile:", error)
+        return
+      }
+
+      if (profile) {
+        const userData = {
+          id: profile.id,
+          email: profile.email,
+          name: profile.name || authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Usuario",
+          avatar_url: profile.avatar_url || authUser.user_metadata?.avatar_url,
+        }
+
+        setUser(userData)
+
+        // Load theme settings after user is set
+        window.dispatchEvent(new CustomEvent("userLoaded", { detail: { userId: authUser.id } }))
+      }
+    } catch (error) {
+      console.error("Error in loadUserProfile:", error)
+    }
   }
 
-  const signOut = () => {
-    setUser(null)
+  const handleSignInWithGoogle = async () => {
+    try {
+      setLoading(true)
+      console.log("Starting Google sign in...")
+      const { error } = await signInWithGoogle()
+      if (error) {
+        console.error("Error signing in with Google:", error)
+        throw error
+      }
+    } catch (error) {
+      console.error("Sign in error:", error)
+      setLoading(false)
+    }
   }
 
-  return <AuthContext.Provider value={{ user, loading, signIn, signOut }}>{children}</AuthContext.Provider>
+  const handleSignInWithGitHub = async () => {
+    try {
+      setLoading(true)
+      console.log("Starting GitHub sign in...")
+      const { error } = await signInWithGitHub()
+      if (error) {
+        console.error("Error signing in with GitHub:", error)
+        throw error
+      }
+    } catch (error) {
+      console.error("Sign in error:", error)
+      setLoading(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      setLoading(true)
+      const { error } = await supabaseSignOut()
+      if (error) {
+        console.error("Error signing out:", error)
+        throw error
+      }
+      setUser(null)
+    } catch (error) {
+      console.error("Sign out error:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signInWithGoogle: handleSignInWithGoogle,
+        signInWithGitHub: handleSignInWithGitHub,
+        signOut: handleSignOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => {

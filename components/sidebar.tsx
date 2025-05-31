@@ -7,6 +7,7 @@ import { Home, FileText, Plus, Layout, Settings, LogIn, LogOut, Menu, X } from "
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 const navigation = [
   { name: "Home", href: "/", icon: Home },
@@ -19,8 +20,7 @@ const navigation = [
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
-  const { user, signIn, signOut } = useAuth()
-  // Importar useTheme y agregar las nuevas funciones
+  const { user, signInWithGoogle, signInWithGitHub, signOut } = useAuth()
   const { companyLogo, logoType, primaryColor, isDark, projectName, isLightColor, getOptimalTextColor } = useTheme()
 
   // Calcular el color de texto óptimo
@@ -29,29 +29,26 @@ export default function Sidebar() {
   const renderLogo = () => {
     if (companyLogo) {
       return (
-        <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-white">
+        <div className="w-8 h-8 overflow-hidden flex items-center justify-center bg-white">
           <img
             src={companyLogo || "/placeholder.svg"}
             alt="Company Logo"
             className="w-full h-full object-contain"
             onError={(e) => {
-              // Si hay error cargando la imagen, mostrar el logo por defecto
               console.error("Error loading logo:", e)
             }}
           />
         </div>
       )
     } else {
-      // Logo por defecto
       return (
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
+        <div className="w-8 h-8 flex items-center justify-center" style={{ backgroundColor: primaryColor }}>
           <FileText className="w-5 h-5 text-white" />
         </div>
       )
     }
   }
 
-  // Actualizar el JSX del sidebar para incluir los atributos de datos y estilos dinámicos
   return (
     <>
       {/* Mobile menu button */}
@@ -70,7 +67,7 @@ export default function Sidebar() {
       {/* Sidebar */}
       <div
         className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-background border-r border-border transform transition-transform duration-300 ease-in-out sidebar-container
+        fixed inset-y-0 left-0 z-40 w-64 bg-background transform transition-transform duration-300 ease-in-out sidebar-container
         lg:translate-x-0 lg:static lg:inset-0
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}
@@ -88,7 +85,7 @@ export default function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="flex-1 px-4 py-6 space-y-1">
             {navigation.map((item) => {
               const isActive = pathname === item.href
               return (
@@ -96,7 +93,7 @@ export default function Sidebar() {
                   key={item.name}
                   href={item.href}
                   className={`
-                  flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors sidebar-item
+                  flex items-center px-3 py-2 text-sm font-medium transition-colors sidebar-item
                   ${
                     isActive
                       ? "sidebar-item-active auto-contrast-text"
@@ -127,13 +124,21 @@ export default function Sidebar() {
             {user ? (
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-muted-foreground">{user.email?.[0]?.toUpperCase()}</span>
+                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center overflow-hidden">
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url || "/placeholder.svg"}
+                        alt="Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {user.email?.[0]?.toUpperCase()}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {user.user_metadata?.name || user.email}
-                    </p>
+                    <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
                     <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
                 </div>
@@ -143,18 +148,41 @@ export default function Sidebar() {
                 </Button>
               </div>
             ) : (
-              <Button
-                onClick={signIn}
-                className="w-full auto-contrast-text"
-                style={{
-                  backgroundColor: primaryColor,
-                  color: optimalTextColor,
-                }}
-                data-button="true"
-              >
-                <LogIn className="w-4 h-4 mr-2" />
-                Sign In with Google
-              </Button>
+              <div className="space-y-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      className="w-full auto-contrast-text"
+                      style={{
+                        backgroundColor: primaryColor,
+                        color: optimalTextColor,
+                      }}
+                      data-button="true"
+                    >
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Iniciar Sesión
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="center">
+                    <DropdownMenuItem onClick={signInWithGoogle} className="cursor-pointer">
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 mr-2 bg-red-500 rounded-sm flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">G</span>
+                        </div>
+                        Continuar con Google
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={signInWithGitHub} className="cursor-pointer">
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 mr-2 bg-gray-900 rounded-sm flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">G</span>
+                        </div>
+                        Continuar con GitHub
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
           </div>
         </div>

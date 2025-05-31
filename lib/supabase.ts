@@ -28,15 +28,46 @@ export const getUser = async () => {
 
 export const signInWithGoogle = async () => {
   try {
+    console.log("Attempting Google sign in...")
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
+
+    if (error) {
+      console.error("Google sign in error:", error)
+      alert(`Error signing in with Google: ${error.message}`)
+    }
+
     return { data, error }
   } catch (error) {
     console.error("Error signing in with Google:", error)
+    alert(`Error signing in with Google: ${error}`)
+    return { data: null, error }
+  }
+}
+
+export const signInWithGitHub = async () => {
+  try {
+    console.log("Attempting GitHub sign in...")
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (error) {
+      console.error("GitHub sign in error:", error)
+      alert(`Error signing in with GitHub: ${error.message}`)
+    }
+
+    return { data, error }
+  } catch (error) {
+    console.error("Error signing in with GitHub:", error)
+    alert(`Error signing in with GitHub: ${error}`)
     return { data: null, error }
   }
 }
@@ -48,5 +79,27 @@ export const signOut = async () => {
   } catch (error) {
     console.error("Error signing out:", error)
     return { error }
+  }
+}
+
+export const getUserProfile = async (userId: string) => {
+  try {
+    const { data, error } = await supabase.from("users").select("*").eq("id", userId).single()
+
+    return { data, error }
+  } catch (error) {
+    console.error("Error getting user profile:", error)
+    return { data: null, error }
+  }
+}
+
+export const updateUserProfile = async (userId: string, updates: any) => {
+  try {
+    const { data, error } = await supabase.from("users").update(updates).eq("id", userId).select().single()
+
+    return { data, error }
+  } catch (error) {
+    console.error("Error updating user profile:", error)
+    return { data: null, error }
   }
 }

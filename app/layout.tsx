@@ -3,9 +3,10 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import "./styles/theme-modes.css"
+import { ThemeProvider } from "@/contexts/theme-context"
 import { AuthProvider } from "@/contexts/auth-context"
 import { AppProvider } from "@/contexts/app-context"
-import { ThemeProvider } from "@/contexts/theme-context"
+import { ThemeLoader } from "@/components/theme-loader"
 import Sidebar from "@/components/sidebar"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -27,15 +28,17 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <AuthProvider>
-            <AppProvider>
-              <div className="flex h-screen bg-background">
-                <Sidebar />
-                <main className="flex-1 overflow-auto lg:ml-0">
-                  <div className="lg:pl-0 pl-0">{children}</div>
-                </main>
-              </div>
-              <Toaster />
-            </AppProvider>
+            <ThemeLoader>
+              <AppProvider>
+                <div className="flex h-screen bg-background">
+                  <Sidebar />
+                  <main className="flex-1 overflow-auto lg:ml-0">
+                    <div className="lg:pl-0 pl-0">{children}</div>
+                  </main>
+                </div>
+                <Toaster />
+              </AppProvider>
+            </ThemeLoader>
           </AuthProvider>
         </ThemeProvider>
       </body>
