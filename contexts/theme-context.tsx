@@ -16,6 +16,8 @@ interface ThemeContextType {
   updateProjectName: (name: string) => void
   updateLogo: (file: File) => Promise<void>
   removeLogo: () => void
+  fontFamilies: string[]
+  colorSchemes: Record<string, string>
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -34,6 +36,9 @@ const defaultSettings: UserSettings = {
   },
   theme: "light",
   color_scheme: "black",
+  custom_color: "",
+  font_family: "Inter",
+  style_mode: "flat",
   company_logo: "",
   company_logo_type: undefined,
   updated_at: new Date().toISOString(),
@@ -41,11 +46,52 @@ const defaultSettings: UserSettings = {
 
 const colorSchemes = {
   black: "#000000",
-  blue: "#3b82f6",
-  green: "#10b981",
-  purple: "#8b5cf6",
+  slate: "#64748b",
+  gray: "#6b7280",
+  zinc: "#71717a",
+  neutral: "#737373",
+  stone: "#78716c",
   red: "#ef4444",
+  orange: "#f97316",
+  amber: "#f59e0b",
+  yellow: "#eab308",
+  lime: "#84cc16",
+  green: "#22c55e",
+  emerald: "#10b981",
+  teal: "#14b8a6",
+  cyan: "#06b6d4",
+  sky: "#0ea5e9",
+  blue: "#3b82f6",
+  indigo: "#6366f1",
+  violet: "#8b5cf6",
+  purple: "#a855f7",
+  fuchsia: "#d946ef",
+  pink: "#ec4899",
+  rose: "#f43f5e",
 }
+
+const fontFamilies = [
+  "Inter",
+  "Roboto",
+  "Open Sans",
+  "Lato",
+  "Montserrat",
+  "Poppins",
+  "Raleway",
+  "Nunito",
+  "Playfair Display",
+  "Merriweather",
+  "Source Sans Pro",
+  "Ubuntu",
+  "Rubik",
+  "Work Sans",
+  "Quicksand",
+  "Fira Sans",
+  "Mulish",
+  "Oswald",
+  "DM Sans",
+  "Space Grotesk",
+]
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
@@ -82,8 +128,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove("dark")
     }
 
-    // Aplicar color primario
-    const primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
+    // Aplicar color primario (usar color personalizado si existe)
+    const primaryColor =
+      settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
 
     // Actualizar variables CSS personalizadas
     root.style.setProperty("--primary-color", primaryColor)
@@ -98,8 +145,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.style.setProperty("--primary-foreground", "0 0% 98%")
     }
 
+    // Aplicar fuente
+    document.body.style.fontFamily = `"${settings.font_family}", sans-serif`
+
+    // Aplicar estilo visual
+    root.setAttribute("data-style-mode", settings.style_mode)
+
     // Actualizar el título de la página
     document.title = `${settings.project_name} - Document Management System`
+
+    // Cargar la fuente de Google si no es Inter (que ya está incluida)
+    if (settings.font_family !== "Inter" && !document.getElementById(`google-font-${settings.font_family}`)) {
+      const link = document.createElement("link")
+      link.id = `google-font-${settings.font_family}`
+      link.rel = "stylesheet"
+      link.href = `https://fonts.googleapis.com/css2?family=${settings.font_family.replace(/\s+/g, "+")}:wght@400;500;600;700&display=swap`
+      document.head.appendChild(link)
+    }
 
     // Guardar configuraciones en localStorage
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
@@ -196,7 +258,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const isDark = settings.theme === "dark"
-  const primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
+  const primaryColor =
+    settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
   const companyLogo = settings.company_logo || null
   const logoType = settings.company_logo_type || null
   const projectName = settings.project_name || "DocManager"
@@ -215,6 +278,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         updateProjectName,
         updateLogo,
         removeLogo,
+        fontFamilies,
+        colorSchemes,
       }}
     >
       {children}

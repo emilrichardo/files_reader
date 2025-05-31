@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 import DebugTheme from "@/components/debug-theme"
+// Importar el componente de color picker
+import { HexColorPicker } from "react-colorful"
 
 const colorSchemes = [
   { value: "black", label: "Negro", color: "#000000" },
@@ -26,6 +28,7 @@ const colorSchemes = [
 export default function SettingsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
+  // Actualizar la desestructuración del useTheme para incluir las nuevas propiedades
   const {
     settings,
     updateSettings,
@@ -38,6 +41,8 @@ export default function SettingsPage() {
     removeLogo,
     companyLogo,
     logoType,
+    fontFamilies,
+    colorSchemes,
   } = useTheme()
 
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({})
@@ -48,6 +53,9 @@ export default function SettingsPage() {
   const [isEditingProjectName, setIsEditingProjectName] = useState(false)
   const [tempProjectName, setTempProjectName] = useState(projectName)
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  // Agregar estados para el color picker
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [customColor, setCustomColor] = useState(settings.custom_color || "")
 
   // Guardar configuraciones
   const saveSettings = async () => {
@@ -190,6 +198,20 @@ export default function SettingsPage() {
       default:
         return "Imagen"
     }
+  }
+
+  // Agregar función para manejar el cambio de color personalizado
+  const handleCustomColorChange = (color: string) => {
+    setCustomColor(color)
+  }
+
+  // Agregar función para aplicar el color personalizado
+  const applyCustomColor = () => {
+    updateSettings({
+      custom_color: customColor,
+      color_scheme: "custom",
+    })
+    setShowColorPicker(false)
   }
 
   return (
@@ -484,28 +506,157 @@ export default function SettingsPage() {
 
               <Separator />
 
-              {/* Color Scheme */}
+              {/* Font Family */}
               <div>
-                <Label>Esquema de Colores</Label>
-                <p className="text-sm text-muted-foreground mb-3">Selecciona el color principal de la aplicación</p>
+                <Label>Tipografía</Label>
+                <p className="text-sm text-muted-foreground mb-3">Selecciona la fuente principal de la aplicación</p>
+                <Select value={settings.font_family} onValueChange={(value) => updateSettings({ font_family: value })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fontFamilies.map((font) => (
+                      <SelectItem key={font} value={font}>
+                        <span style={{ fontFamily: font }}>{font}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              {/* Style Mode */}
+              <div>
+                <Label>Estilo Visual</Label>
+                <p className="text-sm text-muted-foreground mb-3">Selecciona el estilo visual de la aplicación</p>
                 <Select
-                  value={settings.color_scheme}
-                  onValueChange={(value) => updateSettings({ color_scheme: value })}
+                  value={settings.style_mode}
+                  onValueChange={(value: any) => updateSettings({ style_mode: value })}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {colorSchemes.map((scheme) => (
-                      <SelectItem key={scheme.value} value={scheme.value}>
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: scheme.color }} />
-                          <span>{scheme.label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="flat">Flat Design</SelectItem>
+                    <SelectItem value="gradient">Gradient</SelectItem>
+                    <SelectItem value="brutalist">Brutalist</SelectItem>
+                    <SelectItem value="border">Border</SelectItem>
+                    <SelectItem value="glass">Glassmorphism</SelectItem>
+                    <SelectItem value="neumorphism">Neumorphism</SelectItem>
                   </SelectContent>
                 </Select>
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <div
+                    className="p-4 rounded-lg bg-background border border-border text-center text-sm"
+                    data-style="flat"
+                  >
+                    Flat
+                  </div>
+                  <div
+                    className="p-4 rounded-lg bg-gradient-to-br from-primary/80 to-primary/40 text-white text-center text-sm"
+                    data-style="gradient"
+                  >
+                    Gradient
+                  </div>
+                  <div
+                    className="p-4 rounded-lg bg-black text-white font-mono text-center text-sm"
+                    data-style="brutalist"
+                  >
+                    Brutalist
+                  </div>
+                  <div
+                    className="p-4 rounded-lg bg-background border-2 border-black text-center text-sm"
+                    data-style="border"
+                  >
+                    Border
+                  </div>
+                  <div
+                    className="p-4 rounded-lg bg-white/30 backdrop-blur-sm border border-white/20 text-center text-sm"
+                    data-style="glass"
+                  >
+                    Glass
+                  </div>
+                  <div
+                    className="p-4 rounded-lg bg-gray-100 shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] text-center text-sm"
+                    data-style="neumorphism"
+                  >
+                    Neumorphism
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Color Scheme */}
+              <div>
+                <Label>Esquema de Colores</Label>
+                <p className="text-sm text-muted-foreground mb-3">Selecciona el color principal de la aplicación</p>
+
+                {/* Color Presets */}
+                <div className="grid grid-cols-5 gap-2 mb-4">
+                  {Object.entries(colorSchemes).map(([name, color]) => (
+                    <button
+                      key={name}
+                      className={`w-full h-10 rounded-md border transition-all ${
+                        settings.color_scheme === name && !settings.custom_color
+                          ? "ring-2 ring-offset-2 ring-primary"
+                          : "hover:scale-105"
+                      }`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => updateSettings({ color_scheme: name, custom_color: "" })}
+                      title={name.charAt(0).toUpperCase() + name.slice(1)}
+                    />
+                  ))}
+                </div>
+
+                {/* Custom Color */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Color Personalizado</Label>
+                    <Button variant="outline" size="sm" onClick={() => setShowColorPicker(!showColorPicker)}>
+                      {showColorPicker ? "Ocultar" : "Mostrar"} Selector
+                    </Button>
+                  </div>
+
+                  {showColorPicker && (
+                    <div className="p-4 border border-border rounded-lg bg-background">
+                      <HexColorPicker
+                        color={customColor || "#000000"}
+                        onChange={handleCustomColorChange}
+                        className="w-full mb-4"
+                      />
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-10 h-10 rounded-md border"
+                          style={{ backgroundColor: customColor || "#000000" }}
+                        />
+                        <Input
+                          value={customColor}
+                          onChange={(e) => setCustomColor(e.target.value)}
+                          placeholder="#000000"
+                          className="flex-1"
+                        />
+                        <Button onClick={applyCustomColor}>Aplicar</Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {settings.custom_color && !showColorPicker && (
+                    <div className="flex items-center gap-2 p-2 border border-border rounded-md">
+                      <div className="w-6 h-6 rounded-md border" style={{ backgroundColor: settings.custom_color }} />
+                      <span className="text-sm">{settings.custom_color}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => updateSettings({ custom_color: "", color_scheme: "black" })}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

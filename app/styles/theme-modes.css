@@ -1,0 +1,124 @@
+/* Estilos para los diferentes modos visuales */
+
+/* Flat Design (default) */
+[data-style-mode="flat"] {
+  --card-shadow: none;
+  --button-shadow: none;
+  --border-width: 1px;
+  --border-radius: 0.5rem;
+}
+
+/* Gradient */
+[data-style-mode="gradient"] {
+  --card-shadow: 0 10px 15px -3px rgba(var(--primary-rgb), 0.1), 0 4px 6px -2px rgba(var(--primary-rgb), 0.05);
+  --button-shadow: none;
+  --border-width: 1px;
+  --border-radius: 0.5rem;
+}
+
+[data-style-mode="gradient"] .bg-primary {
+  background: linear-gradient(135deg, var(--primary-color) 0%, rgba(var(--primary-rgb), 0.8) 100%);
+}
+
+[data-style-mode="gradient"] .card {
+  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--muted)) 100%);
+}
+
+/* Brutalist */
+[data-style-mode="brutalist"] {
+  --card-shadow: 5px 5px 0px 0px rgba(0, 0, 0, 1);
+  --button-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 1);
+  --border-width: 2px;
+  --border-radius: 0;
+}
+
+[data-style-mode="brutalist"] .card,
+[data-style-mode="brutalist"] .button,
+[data-style-mode="brutalist"] .input {
+  border: var(--border-width) solid black;
+  border-radius: 0;
+}
+
+[data-style-mode="brutalist"] .button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0px 0px rgba(0, 0, 0, 1);
+}
+
+/* Border */
+[data-style-mode="border"] {
+  --card-shadow: none;
+  --button-shadow: none;
+  --border-width: 2px;
+  --border-radius: 0.75rem;
+}
+
+[data-style-mode="border"] .card,
+[data-style-mode="border"] .button,
+[data-style-mode="border"] .input {
+  border: var(--border-width) solid var(--primary-color);
+}
+
+/* Glass */
+[data-style-mode="glass"] {
+  --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  --button-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.1);
+  --border-width: 1px;
+  --border-radius: 1rem;
+}
+
+[data-style-mode="glass"] .card {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+[data-style-mode="glass"] .button {
+  background: rgba(var(--primary-rgb), 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(var(--primary-rgb), 0.18);
+}
+
+/* Neumorphism */
+[data-style-mode="neumorphism"] {
+  --card-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff;
+  --button-shadow: 3px 3px 6px #bebebe, -3px -3px 6px #ffffff;
+  --border-width: 0px;
+  --border-radius: 1rem;
+}
+
+[data-style-mode="neumorphism"] .card {
+  background: #f0f0f0;
+  box-shadow: var(--card-shadow);
+  border: none;
+}
+
+[data-style-mode="neumorphism"] .button {
+  background: #f0f0f0;
+  box-shadow: var(--button-shadow);
+  border: none;
+}
+
+[data-style-mode="neumorphism"] .button:active {
+  box-shadow: inset 3px 3px 6px #bebebe, inset -3px -3px 6px #ffffff;
+}
+
+/* Aplicar estilos a componentes específicos */
+[data-style-mode] .card {
+  box-shadow: var(--card-shadow);
+  border-radius: var(--border-radius);
+  border-width: var(--border-width);
+}
+
+[data-style-mode] .button {
+  box-shadow: var(--button-shadow);
+  border-radius: var(--border-radius);
+  border-width: var(--border-width);
+}
+
+[data-style-mode] .input,
+[data-style-mode] .select {
+  border-radius: var(--border-radius);
+  border-width: var(--border-width);
+}
