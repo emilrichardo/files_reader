@@ -426,9 +426,8 @@ export default function CreateDocumentPage() {
           docId = addDocument({
             name: documentName,
             description: documentDescription,
-            user_id: user?.id || "demo-user",
+            user_id: user?.id || "anonymous",
             fields,
-            rows: [],
           })
           setCurrentDocumentId(docId)
           toast({
@@ -569,17 +568,21 @@ export default function CreateDocumentPage() {
     }
 
     try {
-      let docId = currentDocumentId
+      const docId = addDocument({
+        name: documentName,
+        description: documentDescription,
+        user_id: user?.id || "anonymous",
+        fields,
+      })
 
-      if (!docId) {
-        docId = addDocument({
-          name: documentName,
-          description: documentDescription,
-          user_id: user?.id || "demo-user",
-          fields,
-          rows,
+      // Agregar las filas existentes al documento
+      rows.forEach((row) => {
+        addRowToDocument(docId, {
+          document_id: docId,
+          data: row.data,
+          file_metadata: row.file_metadata,
         })
-      }
+      })
 
       toast({
         title: "Documento guardado",
@@ -598,7 +601,7 @@ export default function CreateDocumentPage() {
         variant: "destructive",
       })
     }
-  }, [documentName, documentDescription, fields, rows, currentDocumentId, user, addDocument, toast, router])
+  }, [documentName, documentDescription, fields, rows, user, addDocument, addRowToDocument, toast, router])
 
   const exportDocument = useCallback(
     (format: "csv" | "pdf" | "excel") => {

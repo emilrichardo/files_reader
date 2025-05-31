@@ -1,19 +1,12 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
-import { supabase, signInWithGoogle, signOut as supabaseSignOut } from "@/lib/supabase"
+import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
-
-interface AuthUser {
-  id: string
-  email: string
-  name: string
-  avatar_url?: string
-}
+import { supabase } from "@/lib/supabase"
 
 interface AuthContextType {
-  user: AuthUser | null
+  user: User | null
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
@@ -22,118 +15,85 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let mounted = true
-
-    const initializeAuth = async () => {
+    // Obtener sesión inicial
+    const getInitialSession = async () => {
       try {
-        // Obtener sesión actual
         const {
           data: { session },
         } = await supabase.auth.getSession()
-
-        if (mounted) {
-          if (session?.user) {
-            await loadUserProfile(session.user)
-          } else {
-            setUser(null)
-          }
-          setLoading(false)
-        }
+        setUser(session?.user ?? null)
       } catch (error) {
-        console.error("Error initializing auth:", error)
-        if (mounted) {
-          setUser(null)
-          setLoading(false)
-        }
+        console.error("Error getting initial session:", error)
+        setUser(null)
+      } finally {
+        setLoading(false)
       }
     }
 
-    initializeAuth()
+    getInitialSession()
 
     // Escuchar cambios de autenticación
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return
-
-      console.log("Auth state changed:", event)
-
-      if (event === "SIGNED_IN" && session?.user) {
-        await loadUserProfile(session.user)
-      } else if (event === "SIGNED_OUT") {
-        setUser(null)
-      }
-
+      console.log("Auth state changed:", event, session?.user?.email)
+      setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
+    return () => subscription.unsubscribe()
   }, [])
 
-  const loadUserProfile = async (authUser: User) => {
-    try {
-      const userData = {
-        id: authUser.id,
-        email: authUser.email || "",
-        name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Usuario",
-        avatar_url: authUser.user_metadata?.avatar_url,
-      }
-
-      setUser(userData)
-    } catch (error) {
-      console.error("Error loading user profile:", error)
-    }
-  }
-
-  const handleSignInWithGoogle = async () => {
+  const signInWithGoogle = async () => {
     try {
       setLoading(true)
-      const { error } = await signInWithGoogle()
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
       if (error) {
         console.error("Error signing in with Google:", error)
-        alert(`Error al iniciar sesión: ${error.message}`)
-        setLoading(false)
+        throw error
       }
     } catch (error) {
-      console.error("Sign in error:", error)
-      setLoading(false)
-    }
-  }
-
-  const handleSignOut = async () => {
-    try {
-      setLoading(true)
-      const { error } = await supabaseSignOut()
-      if (error) {
-        console.error("Error signing out:", error)
-      }
-      setUser(null)
-    } catch (error) {
-      console.error("Sign out error:", error)
+      console.error("Error in signInWithGoogle:", error)
+      throw error
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        signInWithGoogle: handleSignInWithGoogle,
-        signOut: handleSignOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  const signOut = async () => {
+    try {
+      setLoading(true)
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error("Error signing out:", error)
+        throw error
+      }
+      setUser(null)
+    } catch (error) {
+      console.error("Error in signOut:", error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const value = {
+    user,
+    loading,
+    signInWithGoogle,
+    signOut,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export const useAuth = () => {

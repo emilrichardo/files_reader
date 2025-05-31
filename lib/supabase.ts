@@ -3,44 +3,52 @@ import { createClient } from "@supabase/supabase-js"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
+})
 
+// Función para iniciar sesión con Google
 export const signInWithGoogle = async () => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
-      scopes: "https://www.googleapis.com/auth/userinfo.email",
     },
   })
-  return { data, error }
+
+  if (error) {
+    console.error("Error signing in with Google:", error)
+    throw error
+  }
+
+  return data
 }
 
+// Función para cerrar sesión
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut()
-  return { error }
+
+  if (error) {
+    console.error("Error signing out:", error)
+    throw error
+  }
 }
 
-export const getUserProfile = async (userId: string) => {
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
+// Función para obtener el usuario actual
+export const getCurrentUser = async () => {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
-  return { data, error }
-}
+  if (error) {
+    console.error("Error getting current user:", error)
+    return null
+  }
 
-export const createUserProfile = async (userId: string, email: string, name: string) => {
-  const { data, error } = await supabase
-    .from("profiles")
-    .insert([
-      {
-        id: userId,
-        email,
-        name,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ])
-    .select()
-    .single()
-
-  return { data, error }
+  return user
 }

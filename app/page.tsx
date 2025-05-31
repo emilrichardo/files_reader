@@ -1,37 +1,41 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { Plus, FileText, Clock, ArrowRight, LogIn } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import { useApp } from "@/contexts/app-context"
-import { useTheme } from "@/contexts/theme-context"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Plus, FileText, Layout, BarChart3, Settings, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import type { Document } from "@/lib/types"
+import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/contexts/auth-context"
+import { useApp } from "@/contexts/app-context"
 
 export default function HomePage() {
-  const { user, loading: authLoading, signInWithGoogle } = useAuth()
-  const { documents, loading: appLoading } = useApp()
-  const { primaryColor, getOptimalTextColor, isLoaded: themeLoaded } = useTheme()
-  const [recentDocuments, setRecentDocuments] = useState<Document[]>([])
+  const router = useRouter()
+  const { user, signInWithGoogle, loading: authLoading } = useAuth()
+  const { documents, templates, loading: appLoading } = useApp()
+  const [isSigningIn, setIsSigningIn] = useState(false)
 
-  const optimalTextColor = getOptimalTextColor(primaryColor)
-
-  useEffect(() => {
-    if (documents.length > 0) {
-      const recent = documents
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-        .slice(0, 3)
-      setRecentDocuments(recent)
+  const handleSignIn = async () => {
+    try {
+      setIsSigningIn(true)
+      await signInWithGoogle()
+    } catch (error) {
+      console.error("Error signing in:", error)
+    } finally {
+      setIsSigningIn(false)
     }
-  }, [documents])
+  }
 
-  // Solo mostrar loading si el tema no está cargado
-  if (!themeLoaded) {
+  const recentDocuments = documents.slice(0, 3)
+  const recentTemplates = templates.slice(0, 3)
+
+  if (authLoading || appLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
+        </div>
       </div>
     )
   }
@@ -41,157 +45,261 @@ export default function HomePage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {user ? `Bienvenido de nuevo, ${user.name}` : "Bienvenido a DocManager"}
-          </h1>
-          <p className="text-gray-600">Gestiona tus documentos y extrae información valiosa de tus datos.</p>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Card
-            className="border-2 border-dashed border-black bg-gradient-to-br from-black/5 to-gray-800/5 hover:shadow-lg transition-shadow cursor-pointer"
-            data-card="true"
-          >
-            <Link href="/documents/create">
-              <CardContent className="p-6 text-center">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 auto-contrast-text"
-                  style={{
-                    backgroundColor: primaryColor,
-                    color: optimalTextColor,
-                  }}
-                  data-primary-bg="true"
-                >
-                  <Plus className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Crear Nuevo Documento</h3>
-                <p className="text-gray-600 text-sm">Inicia un nuevo proyecto y define tu estructura de datos</p>
-              </CardContent>
-            </Link>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow" data-card="true">
-            <CardContent className="p-6 text-center">
-              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{documents.length} Documentos</h3>
-              <p className="text-gray-600 text-sm">Total de documentos en tu espacio de trabajo</p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-lg transition-shadow" data-card="true">
-            <CardContent className="p-6 text-center">
-              <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Clock className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Actividad Reciente</h3>
-              <p className="text-gray-600 text-sm">
-                {documents.length > 0 ? "Última actualización hoy" : "Sin actividad reciente"}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                {user ? `Bienvenido, ${user.email}` : "Bienvenido a Invitu"}
+              </h1>
+              <p className="text-gray-600">
+                {user
+                  ? "Gestiona tus documentos y extrae datos de forma inteligente"
+                  : "Extrae datos de documentos de forma inteligente con IA"}
               </p>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+            <div className="flex gap-3">
+              {!user && (
+                <Button
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <LogIn className="w-4 h-4" />
+                  {isSigningIn ? "Conectando..." : "Iniciar Sesión"}
+                </Button>
+              )}
+              <Button
+                onClick={() => router.push("/documents/create")}
+                className="bg-black hover:bg-gray-800 text-white flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Crear Documento
+              </Button>
+            </div>
+          </div>
 
-        {/* Authentication Banner for non-authenticated users */}
-        {!authLoading && !user && (
-          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200" data-card="true">
-            <CardContent className="p-6">
+          {/* Auth Banner */}
+          {!user && (
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    ¡Inicia sesión para guardar tus documentos!
-                  </h3>
-                  <p className="text-gray-600">
-                    Puedes crear y editar documentos sin iniciar sesión, pero para guardarlos permanentemente necesitas
-                    una cuenta.
+                  <h3 className="font-medium text-blue-900">¿Quieres guardar tus documentos?</h3>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Inicia sesión para guardar y sincronizar tus documentos en la nube
                   </p>
                 </div>
                 <Button
-                  onClick={signInWithGoogle}
-                  className="flex items-center"
-                  style={{ backgroundColor: primaryColor, color: optimalTextColor }}
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Iniciar Sesión
+                  {isSigningIn ? "Conectando..." : "Iniciar Sesión"}
                 </Button>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => router.push("/documents/create")}
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-black rounded-lg">
+                  <Plus className="w-5 h-5 text-white" />
+                </div>
+                <CardTitle className="text-lg">Nuevo Documento</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Crea un nuevo documento y define campos para extraer datos</CardDescription>
             </CardContent>
           </Card>
-        )}
 
-        {/* Recent Documents */}
-        <Card data-card="true">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Documentos Recientes</CardTitle>
-              <CardDescription>{user ? "Tus documentos editados recientemente" : "Documentos locales"}</CardDescription>
-            </div>
-            {user && (
-              <Link href="/documents">
-                <Button variant="outline" size="sm" data-button="true">
-                  Ver Todos los Documentos
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            )}
-          </CardHeader>
-          <CardContent>
-            {appLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                ))}
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push("/documents")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <CardTitle className="text-lg">Documentos</CardTitle>
               </div>
-            ) : recentDocuments.length > 0 ? (
-              <div className="space-y-4">
-                {recentDocuments.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-white" />
-                      </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Ver y gestionar todos tus documentos
+                {documents.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {documents.length}
+                  </Badge>
+                )}
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push("/templates")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-green-500 rounded-lg">
+                  <Layout className="w-5 h-5 text-white" />
+                </div>
+                <CardTitle className="text-lg">Plantillas</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Plantillas reutilizables para tus documentos
+                {templates.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {templates.length}
+                  </Badge>
+                )}
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push("/settings")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-purple-500 rounded-lg">
+                  <Settings className="w-5 h-5 text-white" />
+                </div>
+                <CardTitle className="text-lg">Configuración</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Personaliza tu experiencia y configuraciones</CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Recent Documents */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Documentos Recientes
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => router.push("/documents")}>
+                  Ver todos
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentDocuments.length > 0 ? (
+                <div className="space-y-3">
+                  {recentDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/documents/${doc.id}`)}
+                    >
                       <div>
                         <h4 className="font-medium text-gray-900">{doc.name}</h4>
-                        <p className="text-sm text-gray-600">{doc.description}</p>
-                        <p className="text-xs text-gray-500">{doc.rows?.length || 0} entradas</p>
+                        <p className="text-sm text-gray-600">
+                          {doc.rows.length} entradas • {new Date(doc.updated_at).toLocaleDateString()}
+                        </p>
                       </div>
+                      <Badge variant="secondary">{doc.fields.length} campos</Badge>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">{new Date(doc.updated_at).toLocaleDateString("es-ES")}</p>
-                      <Link href={`/documents/${doc.id}`}>
-                        <Button variant="ghost" size="sm" data-button="true">
-                          Abrir
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Aún no hay documentos</h3>
-                <p className="text-gray-600 mb-4">Crea tu primer documento para comenzar</p>
-                <Link href="/documents/create">
-                  <Button
-                    className="auto-contrast-text"
-                    style={{ backgroundColor: primaryColor, color: optimalTextColor }}
-                    data-button="true"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crear Documento
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-4">No tienes documentos aún</p>
+                  <Button onClick={() => router.push("/documents/create")} size="sm">
+                    Crear tu primer documento
                   </Button>
-                </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Templates */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Layout className="w-5 h-5" />
+                  Plantillas Recientes
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => router.push("/templates")}>
+                  Ver todas
+                </Button>
               </div>
-            )}
+            </CardHeader>
+            <CardContent>
+              {recentTemplates.length > 0 ? (
+                <div className="space-y-3">
+                  {recentTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/templates/${template.id}`)}
+                    >
+                      <div>
+                        <h4 className="font-medium text-gray-900">{template.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {template.description || "Sin descripción"} •{" "}
+                          {new Date(template.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">{template.fields.length} campos</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Layout className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 mb-4">No tienes plantillas aún</p>
+                  <Button onClick={() => router.push("/documents/create")} size="sm">
+                    Crear tu primera plantilla
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Stats */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" />
+              Estadísticas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-900">{documents.length}</div>
+                <div className="text-sm text-gray-600">Documentos</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-900">{templates.length}</div>
+                <div className="text-sm text-gray-600">Plantillas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-900">
+                  {documents.reduce((acc, doc) => acc + doc.rows.length, 0)}
+                </div>
+                <div className="text-sm text-gray-600">Entradas de Datos</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-900">
+                  {documents.reduce((acc, doc) => acc + doc.fields.length, 0)}
+                </div>
+                <div className="text-sm text-gray-600">Campos Totales</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
