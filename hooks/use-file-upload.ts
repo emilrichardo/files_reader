@@ -14,41 +14,48 @@ export function useFileUpload(): UseFileUploadReturn {
   const [uploadProgress, setUploadProgress] = useState(0)
 
   const uploadFile = async (file: File): Promise<FileMetadata> => {
+    console.log("Iniciando carga de archivo:", file.name)
     setIsUploading(true)
     setUploadProgress(0)
 
-    // Simular progreso de carga
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return 90
-        }
-        return prev + 10
-      })
-    }, 100)
+    try {
+      // Simular progreso de carga
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval)
+            return 90
+          }
+          return prev + 10
+        })
+      }, 100)
 
-    // Simular tiempo de procesamiento
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+      // Simular tiempo de procesamiento
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    clearInterval(progressInterval)
-    setUploadProgress(100)
+      clearInterval(progressInterval)
+      setUploadProgress(100)
 
-    // Crear URL temporal para el archivo
-    const fileUrl = URL.createObjectURL(file)
+      // Crear URL temporal para el archivo
+      const fileUrl = URL.createObjectURL(file)
 
-    const fileMetadata: FileMetadata = {
-      filename: file.name,
-      file_size: file.size,
-      file_type: file.type,
-      upload_date: new Date().toISOString(),
-      file_url: fileUrl,
+      const fileMetadata: FileMetadata = {
+        filename: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        upload_date: new Date().toISOString(),
+        file_url: fileUrl,
+      }
+
+      console.log("Archivo procesado exitosamente:", fileMetadata)
+      return fileMetadata
+    } catch (error) {
+      console.error("Error al procesar el archivo:", error)
+      throw error
+    } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
     }
-
-    setIsUploading(false)
-    setUploadProgress(0)
-
-    return fileMetadata
   }
 
   return {

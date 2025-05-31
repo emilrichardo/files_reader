@@ -48,6 +48,7 @@ export default function SettingsPage() {
   const [newApiKeyName, setNewApiKeyName] = useState("")
   const [newApiKeyValue, setNewApiKeyValue] = useState("")
   const [isAddingApiKey, setIsAddingApiKey] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Cargar configuraciones del localStorage
   useEffect(() => {
@@ -55,21 +56,48 @@ export default function SettingsPage() {
       const savedSettings = localStorage.getItem(STORAGE_KEY)
       if (savedSettings) {
         setSettings(JSON.parse(savedSettings))
+        toast({
+          title: "Configuraciones cargadas",
+          description: "Se han cargado tus configuraciones guardadas.",
+        })
       }
     } catch (error) {
       console.error("Error loading settings:", error)
     }
-  }, [])
+  }, [toast])
+
+  // Aplicar tema cuando cambie
+  useEffect(() => {
+    // Aplicar tema oscuro/claro al documento
+    if (settings.theme === "dark") {
+      document.documentElement.classList.add("dark")
+    } else {
+      document.documentElement.classList.remove("dark")
+    }
+
+    // Aplicar esquema de colores (esto requeriría actualizar las variables CSS)
+    // Esta es una implementación simplificada
+    const root = document.documentElement
+    const scheme = colorSchemes.find((s) => s.value === settings.color_scheme)
+    if (scheme) {
+      root.style.setProperty("--primary", scheme.color)
+    }
+  }, [settings.theme, settings.color_scheme])
 
   // Guardar configuraciones en localStorage
-  const saveSettings = () => {
+  const saveSettings = async () => {
     try {
+      setIsSaving(true)
       const updatedSettings = {
         ...settings,
         updated_at: new Date().toISOString(),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSettings))
       setSettings(updatedSettings)
+
+      // Simular una operación asíncrona
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       toast({
         title: "Configuración guardada",
         description: "Tus configuraciones han sido guardadas exitosamente.",
@@ -81,6 +109,8 @@ export default function SettingsPage() {
         description: "Error al guardar las configuraciones.",
         variant: "destructive",
       })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -396,9 +426,9 @@ export default function SettingsPage() {
 
           {/* Save Button */}
           <div className="flex justify-end">
-            <Button onClick={saveSettings} className="bg-black hover:bg-gray-800 text-white">
+            <Button onClick={saveSettings} className="bg-black hover:bg-gray-800 text-white" disabled={isSaving}>
               <Save className="w-4 h-4 mr-2" />
-              Guardar Configuración
+              {isSaving ? "Guardando..." : "Guardar Configuración"}
             </Button>
           </div>
         </div>

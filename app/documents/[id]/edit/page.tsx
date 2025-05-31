@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, Plus, Trash2, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -10,17 +10,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { useApp } from "@/contexts/app-context"
 import { useToast } from "@/hooks/use-toast"
-import type { Document } from "@/lib/types"
+import type { Document, DocumentRow } from "@/lib/types"
 
 export default function EditDocumentPage() {
   const params = useParams()
   const router = useRouter()
-  const { getDocument, updateDocument } = useApp()
+  const { getDocument, updateDocument, addRowToDocument, updateDocumentRow, deleteDocumentRow } = useApp()
   const { toast } = useToast()
   const [document, setDocument] = useState<Document | null>(null)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [loading, setLoading] = useState(true)
+  const [rows, setRows] = useState<DocumentRow[]>([])
 
   useEffect(() => {
     const docId = params.id as string
@@ -29,6 +30,7 @@ export default function EditDocumentPage() {
       setDocument(doc)
       setName(doc.name)
       setDescription(doc.description || "")
+      setRows(doc.rows)
     }
     setLoading(false)
   }, [params.id, getDocument])
@@ -57,6 +59,60 @@ export default function EditDocumentPage() {
 
     router.push(`/documents/${document.id}`)
   }
+
+  const addRow = useCallback(() => {
+    if (!document) return
+
+    const newRow: DocumentRow = {
+      id: Date.now().toString(),
+      document_id: document.id,
+      data: {},
+      created_at: new Date().toISOString(),
+    }
+
+    addRowToDocument(document.id, newRow)
+    setRows((prev) => [...prev, newRow])
+
+    toast({
+      title: "Fila agregada",
+      description: "Se ha agregado una nueva fila al documento.",
+    })
+  }, [document, addRowToDocument, toast])
+
+  const updateRowData = useCallback(
+    (rowId: string, fieldName: string, value: any) => {
+      if (!document) return
+
+      setRows((prev) =>
+        prev.map((row) => (row.id === rowId ? { ...row, data: { ...row.data, [fieldName]: value } } : row)),
+      )
+
+      // Actualizar en el contexto global
+      const row = rows.find((r) => r.id === rowId)
+      if (row) {
+        const updatedData = { ...row.data, [fieldName]: value }
+        updateDocumentRow(document.id, rowId, updatedData)
+      }
+    },
+    [document, rows, updateDocumentRow],
+  )
+
+  const removeRow = useCallback(
+    (rowId: string) => {
+      if (!document) return
+
+      if (confirm("¿Estás seguro de que quieres eliminar esta fila?")) {
+        deleteDocumentRow(document.id, rowId)
+        setRows((prev) => prev.filter((row) => row.id !== rowId))
+
+        toast({
+          title: "Fila eliminada",
+          description: "La fila ha sido eliminada exitosamente.",
+        })
+      }
+    },
+    [document, deleteDocumentRow, toast],
+  )
 
   if (loading) {
     return (
@@ -92,7 +148,7 @@ export default function EditDocumentPage() {
 
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
@@ -101,7 +157,7 @@ export default function EditDocumentPage() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Editar Documento</h1>
-              <p className="text-gray-600">Modifica la información básica del documento</p>
+              <p className="text-gray-600">Modifica la información y datos del documento</p>
             </div>
           </div>
           <Button onClick={handleSave} className="bg-black hover:bg-gray-800 text-white">
@@ -111,7 +167,7 @@ export default function EditDocumentPage() {
         </div>
 
         {/* Edit Form */}
-        <Card>
+        <Card className="mb-8">
           <CardHeader>
             <CardTitle>Información del Documento</CardTitle>
             <CardDescription>Actualiza el nombre y descripción del documento</CardDescription>
@@ -145,7 +201,7 @@ export default function EditDocumentPage() {
                   <span className="text-gray-500">Campos definidos:</span> {document.fields.length}
                 </div>
                 <div>
-                  <span className="text-gray-500">Entradas de datos:</span> {document.rows.length}
+                  <span className="text-gray-500">Entradas de datos:</span> {rows.length}
                 </div>
                 <div>
                   <span className="text-gray-500">Creado:</span>{" "}
@@ -157,6 +213,81 @@ export default function EditDocumentPage() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Table */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Datos del Documento</CardTitle>
+              <CardDescription>Edita las entradas de datos existentes</CardDescription>
+            </div>
+            <Button onClick={addRow} className="bg-black hover:bg-gray-800 text-white">
+              <Plus className="w-4 h-4 mr-2" />
+              Agregar Fila
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {document.fields.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      {document.fields.map((field) => (
+                        <th key={field.id} className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                          {field.field_name}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </th>
+                      ))}
+                      <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">Archivo</th>
+                      <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id} className="hover:bg-gray-50">
+                        {document.fields.map((field) => (
+                          <td key={field.id} className="border border-gray-200 p-2">
+                            <Input
+                              value={row.data[field.field_name] || ""}
+                              onChange={(e) => updateRowData(row.id, field.field_name, e.target.value)}
+                              placeholder={`Ingresa ${field.field_name}...`}
+                              type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                            />
+                          </td>
+                        ))}
+                        <td className="border border-gray-200 p-2">
+                          {row.file_metadata && (
+                            <div className="flex items-center space-x-1">
+                              <FileText className="w-4 h-4 text-gray-500" />
+                              <span className="text-xs text-gray-600 truncate max-w-20">
+                                {row.file_metadata.filename}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="border border-gray-200 p-2">
+                          <Button variant="outline" size="icon" onClick={() => removeRow(row.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={document.fields.length + 2}
+                          className="border border-gray-200 p-8 text-center text-gray-500"
+                        >
+                          No hay entradas de datos aún. Agrega una fila para comenzar.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

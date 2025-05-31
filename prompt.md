@@ -166,19 +166,31 @@ Navegación lateral izquierda con las siguientes secciones:
 #### **Carga de Archivos**
 - **Zona de drag & drop** debajo de la tabla
 - **Soporte para**: PDF, JPG, PNG, DOC, DOCX
-- **Proceso de carga**:
-  1. Validación del nombre del documento
+- **Proceso de carga completo**:
+  1. Validación del nombre del documento y campos definidos
   2. Creación automática del documento si no existe
   3. Simulación de procesamiento con barra de progreso
-  4. Extracción simulada de datos basada en campos definidos
-  5. Modal de preview con datos extraídos
-  6. Confirmación y agregado a la tabla
+  4. Extracción inteligente de datos basada en campos definidos y tipo de documento
+  5. Modal de vista previa con datos extraídos y campos editables
+  6. Validación de campos requeridos
+  7. Confirmación y agregado a la tabla de datos
+  8. Notificación de éxito con detalles del procesamiento
 
 #### **Modal de Preview de Archivos**
-- **Información del archivo**: nombre, tamaño, tipo, fecha
-- **Campos extraídos** editables antes de confirmar
-- **Validación** de campos requeridos
-- **Botones**: Cancelar, Confirmar y Agregar
+- **Interfaz mejorada** con información completa del archivo
+- **Campos extraídos editables** con validación en tiempo real
+- **Tooltips** con descripciones de campos al pasar el mouse
+- **Indicadores visuales** para campos requeridos
+- **Botones de acción claros**: Cancelar, Confirmar y Agregar
+- **Manejo de estado optimizado** para evitar loops y problemas de renderizado
+
+#### **Edición Posterior de Datos**
+- **Edición completa** de filas desde la página de edición del documento
+- **Agregar nuevas filas** manualmente después de la carga
+- **Eliminar filas** con confirmación
+- **Actualización en tiempo real** de los datos modificados
+- **Validación** de campos requeridos y tipos de datos
+- **Persistencia** automática de cambios
 
 #### **Exportación**
 - **Selector de formato**: CSV, PDF, Excel

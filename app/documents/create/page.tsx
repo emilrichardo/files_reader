@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, Upload, Save, FileText, Layout, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,9 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
 import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
+
+// Clave para almacenar las configuraciones en localStorage
+const DOCUMENT_DRAFT_KEY = "docmanager_document_draft"
 
 export default function CreateDocumentPage() {
   const router = useRouter()
@@ -64,6 +67,51 @@ export default function CreateDocumentPage() {
   }>({ isOpen: false })
   const [templateName, setTemplateName] = useState("")
   const [templateDescription, setTemplateDescription] = useState("")
+
+  // Cargar borrador guardado al iniciar
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(DOCUMENT_DRAFT_KEY)
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft)
+        setDocumentName(draft.name || "Nuevo Documento")
+        setDocumentDescription(draft.description || "")
+        setFields(draft.fields || [])
+        setRows(draft.rows || [])
+        setCurrentDocumentId(draft.currentDocumentId || null)
+
+        toast({
+          title: "Borrador cargado",
+          description: "Se ha cargado un borrador guardado anteriormente.",
+        })
+      }
+    } catch (error) {
+      console.error("Error loading draft:", error)
+    }
+  }, [toast])
+
+  // Guardar borrador automáticamente cuando cambian los datos
+  useEffect(() => {
+    const saveDraft = () => {
+      try {
+        const draft = {
+          name: documentName,
+          description: documentDescription,
+          fields,
+          rows,
+          currentDocumentId,
+          lastUpdated: new Date().toISOString(),
+        }
+        localStorage.setItem(DOCUMENT_DRAFT_KEY, JSON.stringify(draft))
+      } catch (error) {
+        console.error("Error saving draft:", error)
+      }
+    }
+
+    // Guardar borrador cada vez que cambian los datos principales
+    const timeoutId = setTimeout(saveDraft, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [documentName, documentDescription, fields, rows, currentDocumentId])
 
   const handleTitleClick = useCallback(() => {
     setIsEditingTitle(true)
@@ -202,69 +250,170 @@ export default function CreateDocumentPage() {
     }
   }, [])
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setDragActive(false)
+  // Agregar esta función auxiliar para generar valores por defecto según el tipo
+  const generateDefaultValue = (type: string, fieldName: string): any => {
+    switch (type) {
+      case "number":
+        return Math.floor(Math.random() * 100)
+      case "date":
+        return new Date().toISOString().split("T")[0]
+      case "boolean":
+        return Math.random() > 0.5
+      case "email":
+        const domains = ["gmail.com", "outlook.com", "empresa.com", "example.com"]
+        return `usuario${Math.floor(Math.random() * 1000)}@${domains[Math.floor(Math.random() * domains.length)]}`
+      case "url":
+        return `https://example.com/page${Math.floor(Math.random() * 100)}`
+      default: // text
+        if (fieldName.includes("nombre") || fieldName.includes("name")) {
+          const nombres = ["Juan Pérez", "María García", "Carlos López", "Ana Martínez", "Roberto Fernández"]
+          return nombres[Math.floor(Math.random() * nombres.length)]
+        } else if (fieldName.includes("direccion") || fieldName.includes("address")) {
+          const direcciones = ["Calle Principal 123", "Av. Central 456", "Plaza Mayor 789", "Ruta 8 Km 45"]
+          return direcciones[Math.floor(Math.random() * direcciones.length)]
+        } else if (fieldName.includes("telefono") || fieldName.includes("phone")) {
+          return `+${Math.floor(Math.random() * 100)} ${Math.floor(Math.random() * 1000000000)}`
+        } else {
+          return `Valor extraído para ${fieldName}`
+        }
+    }
+  }
 
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleFiles(e.dataTransfer.files)
-      }
-    },
-    [documentName, fields, currentDocumentId],
-  )
-
+  // Move this entire block before handleFiles
   const simulateDataExtraction = useCallback((file: File, fields: DocumentField[]): Record<string, any> => {
     const extractedData: Record<string, any> = {}
 
+    // Generar datos más realistas basados en el nombre del archivo
+    const fileName = file.name.toLowerCase()
+    const isInvoice = fileName.includes("factura") || fileName.includes("invoice")
+    const isContract = fileName.includes("contrato") || fileName.includes("contract")
+    const isInventory = fileName.includes("inventario") || fileName.includes("inventory")
+
+    // Fecha actual formateada
+    const currentDate = new Date().toISOString().split("T")[0]
+
     // Simular extracción de datos basada en el nombre del archivo y campos
     fields.forEach((field) => {
-      switch (field.field_name.toLowerCase()) {
-        case "document_title":
-        case "titulo":
-        case "title":
-          extractedData[field.field_name] = file.name.replace(/\.[^/.]+$/, "")
-          break
-        case "fecha":
-        case "date":
-          extractedData[field.field_name] = new Date().toISOString().split("T")[0]
-          break
-        case "numero_factura":
-        case "invoice_number":
-          extractedData[field.field_name] = `FAC-${Math.floor(Math.random() * 10000)}`
-          break
-        case "monto":
-        case "amount":
-        case "total":
-          extractedData[field.field_name] = (Math.random() * 1000 + 100).toFixed(2)
-          break
-        case "cliente":
-        case "customer":
-        case "client":
-          const clientes = ["Empresa ABC S.A.", "Corporación XYZ", "TechCorp Solutions", "Innovate Ltd."]
-          extractedData[field.field_name] = clientes[Math.floor(Math.random() * clientes.length)]
-          break
-        default:
-          if (field.type === "number") {
-            extractedData[field.field_name] = Math.floor(Math.random() * 100)
-          } else if (field.type === "date") {
-            extractedData[field.field_name] = new Date().toISOString().split("T")[0]
-          } else {
-            extractedData[field.field_name] = `Valor extraído para ${field.field_name}`
-          }
+      const fieldNameLower = field.field_name.toLowerCase()
+
+      // Datos específicos según el tipo de documento detectado
+      if (isInvoice) {
+        switch (fieldNameLower) {
+          case "document_title":
+          case "titulo":
+          case "title":
+            extractedData[field.field_name] = `Factura ${Math.floor(Math.random() * 10000)}`
+            break
+          case "fecha":
+          case "date":
+            extractedData[field.field_name] = currentDate
+            break
+          case "numero_factura":
+          case "invoice_number":
+            extractedData[field.field_name] = `FAC-${Math.floor(Math.random() * 10000)}`
+            break
+          case "monto":
+          case "amount":
+          case "total":
+            extractedData[field.field_name] = (Math.random() * 1000 + 100).toFixed(2)
+            break
+          case "cliente":
+          case "customer":
+          case "client":
+            const clientes = ["Empresa ABC S.A.", "Corporación XYZ", "TechCorp Solutions", "Innovate Ltd."]
+            extractedData[field.field_name] = clientes[Math.floor(Math.random() * clientes.length)]
+            break
+          default:
+            extractedData[field.field_name] = generateDefaultValue(field.type, fieldNameLower)
+        }
+      } else if (isContract) {
+        switch (fieldNameLower) {
+          case "document_title":
+          case "titulo":
+          case "title":
+            extractedData[field.field_name] = `Contrato de Servicios ${Math.floor(Math.random() * 1000)}`
+            break
+          case "fecha":
+          case "date":
+          case "fecha_inicio":
+          case "start_date":
+            extractedData[field.field_name] = currentDate
+            break
+          case "numero_contrato":
+          case "contract_number":
+            extractedData[field.field_name] = `CONT-${Math.floor(Math.random() * 10000)}`
+            break
+          case "duracion":
+          case "duration":
+            extractedData[field.field_name] = `${Math.floor(Math.random() * 24) + 1} meses`
+            break
+          case "cliente":
+          case "customer":
+          case "client":
+            const clientes = ["Empresa ABC S.A.", "Corporación XYZ", "TechCorp Solutions", "Innovate Ltd."]
+            extractedData[field.field_name] = clientes[Math.floor(Math.random() * clientes.length)]
+            break
+          default:
+            extractedData[field.field_name] = generateDefaultValue(field.type, fieldNameLower)
+        }
+      } else if (isInventory) {
+        switch (fieldNameLower) {
+          case "document_title":
+          case "titulo":
+          case "title":
+            extractedData[field.field_name] = `Inventario ${new Date().toLocaleDateString()}`
+            break
+          case "codigo_producto":
+          case "product_code":
+            extractedData[field.field_name] = `PROD-${Math.floor(Math.random() * 10000)}`
+            break
+          case "nombre":
+          case "name":
+          case "producto":
+          case "product":
+            const productos = ["Laptop HP", "Monitor Dell", "Teclado Logitech", "Mouse Inalámbrico", "Impresora Epson"]
+            extractedData[field.field_name] = productos[Math.floor(Math.random() * productos.length)]
+            break
+          case "cantidad":
+          case "quantity":
+            extractedData[field.field_name] = Math.floor(Math.random() * 100) + 1
+            break
+          case "precio":
+          case "price":
+            extractedData[field.field_name] = (Math.random() * 500 + 50).toFixed(2)
+            break
+          default:
+            extractedData[field.field_name] = generateDefaultValue(field.type, fieldNameLower)
+        }
+      } else {
+        // Documento genérico
+        extractedData[field.field_name] = generateDefaultValue(field.type, fieldNameLower)
       }
     })
 
     return extractedData
   }, [])
 
+  // Actualizar la función handleFiles para mejorar el procesamiento de documentos
+  // y asegurar que el modal de vista previa se muestre correctamente
   const handleFiles = useCallback(
     async (files: FileList) => {
+      console.log("Procesando archivos:", files.length)
+
       if (!documentName.trim() || documentName === "Nuevo Documento") {
         toast({
           title: "Error",
           description: "Por favor, cambia el nombre del documento antes de subir archivos.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Verificar que haya campos definidos
+      if (fields.length === 0) {
+        toast({
+          title: "Error",
+          description: "Por favor, define al menos un campo antes de subir archivos.",
           variant: "destructive",
         })
         return
@@ -282,6 +431,10 @@ export default function CreateDocumentPage() {
             rows: [],
           })
           setCurrentDocumentId(docId)
+          toast({
+            title: "Documento creado",
+            description: "Se ha creado un nuevo documento para procesar los archivos.",
+          })
         } catch (error) {
           console.error("Error creating document:", error)
           toast({
@@ -293,13 +446,29 @@ export default function CreateDocumentPage() {
         }
       }
 
-      for (const file of Array.from(files)) {
+      // Procesar solo el primer archivo por ahora para simplificar
+      if (files.length > 0) {
+        const file = files[0]
         try {
           setUploadingFile(file.name)
+
+          // Mostrar notificación de inicio de procesamiento
+          toast({
+            title: "Procesando archivo",
+            description: `Iniciando procesamiento de ${file.name}...`,
+          })
+
           const fileMetadata = await uploadFile(file)
+          console.log("Archivo procesado:", fileMetadata)
 
           // Simular extracción de datos basada en los campos definidos
           const extractedData = simulateDataExtraction(file, fields)
+          console.log("Datos extraídos:", extractedData)
+
+          toast({
+            title: "Archivo procesado",
+            description: `Se han extraído datos de ${file.name}. Revise y confirme la información.`,
+          })
 
           // Asegurarse de que fileMetadata existe antes de abrir el modal
           if (fileMetadata) {
@@ -321,7 +490,31 @@ export default function CreateDocumentPage() {
         }
       }
     },
-    [documentName, documentDescription, fields, currentDocumentId, user, addDocument, uploadFile, toast],
+    [
+      documentName,
+      documentDescription,
+      fields,
+      currentDocumentId,
+      user,
+      addDocument,
+      uploadFile,
+      simulateDataExtraction,
+      toast,
+    ],
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragActive(false)
+
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        console.log("Archivos arrastrados:", e.dataTransfer.files.length)
+        handleFiles(e.dataTransfer.files)
+      }
+    },
+    [handleFiles],
   )
 
   const handlePreviewConfirm = useCallback(
@@ -392,6 +585,9 @@ export default function CreateDocumentPage() {
         title: "Documento guardado",
         description: "El documento ha sido guardado exitosamente.",
       })
+
+      // Limpiar el borrador después de guardar exitosamente
+      localStorage.removeItem(DOCUMENT_DRAFT_KEY)
 
       router.push(`/documents/${docId}`)
     } catch (error) {
@@ -706,20 +902,25 @@ export default function CreateDocumentPage() {
               <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí o haz clic para subir</h3>
               <p className="text-gray-600 mb-4">Soporta archivos PDF, JPG, PNG, DOC, DOCX</p>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                onChange={(e) => e.target.files && handleFiles(e.target.files)}
-                className="hidden"
-                id="file-upload"
+              <Button
+                className="bg-black hover:bg-gray-800 text-white"
                 disabled={isUploading}
-              />
-              <label htmlFor="file-upload">
-                <Button className="bg-black hover:bg-gray-800 text-white" disabled={isUploading}>
-                  {isUploading ? "Procesando..." : "Elegir Archivos"}
-                </Button>
-              </label>
+                onClick={() => {
+                  const input = document.createElement("input")
+                  input.type = "file"
+                  input.accept = ".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  input.multiple = true
+                  input.onchange = (e) => {
+                    const files = (e.target as HTMLInputElement).files
+                    if (files && files.length > 0) {
+                      handleFiles(files)
+                    }
+                  }
+                  input.click()
+                }}
+              >
+                {isUploading ? "Procesando..." : "Elegir Archivos"}
+              </Button>
             </div>
           </CardContent>
         </Card>
