@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus, FileText, Clock, ArrowRight } from "lucide-react"
+import { Plus, FileText, Clock, ArrowRight, LogIn } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useApp } from "@/contexts/app-context"
 import { useTheme } from "@/contexts/theme-context"
@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { Document } from "@/lib/types"
 
 export default function HomePage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, signInWithGoogle } = useAuth()
   const { documents, loading: appLoading } = useApp()
   const { primaryColor, getOptimalTextColor, isLoaded: themeLoaded } = useTheme()
   const [recentDocuments, setRecentDocuments] = useState<Document[]>([])
@@ -27,8 +27,8 @@ export default function HomePage() {
     }
   }, [documents])
 
-  // Mostrar loading mientras se cargan los datos
-  if (authLoading || !themeLoaded) {
+  // Solo mostrar loading si el tema no está cargado
+  if (!themeLoaded) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
@@ -44,11 +44,7 @@ export default function HomePage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {user ? `Bienvenido de nuevo, ${user.name}` : "Bienvenido a DocManager"}
           </h1>
-          <p className="text-gray-600">
-            {user
-              ? "Gestiona tus documentos y extrae información valiosa de tus datos."
-              : "Gestiona documentos y extrae información valiosa de tus datos."}
-          </p>
+          <p className="text-gray-600">Gestiona tus documentos y extrae información valiosa de tus datos.</p>
         </div>
 
         {/* Quick Actions */}
@@ -98,21 +94,48 @@ export default function HomePage() {
           </Card>
         </div>
 
+        {/* Authentication Banner for non-authenticated users */}
+        {!authLoading && !user && (
+          <Card className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200" data-card="true">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    ¡Inicia sesión para guardar tus documentos!
+                  </h3>
+                  <p className="text-gray-600">
+                    Puedes crear y editar documentos sin iniciar sesión, pero para guardarlos permanentemente necesitas
+                    una cuenta.
+                  </p>
+                </div>
+                <Button
+                  onClick={signInWithGoogle}
+                  className="flex items-center"
+                  style={{ backgroundColor: primaryColor, color: optimalTextColor }}
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Iniciar Sesión
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Recent Documents */}
         <Card data-card="true">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Documentos Recientes</CardTitle>
-              <CardDescription>
-                {user ? "Tus documentos editados recientemente" : "Documentos de ejemplo"}
-              </CardDescription>
+              <CardDescription>{user ? "Tus documentos editados recientemente" : "Documentos locales"}</CardDescription>
             </div>
-            <Link href="/documents">
-              <Button variant="outline" size="sm" data-button="true">
-                Ver Todos los Documentos
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
+            {user && (
+              <Link href="/documents">
+                <Button variant="outline" size="sm" data-button="true">
+                  Ver Todos los Documentos
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            )}
           </CardHeader>
           <CardContent>
             {appLoading ? (
@@ -155,12 +178,8 @@ export default function HomePage() {
             ) : (
               <div className="text-center py-8">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {user ? "Aún no hay documentos" : "Comienza creando documentos"}
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  {user ? "Crea tu primer documento para comenzar" : "Inicia sesión para gestionar tus documentos"}
-                </p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Aún no hay documentos</h3>
+                <p className="text-gray-600 mb-4">Crea tu primer documento para comenzar</p>
                 <Link href="/documents/create">
                   <Button
                     className="auto-contrast-text"
