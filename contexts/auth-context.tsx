@@ -36,11 +36,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Obtener sesión inicial
     const getInitialSession = async () => {
       try {
+        console.log("Getting initial session...")
         const {
           data: { session },
         } = await supabase.auth.getSession()
+
+        console.log("Initial session:", session ? "Found" : "Not found")
+
         if (session?.user) {
+          console.log("User found in session:", session.user.email)
           await loadUserProfile(session.user)
+        } else {
+          console.log("No user in session, checking localStorage")
+          // Intentar cargar desde localStorage si no hay sesión
+          const localUser = localStorage.getItem("localUser")
+          if (localUser) {
+            try {
+              const parsedUser = JSON.parse(localUser)
+              console.log("Found local user:", parsedUser.email)
+              setUser(parsedUser)
+            } catch (e) {
+              console.error("Error parsing local user:", e)
+            }
+          } else {
+            console.log("No local user found")
+            setUser(null)
+          }
         }
       } catch (error) {
         console.error("Error getting initial session:", error)
@@ -59,7 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (session?.user) {
         await loadUserProfile(session.user)
-      } else {
+      } else if (event === "SIGNED_OUT") {
+        console.log("User signed out, clearing local user")
+        localStorage.removeItem("localUser")
         setUser(null)
       }
       setLoading(false)
@@ -70,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserProfile = async (authUser: User) => {
     try {
+      console.log("Loading user profile for:", authUser.email)
       const { data: profile, error } = await getUserProfile(authUser.id)
 
       if (error) {
@@ -77,19 +101,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      if (profile) {
-        const userData = {
-          id: profile.id,
-          email: profile.email,
-          name: profile.name || authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Usuario",
-          avatar_url: profile.avatar_url || authUser.user_metadata?.avatar_url,
-        }
-
-        setUser(userData)
-
-        // Load theme settings after user is set
-        window.dispatchEvent(new CustomEvent("userLoaded", { detail: { userId: authUser.id } }))
+      const userData = {
+        id: authUser.id,
+        email: authUser.email || "usuario@ejemplo.com",
+        name: profile?.name || authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Usuario",
+        avatar_url: profile?.avatar_url || authUser.user_metadata?.avatar_url,
       }
+
+      console.log("User profile loaded:", userData.name)
+      setUser(userData)
+
+      // Guardar en localStorage para persistencia
+      localStorage.setItem("localUser", JSON.stringify(userData))
+
+      // Load theme settings after user is set
+      window.dispatchEvent(new CustomEvent("userLoaded", { detail: { userId: authUser.id } }))
     } catch (error) {
       console.error("Error in loadUserProfile:", error)
     }
@@ -133,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Error signing out:", error)
         throw error
       }
+      localStorage.removeItem("localUser")
       setUser(null)
     } catch (error) {
       console.error("Sign out error:", error)

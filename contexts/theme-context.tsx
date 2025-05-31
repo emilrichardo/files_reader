@@ -98,7 +98,20 @@ const fontFamilies = [
 ]
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<UserSettings>(defaultSettings)
+  const [settings, setSettings] = useState<UserSettings>(() => {
+    // Intentar cargar desde localStorage al inicio
+    if (typeof window !== "undefined") {
+      const savedSettings = localStorage.getItem("theme_settings")
+      if (savedSettings) {
+        try {
+          return JSON.parse(savedSettings)
+        } catch (e) {
+          console.error("Error parsing saved settings:", e)
+        }
+      }
+    }
+    return defaultSettings
+  })
   const [isLoaded, setIsLoaded] = useState(false)
 
   // Initialize with default settings
@@ -106,46 +119,74 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setIsLoaded(true)
   }, [])
 
+  // Escuchar evento de usuario cargado
+  useEffect(() => {
+    const handleUserLoaded = (event: CustomEvent) => {
+      const { userId } = event.detail
+      if (userId) {
+        loadUserSettings(userId)
+      }
+    }
+
+    window.addEventListener("userLoaded" as any, handleUserLoaded as EventListener)
+
+    return () => {
+      window.removeEventListener("userLoaded" as any, handleUserLoaded as EventListener)
+    }
+  }, [])
+
   // Function to load user settings (called from AuthProvider when user is available)
   const loadUserSettings = async (userId: string) => {
     try {
+      console.log("Loading user settings for:", userId)
       const { data, error } = await getUserSettings(userId)
 
       if (error) {
         console.error("Error loading user settings:", error)
         // Fallback: cargar desde localStorage
-        const localSettings = localStorage.getItem("user_settings")
+        const localSettings = localStorage.getItem("theme_settings")
         if (localSettings) {
           const parsed = JSON.parse(localSettings)
-          setSettings({ ...defaultSettings, ...parsed, user_id: userId })
+          setSettings({ ...parsed, user_id: userId })
         } else {
           setSettings({ ...defaultSettings, user_id: userId })
         }
       } else if (data) {
+        console.log("User settings loaded from database:", data)
         setSettings({
           ...defaultSettings,
           ...data,
           api_keys: data.api_keys || {},
         })
+        // Actualizar localStorage con los datos de la base de datos
+        localStorage.setItem(
+          "theme_settings",
+          JSON.stringify({
+            ...defaultSettings,
+            ...data,
+            api_keys: data.api_keys || {},
+          }),
+        )
       } else {
         // No hay configuraciones, crear las por defecto
         const newSettings = { ...defaultSettings, user_id: userId }
         try {
           await updateUserSettings(userId, newSettings)
           setSettings(newSettings)
+          localStorage.setItem("theme_settings", JSON.stringify(newSettings))
         } catch (createError) {
           console.error("Error creating default settings:", createError)
           setSettings(newSettings)
-          localStorage.setItem("user_settings", JSON.stringify(newSettings))
+          localStorage.setItem("theme_settings", JSON.stringify(newSettings))
         }
       }
     } catch (error) {
       console.error("Error in loadUserSettings:", error)
       // Fallback completo a localStorage
-      const localSettings = localStorage.getItem("user_settings")
+      const localSettings = localStorage.getItem("theme_settings")
       if (localSettings) {
         const parsed = JSON.parse(localSettings)
-        setSettings({ ...defaultSettings, ...parsed, user_id: userId })
+        setSettings({ ...parsed, user_id: userId })
       } else {
         setSettings({ ...defaultSettings, user_id: userId })
       }
@@ -194,31 +235,34 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       link.href = `https://fonts.googleapis.com/css2?family=${settings.font_family.replace(/\s+/g, "+")}:wght@400;500;600;700&display=swap`
       document.head.appendChild(link)
     }
+
+    // Guardar en localStorage
+    localStorage.setItem("theme_settings", JSON.stringify(settings))
   }, [settings, isLoaded])
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
+    console.log("Updating settings:", updates)
     const updatedSettings = { ...settings, ...updates, updated_at: new Date().toISOString() }
 
     // Actualizar estado local inmediatamente
     setSettings(updatedSettings)
 
+    // Guardar en localStorage siempre
+    localStorage.setItem("theme_settings", JSON.stringify(updatedSettings))
+
     // Intentar guardar en la base de datos si hay usuario autenticado
     if (settings.user_id && settings.user_id !== "demo-user") {
       try {
+        console.log("Saving settings to database for user:", settings.user_id)
         const { error } = await updateUserSettings(settings.user_id, updates)
         if (error) {
           console.error("Error updating settings in database:", error)
-          // Fallback: guardar en localStorage
-          localStorage.setItem("user_settings", JSON.stringify(updatedSettings))
+        } else {
+          console.log("Settings saved to database successfully")
         }
       } catch (error) {
         console.error("Error updating settings:", error)
-        // Fallback: guardar en localStorage
-        localStorage.setItem("user_settings", JSON.stringify(updatedSettings))
       }
-    } else {
-      // Si no hay usuario o es demo, guardar en localStorage
-      localStorage.setItem("user_settings", JSON.stringify(updatedSettings))
     }
   }
 
