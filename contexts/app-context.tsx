@@ -9,7 +9,6 @@ interface AppContextType {
   documents: Document[]
   templates: Template[]
   loading: boolean
-  isHydrated: boolean
   addDocument: (document: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => string
   updateDocument: (id: string, updates: Partial<Document>) => void
   deleteDocument: (id: string) => void
@@ -21,263 +20,179 @@ interface AppContextType {
   addRowToDocument: (documentId: string, row: Omit<DocumentRow, "id" | "created_at">) => void
   updateDocumentRow: (documentId: string, rowId: string, data: Record<string, any>) => void
   deleteDocumentRow: (documentId: string, rowId: string) => void
-  refreshData: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
-// Función para generar IDs únicos de forma consistente
-const generateId = () => {
-  const timestamp = Date.now()
-  const random = Math.floor(Math.random() * 1000000)
-  return `${timestamp}-${random}`
-}
+const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth()
   const [documents, setDocuments] = useState<Document[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
-  const [isHydrated, setIsHydrated] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  // Marcar como hidratado después del primer render
+  // Marcar como montado
   useEffect(() => {
-    setIsHydrated(true)
+    setMounted(true)
+    setLoading(false)
   }, [])
 
-  // Cargar datos cuando cambia el estado de autenticación y está hidratado
+  // Cargar datos cuando el usuario cambie y esté montado
   useEffect(() => {
-    if (!authLoading && isHydrated) {
+    if (mounted && !authLoading) {
       loadData()
     }
-  }, [user, authLoading, isHydrated])
-
-  // Guardar datos cuando cambien (solo si está hidratado)
-  useEffect(() => {
-    if (isHydrated && !loading) {
-      saveToLocalStorage()
-    }
-  }, [documents, templates, isHydrated, loading])
+  }, [user, mounted, authLoading])
 
   const loadData = () => {
     if (typeof window === "undefined") return
 
     try {
-      setLoading(true)
+      const storageKey = user ? `app_data_${user.id}` : "app_data_anonymous"
+      const savedData = localStorage.getItem(storageKey)
 
-      const key = user ? `_${user.id}` : "_anonymous"
-
-      // Cargar documentos
-      const savedDocuments = localStorage.getItem(`app_documents${key}`)
-      if (savedDocuments) {
+      if (savedData) {
         try {
-          const parsedDocs = JSON.parse(savedDocuments)
-          setDocuments(Array.isArray(parsedDocs) ? parsedDocs : [])
+          const parsed = JSON.parse(savedData)
+          setDocuments(parsed.documents || [])
+          setTemplates(parsed.templates || [])
         } catch (e) {
-          console.error("Error parsing saved documents:", e)
+          console.error("Error parsing saved data:", e)
           setDocuments([])
-        }
-      } else {
-        setDocuments([])
-      }
-
-      // Cargar plantillas
-      const savedTemplates = localStorage.getItem(`app_templates${key}`)
-      if (savedTemplates) {
-        try {
-          const parsedTemplates = JSON.parse(savedTemplates)
-          setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : [])
-        } catch (e) {
-          console.error("Error parsing saved templates:", e)
           setTemplates([])
         }
       } else {
+        setDocuments([])
         setTemplates([])
       }
-
-      console.log("Data loaded successfully")
     } catch (error) {
       console.error("Error loading data:", error)
       setDocuments([])
       setTemplates([])
-    } finally {
-      setLoading(false)
     }
   }
 
-  const saveToLocalStorage = () => {
-    if (typeof window === "undefined") return
+  const saveData = () => {
+    if (typeof window === "undefined" || !mounted) return
 
     try {
-      const key = user ? `_${user.id}` : "_anonymous"
-      localStorage.setItem(`app_documents${key}`, JSON.stringify(documents))
-      localStorage.setItem(`app_templates${key}`, JSON.stringify(templates))
-      console.log("Data saved to localStorage")
+      const storageKey = user ? `app_data_${user.id}` : "app_data_anonymous"
+      const dataToSave = { documents, templates }
+      localStorage.setItem(storageKey, JSON.stringify(dataToSave))
     } catch (error) {
-      console.error("Error saving to localStorage:", error)
+      console.error("Error saving data:", error)
     }
   }
 
-  const refreshData = async () => {
-    if (isHydrated) {
-      loadData()
+  // Guardar datos cuando cambien
+  useEffect(() => {
+    if (mounted) {
+      saveData()
     }
-  }
+  }, [documents, templates, mounted])
 
-  // Funciones para documentos
   const addDocument = (documentData: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => {
-    try {
-      const now = new Date().toISOString()
-      const newDocument: Document = {
-        id: generateId(),
-        created_at: now,
-        updated_at: now,
-        rows: [],
-        ...documentData,
-        user_id: user?.id || "anonymous",
-      }
-
-      console.log("Adding document:", newDocument.name)
-      setDocuments((prev) => [newDocument, ...prev])
-
-      return newDocument.id
-    } catch (error) {
-      console.error("Error adding document:", error)
-      throw error
+    const now = new Date().toISOString()
+    const newDocument: Document = {
+      id: generateId(),
+      created_at: now,
+      updated_at: now,
+      rows: [],
+      user_id: user?.id || "anonymous",
+      ...documentData,
     }
+
+    setDocuments((prev) => [newDocument, ...prev])
+    return newDocument.id
   }
 
   const updateDocument = (id: string, updates: Partial<Document>) => {
-    try {
-      console.log("Updating document:", id, updates)
-      setDocuments((prev) =>
-        prev.map((doc) => (doc.id === id ? { ...doc, ...updates, updated_at: new Date().toISOString() } : doc)),
-      )
-    } catch (error) {
-      console.error("Error updating document:", error)
-    }
+    setDocuments((prev) =>
+      prev.map((doc) => (doc.id === id ? { ...doc, ...updates, updated_at: new Date().toISOString() } : doc)),
+    )
   }
 
   const deleteDocument = (id: string) => {
-    try {
-      console.log("Deleting document:", id)
-      setDocuments((prev) => prev.filter((doc) => doc.id !== id))
-    } catch (error) {
-      console.error("Error deleting document:", error)
-    }
+    setDocuments((prev) => prev.filter((doc) => doc.id !== id))
   }
 
-  const getDocument = (id: string): Document | undefined => {
+  const getDocument = (id: string) => {
     return documents.find((doc) => doc.id === id)
   }
 
-  // Funciones para plantillas
   const addTemplate = (templateData: Omit<Template, "id" | "created_at">) => {
-    try {
-      const now = new Date().toISOString()
-      const newTemplate: Template = {
-        id: generateId(),
-        created_at: now,
-        ...templateData,
-        user_id: user?.id || "anonymous",
-      }
-
-      console.log("Adding template:", newTemplate.name)
-      setTemplates((prev) => [newTemplate, ...prev])
-
-      return newTemplate.id
-    } catch (error) {
-      console.error("Error adding template:", error)
-      throw error
+    const newTemplate: Template = {
+      id: generateId(),
+      created_at: new Date().toISOString(),
+      user_id: user?.id || "anonymous",
+      ...templateData,
     }
+
+    setTemplates((prev) => [newTemplate, ...prev])
+    return newTemplate.id
   }
 
   const updateTemplate = (id: string, updates: Partial<Template>) => {
-    try {
-      console.log("Updating template:", id)
-      setTemplates((prev) => prev.map((template) => (template.id === id ? { ...template, ...updates } : template)))
-    } catch (error) {
-      console.error("Error updating template:", error)
-    }
+    setTemplates((prev) => prev.map((template) => (template.id === id ? { ...template, ...updates } : template)))
   }
 
   const deleteTemplate = (id: string) => {
-    try {
-      console.log("Deleting template:", id)
-      setTemplates((prev) => prev.filter((template) => template.id !== id))
-    } catch (error) {
-      console.error("Error deleting template:", error)
-    }
+    setTemplates((prev) => prev.filter((template) => template.id !== id))
   }
 
-  const getTemplate = (id: string): Template | undefined => {
+  const getTemplate = (id: string) => {
     return templates.find((template) => template.id === id)
   }
 
-  // Funciones para filas de documentos
   const addRowToDocument = (documentId: string, rowData: Omit<DocumentRow, "id" | "created_at">) => {
-    try {
-      const now = new Date().toISOString()
-      const newRow: DocumentRow = {
-        id: generateId(),
-        created_at: now,
-        document_id: documentId,
-        ...rowData,
-      }
-
-      console.log("Adding row to document:", documentId)
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === documentId
-            ? {
-                ...doc,
-                rows: [...doc.rows, newRow],
-                updated_at: now,
-              }
-            : doc,
-        ),
-      )
-    } catch (error) {
-      console.error("Error adding row to document:", error)
+    const newRow: DocumentRow = {
+      id: generateId(),
+      created_at: new Date().toISOString(),
+      document_id: documentId,
+      ...rowData,
     }
+
+    setDocuments((prev) =>
+      prev.map((doc) =>
+        doc.id === documentId
+          ? {
+              ...doc,
+              rows: [...doc.rows, newRow],
+              updated_at: new Date().toISOString(),
+            }
+          : doc,
+      ),
+    )
   }
 
   const updateDocumentRow = (documentId: string, rowId: string, data: Record<string, any>) => {
-    try {
-      console.log("Updating document row:", documentId, rowId)
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === documentId
-            ? {
-                ...doc,
-                rows: doc.rows.map((row) => (row.id === rowId ? { ...row, data } : row)),
-                updated_at: new Date().toISOString(),
-              }
-            : doc,
-        ),
-      )
-    } catch (error) {
-      console.error("Error updating document row:", error)
-    }
+    setDocuments((prev) =>
+      prev.map((doc) =>
+        doc.id === documentId
+          ? {
+              ...doc,
+              rows: doc.rows.map((row) => (row.id === rowId ? { ...row, data } : row)),
+              updated_at: new Date().toISOString(),
+            }
+          : doc,
+      ),
+    )
   }
 
   const deleteDocumentRow = (documentId: string, rowId: string) => {
-    try {
-      console.log("Deleting document row:", documentId, rowId)
-      setDocuments((prev) =>
-        prev.map((doc) =>
-          doc.id === documentId
-            ? {
-                ...doc,
-                rows: doc.rows.filter((row) => row.id !== rowId),
-                updated_at: new Date().toISOString(),
-              }
-            : doc,
-        ),
-      )
-    } catch (error) {
-      console.error("Error deleting document row:", error)
-    }
+    setDocuments((prev) =>
+      prev.map((doc) =>
+        doc.id === documentId
+          ? {
+              ...doc,
+              rows: doc.rows.filter((row) => row.id !== rowId),
+              updated_at: new Date().toISOString(),
+            }
+          : doc,
+      ),
+    )
   }
 
   return (
@@ -286,7 +201,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         documents,
         templates,
         loading,
-        isHydrated,
         addDocument,
         updateDocument,
         deleteDocument,
@@ -298,7 +212,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addRowToDocument,
         updateDocumentRow,
         deleteDocumentRow,
-        refreshData,
       }}
     >
       {children}
@@ -308,7 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 export const useApp = () => {
   const context = useContext(AppContext)
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useApp must be used within an AppProvider")
   }
   return context

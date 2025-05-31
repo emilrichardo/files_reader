@@ -12,7 +12,7 @@ import { useApp } from "@/contexts/app-context"
 export default function HomePage() {
   const router = useRouter()
   const { user, signInWithGoogle, loading: authLoading } = useAuth()
-  const { documents, templates, loading: appLoading, isHydrated } = useApp()
+  const { documents, templates, loading: appLoading } = useApp()
   const [isSigningIn, setIsSigningIn] = useState(false)
 
   const handleSignIn = async () => {
@@ -21,13 +21,14 @@ export default function HomePage() {
       await signInWithGoogle()
     } catch (error) {
       console.error("Error signing in:", error)
+      alert("Error al iniciar sesión. Por favor, intenta de nuevo.")
     } finally {
       setIsSigningIn(false)
     }
   }
 
-  // No renderizar contenido hasta que esté hidratado
-  if (!isHydrated || authLoading || appLoading) {
+  // Mostrar loading solo si realmente está cargando
+  if (authLoading || appLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -51,11 +52,7 @@ export default function HomePage() {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
                 {user ? `Bienvenido, ${user.email?.split("@")[0] || "Usuario"}` : "Bienvenido a Invitu"}
               </h1>
-              <p className="text-gray-600">
-                {user
-                  ? "Gestiona tus documentos y extrae datos de forma inteligente"
-                  : "Extrae datos de documentos de forma inteligente con IA"}
-              </p>
+              <p className="text-gray-600">Extrae datos de documentos de forma inteligente con IA</p>
             </div>
             <div className="flex gap-3">
               {!user && (
@@ -79,7 +76,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Auth Banner */}
+          {/* Auth Banner para usuarios no autenticados */}
           {!user && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between">
@@ -191,12 +188,12 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Content for authenticated users */}
-        {user && (
+        {/* Contenido principal */}
+        {user ? (
+          // Usuario autenticado
           <>
-            {/* Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              {/* Recent Documents */}
+              {/* Documentos Recientes */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -242,7 +239,7 @@ export default function HomePage() {
                 </CardContent>
               </Card>
 
-              {/* Recent Templates */}
+              {/* Plantillas Recientes */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -290,7 +287,7 @@ export default function HomePage() {
               </Card>
             </div>
 
-            {/* Stats */}
+            {/* Estadísticas */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -324,10 +321,8 @@ export default function HomePage() {
               </CardContent>
             </Card>
           </>
-        )}
-
-        {/* Content for non-authenticated users */}
-        {!user && (
+        ) : (
+          // Usuario no autenticado
           <Card>
             <CardHeader>
               <CardTitle>Comienza a usar Invitu</CardTitle>
