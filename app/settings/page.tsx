@@ -43,7 +43,11 @@ export default function SettingsPage() {
     logoType,
     fontFamilies,
     colorSchemes,
+    getOptimalTextColor,
   } = useTheme()
+
+  // Calcular el color de texto óptimo
+  const optimalTextColor = getOptimalTextColor(primaryColor)
 
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({})
   const [newApiKeyName, setNewApiKeyName] = useState("")
@@ -228,7 +232,7 @@ export default function SettingsPage() {
 
         <div className="space-y-8">
           {/* Project Settings */}
-          <Card>
+          <Card data-card="true">
             <CardHeader>
               <CardTitle>Configuración del Proyecto</CardTitle>
               <CardDescription>Personaliza la información básica de tu proyecto</CardDescription>
@@ -665,9 +669,13 @@ export default function SettingsPage() {
           <div className="flex justify-end">
             <Button
               onClick={saveSettings}
-              className="text-white"
-              style={{ backgroundColor: primaryColor }}
+              className="auto-contrast-text"
+              style={{
+                backgroundColor: primaryColor,
+                color: optimalTextColor,
+              }}
               disabled={isSaving}
+              data-button="true"
             >
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? "Guardando..." : "Guardar Configuración"}

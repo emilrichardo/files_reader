@@ -20,7 +20,11 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
   const { user, signIn, signOut } = useAuth()
-  const { companyLogo, logoType, primaryColor, isDark, projectName } = useTheme()
+  // Importar useTheme y agregar las nuevas funciones
+  const { companyLogo, logoType, primaryColor, isDark, projectName, isLightColor, getOptimalTextColor } = useTheme()
+
+  // Calcular el color de texto óptimo
+  const optimalTextColor = getOptimalTextColor(primaryColor)
 
   const renderLogo = () => {
     if (companyLogo) {
@@ -47,11 +51,18 @@ export default function Sidebar() {
     }
   }
 
+  // Actualizar el JSX del sidebar para incluir los atributos de datos y estilos dinámicos
   return (
     <>
       {/* Mobile menu button */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Button variant="outline" size="icon" onClick={() => setIsOpen(!isOpen)} className="bg-white shadow-lg">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setIsOpen(!isOpen)}
+          className="bg-white shadow-lg"
+          data-button="true"
+        >
           {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
         </Button>
       </div>
@@ -59,10 +70,11 @@ export default function Sidebar() {
       {/* Sidebar */}
       <div
         className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-background border-r border-border transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-40 w-64 bg-background border-r border-border transform transition-transform duration-300 ease-in-out sidebar-container
         lg:translate-x-0 lg:static lg:inset-0
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}
+        data-card="true"
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
@@ -84,13 +96,24 @@ export default function Sidebar() {
                   key={item.name}
                   href={item.href}
                   className={`
-                    flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                    ${
-                      isActive ? "text-white shadow-sm" : "text-foreground hover:bg-accent hover:text-accent-foreground"
-                    }
-                  `}
-                  style={isActive ? { backgroundColor: primaryColor } : {}}
+                  flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors sidebar-item
+                  ${
+                    isActive
+                      ? "sidebar-item-active auto-contrast-text"
+                      : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                  }
+                `}
+                  style={
+                    isActive
+                      ? {
+                          backgroundColor: primaryColor,
+                          color: optimalTextColor,
+                          "--optimal-text-color": optimalTextColor,
+                        }
+                      : {}
+                  }
                   onClick={() => setIsOpen(false)}
+                  data-button="true"
                 >
                   <item.icon className="w-5 h-5 mr-3" />
                   {item.name}
@@ -114,13 +137,21 @@ export default function Sidebar() {
                     <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={signOut} className="w-full">
+                <Button variant="outline" size="sm" onClick={signOut} className="w-full" data-button="true">
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
                 </Button>
               </div>
             ) : (
-              <Button onClick={signIn} className="w-full text-white" style={{ backgroundColor: primaryColor }}>
+              <Button
+                onClick={signIn}
+                className="w-full auto-contrast-text"
+                style={{
+                  backgroundColor: primaryColor,
+                  color: optimalTextColor,
+                }}
+                data-button="true"
+              >
                 <LogIn className="w-4 h-4 mr-2" />
                 Sign In with Google
               </Button>

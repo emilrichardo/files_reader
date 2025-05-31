@@ -9,11 +9,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Document } from "@/lib/types"
 
+// Importar useTheme
+import { useTheme } from "@/contexts/theme-context"
+
 export default function HomePage() {
   const { user } = useAuth()
   const { documents } = useApp()
   const [recentDocuments, setRecentDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Agregar al inicio del componente
+  const { primaryColor, getOptimalTextColor } = useTheme()
+  const optimalTextColor = getOptimalTextColor(primaryColor)
 
   useEffect(() => {
     // Simular carga y obtener documentos recientes
@@ -65,11 +72,21 @@ export default function HomePage() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="border-2 border-dashed border-black bg-gradient-to-br from-black/5 to-gray-800/5 hover:shadow-lg transition-shadow cursor-pointer">
+          <Card
+            className="border-2 border-dashed border-black bg-gradient-to-br from-black/5 to-gray-800/5 hover:shadow-lg transition-shadow cursor-pointer"
+            data-card="true"
+          >
             <Link href="/documents/create">
               <CardContent className="p-6 text-center">
-                <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Plus className="w-6 h-6 text-white" />
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 auto-contrast-text"
+                  style={{
+                    backgroundColor: primaryColor,
+                    color: optimalTextColor,
+                  }}
+                  data-primary-bg="true"
+                >
+                  <Plus className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Crear Nuevo Documento</h3>
                 <p className="text-gray-600 text-sm">Inicia un nuevo proyecto y define tu estructura de datos</p>
@@ -158,7 +175,11 @@ export default function HomePage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Aún no hay documentos</h3>
                 <p className="text-gray-600 mb-4">Crea tu primer documento para comenzar</p>
                 <Link href="/documents/create">
-                  <Button className="bg-black hover:bg-gray-800 text-white">
+                  <Button
+                    className="auto-contrast-text"
+                    style={{ backgroundColor: primaryColor, color: optimalTextColor }}
+                    data-button="true"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     Crear Documento
                   </Button>

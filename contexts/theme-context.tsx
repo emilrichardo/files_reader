@@ -18,6 +18,9 @@ interface ThemeContextType {
   removeLogo: () => void
   fontFamilies: string[]
   colorSchemes: Record<string, string>
+  isLightColor: (color: string) => boolean
+  getOptimalTextColor: (backgroundColor: string) => string
+  getContrastColor: (hex: string, lightColor?: string, darkColor?: string) => string
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -135,6 +138,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Actualizar variables CSS personalizadas
     root.style.setProperty("--primary-color", primaryColor)
     root.style.setProperty("--primary-rgb", hexToRgb(primaryColor))
+
+    // Aplicar color de texto óptimo como variable CSS
+    const optimalTextColor = getOptimalTextColor(primaryColor)
+    root.style.setProperty("--optimal-text-color", optimalTextColor)
+
+    // Aplicar el modo de estilo al elemento raíz
+    root.setAttribute("data-style-mode", settings.style_mode)
+
+    // Aplicar variables CSS adicionales para los estilos
+    root.style.setProperty("--primary-color", primaryColor)
+    root.style.setProperty("--primary-rgb", hexToRgb(primaryColor))
+    root.style.setProperty("--optimal-text-color", optimalTextColor)
 
     // Actualizar variables CSS de shadcn/ui para el color primario
     if (settings.theme === "dark") {
@@ -264,6 +279,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const logoType = settings.company_logo_type || null
   const projectName = settings.project_name || "DocManager"
 
+  const isLightColor = (color: string): boolean => {
+    return getLuminance(color) > 0.5
+  }
+
+  const getOptimalTextColor = (backgroundColor: string): string => {
+    return isLightColor(backgroundColor) ? "#000000" : "#ffffff"
+  }
+
+  const getContrastColor = (hex: string, lightColor = "#ffffff", darkColor = "#000000"): string => {
+    return isLightColor(hex) ? darkColor : lightColor
+  }
+
   return (
     <ThemeContext.Provider
       value={{
@@ -280,6 +307,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         removeLogo,
         fontFamilies,
         colorSchemes,
+        isLightColor,
+        getOptimalTextColor,
+        getContrastColor,
       }}
     >
       {children}
@@ -335,4 +365,33 @@ function rgbToHsl(rgb: string): string {
   }
 
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
+}
+
+// Agregar estas funciones auxiliares después de las funciones existentes de conversión de colores
+
+// Función para calcular la luminosidad de un color
+function getLuminance(hex: string): number {
+  const rgb = hexToRgb(hex)
+    .split(", ")
+    .map((x) => Number.parseInt(x))
+  const [r, g, b] = rgb.map((c) => {
+    c = c / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+// Función para determinar si un color es claro u oscuro
+function isLightColorFn(hex: string): boolean {
+  return getLuminance(hex) > 0.5
+}
+
+// Función para obtener el color de texto óptimo basado en el fondo
+function getOptimalTextColorFn(backgroundColor: string): string {
+  return isLightColorFn(backgroundColor) ? "#000000" : "#ffffff"
+}
+
+// Función para obtener un color de contraste
+function getContrastColorFn(hex: string, lightColor = "#ffffff", darkColor = "#000000"): string {
+  return isLightColorFn(hex) ? darkColor : lightColor
 }
