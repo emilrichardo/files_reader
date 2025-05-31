@@ -18,7 +18,7 @@ interface FilePreviewModalProps {
   onClose: () => void
   onConfirm: (data: Record<string, any>) => void
   fields: DocumentField[]
-  fileMetadata?: FileMetadata // Ahora es opcional
+  fileMetadata?: FileMetadata
   extractedData?: Record<string, any>
 }
 
@@ -30,12 +30,21 @@ export default function FilePreviewModal({
   fileMetadata,
   extractedData = {},
 }: FilePreviewModalProps) {
-  const [formData, setFormData] = useState<Record<string, any>>(extractedData)
+  const [formData, setFormData] = useState<Record<string, any>>({})
 
-  // Actualizar formData cuando cambian los datos extraídos
+  // Solo actualizar formData cuando el modal se abre y hay nuevos datos extraídos
   useEffect(() => {
-    setFormData(extractedData || {})
-  }, [extractedData])
+    if (isOpen && extractedData && Object.keys(extractedData).length > 0) {
+      setFormData(extractedData)
+    }
+  }, [isOpen]) // Solo depende de isOpen, no de extractedData
+
+  // Resetear formData cuando el modal se cierra
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData({})
+    }
+  }, [isOpen])
 
   const handleInputChange = (fieldName: string, value: any) => {
     setFormData((prev) => ({
@@ -49,13 +58,18 @@ export default function FilePreviewModal({
     onClose()
   }
 
+  const handleClose = () => {
+    setFormData({})
+    onClose()
+  }
+
   // Si no hay fileMetadata, no renderizar el contenido del modal
   if (!fileMetadata) {
     return null
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Vista Previa de Datos Extraídos</DialogTitle>
@@ -108,7 +122,7 @@ export default function FilePreviewModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleClose}>
             Cancelar
           </Button>
           <Button onClick={handleConfirm} className="bg-black hover:bg-gray-800 text-white">

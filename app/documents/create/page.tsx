@@ -3,13 +3,22 @@
 import type React from "react"
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, Upload, Save, FileText } from "lucide-react"
+import { Plus, Trash2, Upload, Save, FileText, Layout, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useApp } from "@/contexts/app-context"
 import { useAuth } from "@/contexts/auth-context"
@@ -21,11 +30,12 @@ import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
 export default function CreateDocumentPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { addDocument, addRowToDocument } = useApp()
+  const { addDocument, addRowToDocument, templates, addTemplate } = useApp()
   const { user } = useAuth()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
 
-  const [documentName, setDocumentName] = useState("")
+  const [documentName, setDocumentName] = useState("Nuevo Documento")
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [documentDescription, setDocumentDescription] = useState("")
   const [fields, setFields] = useState<DocumentField[]>([
     {
@@ -49,8 +59,99 @@ export default function CreateDocumentPage() {
   }>({
     isOpen: false,
   })
+  const [saveTemplateModal, setSaveTemplateModal] = useState<{
+    isOpen: boolean
+  }>({ isOpen: false })
+  const [templateName, setTemplateName] = useState("")
+  const [templateDescription, setTemplateDescription] = useState("")
 
-  const addField = () => {
+  const handleTitleClick = useCallback(() => {
+    setIsEditingTitle(true)
+  }, [])
+
+  const handleTitleSave = useCallback(() => {
+    setIsEditingTitle(false)
+    if (!documentName.trim()) {
+      setDocumentName("Nuevo Documento")
+    }
+  }, [documentName])
+
+  const handleTitleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        handleTitleSave()
+      } else if (e.key === "Escape") {
+        setDocumentName("Nuevo Documento")
+        setIsEditingTitle(false)
+      }
+    },
+    [handleTitleSave],
+  )
+
+  const loadTemplate = useCallback(
+    (templateId: string) => {
+      const template = templates.find((t) => t.id === templateId)
+      if (template) {
+        const newFields = template.fields.map((field) => ({
+          ...field,
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        }))
+        setFields(newFields)
+        toast({
+          title: "Plantilla cargada",
+          description: `Se han cargado ${newFields.length} campos de la plantilla "${template.name}".`,
+        })
+      }
+    },
+    [templates, toast],
+  )
+
+  const saveAsTemplate = useCallback(() => {
+    if (!templateName.trim()) {
+      toast({
+        title: "Error",
+        description: "Por favor, ingresa un nombre para la plantilla.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (fields.length === 0) {
+      toast({
+        title: "Error",
+        description: "No hay campos para guardar en la plantilla.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      addTemplate({
+        name: templateName,
+        description: templateDescription,
+        user_id: user?.id || "demo-user",
+        fields: fields.map((field, index) => ({ ...field, order: index })),
+      })
+
+      toast({
+        title: "Plantilla guardada",
+        description: `La plantilla "${templateName}" ha sido guardada exitosamente.`,
+      })
+
+      setSaveTemplateModal({ isOpen: false })
+      setTemplateName("")
+      setTemplateDescription("")
+    } catch (error) {
+      console.error("Error saving template:", error)
+      toast({
+        title: "Error",
+        description: "Error al guardar la plantilla.",
+        variant: "destructive",
+      })
+    }
+  }, [templateName, templateDescription, fields, user, addTemplate, toast])
+
+  const addField = useCallback(() => {
     const newField: DocumentField = {
       id: Date.now().toString(),
       field_name: "",
@@ -60,34 +161,36 @@ export default function CreateDocumentPage() {
       required: false,
       order: fields.length,
     }
-    setFields([...fields, newField])
-  }
+    setFields((prev) => [...prev, newField])
+  }, [fields.length])
 
-  const updateField = (id: string, updates: Partial<DocumentField>) => {
-    setFields(fields.map((field) => (field.id === id ? { ...field, ...updates } : field)))
-  }
+  const updateField = useCallback((id: string, updates: Partial<DocumentField>) => {
+    setFields((prev) => prev.map((field) => (field.id === id ? { ...field, ...updates } : field)))
+  }, [])
 
-  const removeField = (id: string) => {
-    setFields(fields.filter((field) => field.id !== id))
-  }
+  const removeField = useCallback((id: string) => {
+    setFields((prev) => prev.filter((field) => field.id !== id))
+  }, [])
 
-  const addRow = () => {
+  const addRow = useCallback(() => {
     const newRow: DocumentRow = {
       id: Date.now().toString(),
       document_id: currentDocumentId || "temp",
       data: {},
       created_at: new Date().toISOString(),
     }
-    setRows([...rows, newRow])
-  }
+    setRows((prev) => [...prev, newRow])
+  }, [currentDocumentId])
 
-  const updateRowData = (rowId: string, fieldName: string, value: any) => {
-    setRows(rows.map((row) => (row.id === rowId ? { ...row, data: { ...row.data, [fieldName]: value } } : row)))
-  }
+  const updateRowData = useCallback((rowId: string, fieldName: string, value: any) => {
+    setRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, data: { ...row.data, [fieldName]: value } } : row)),
+    )
+  }, [])
 
-  const removeRow = (id: string) => {
-    setRows(rows.filter((row) => row.id !== id))
-  }
+  const removeRow = useCallback((id: string) => {
+    setRows((prev) => prev.filter((row) => row.id !== id))
+  }, [])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -109,61 +212,10 @@ export default function CreateDocumentPage() {
         handleFiles(e.dataTransfer.files)
       }
     },
-    [fields],
+    [documentName, fields, currentDocumentId],
   )
 
-  const handleFiles = async (files: FileList) => {
-    if (!documentName.trim()) {
-      toast({
-        title: "Error",
-        description: "Por favor, ingresa un nombre para el documento antes de subir archivos.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Crear documento si no existe
-    if (!currentDocumentId) {
-      const docId = addDocument({
-        name: documentName,
-        description: documentDescription,
-        user_id: user?.id || "demo-user",
-        fields,
-        rows: [],
-      })
-      setCurrentDocumentId(docId)
-    }
-
-    for (const file of Array.from(files)) {
-      try {
-        setUploadingFile(file.name)
-        const fileMetadata = await uploadFile(file)
-
-        // Simular extracción de datos basada en los campos definidos
-        const extractedData = simulateDataExtraction(file, fields)
-
-        // Asegurarse de que fileMetadata existe antes de abrir el modal
-        if (fileMetadata) {
-          setPreviewModal({
-            isOpen: true,
-            fileMetadata,
-            extractedData,
-          })
-        }
-      } catch (error) {
-        console.error("Error uploading file:", error)
-        toast({
-          title: "Error",
-          description: `Error al procesar el archivo ${file.name}`,
-          variant: "destructive",
-        })
-      } finally {
-        setUploadingFile(null)
-      }
-    }
-  }
-
-  const simulateDataExtraction = (file: File, fields: DocumentField[]): Record<string, any> => {
+  const simulateDataExtraction = useCallback((file: File, fields: DocumentField[]): Record<string, any> => {
     const extractedData: Record<string, any> = {}
 
     // Simular extracción de datos basada en el nombre del archivo y campos
@@ -205,38 +257,110 @@ export default function CreateDocumentPage() {
     })
 
     return extractedData
-  }
+  }, [])
 
-  const handlePreviewConfirm = (data: Record<string, any>) => {
-    if (currentDocumentId && previewModal.fileMetadata) {
-      addRowToDocument(currentDocumentId, {
-        document_id: currentDocumentId,
-        data,
-        file_metadata: previewModal.fileMetadata,
-      })
-
-      // Agregar la fila a la vista local también
-      const newRow: DocumentRow = {
-        id: Date.now().toString(),
-        document_id: currentDocumentId,
-        data,
-        file_metadata: previewModal.fileMetadata,
-        created_at: new Date().toISOString(),
+  const handleFiles = useCallback(
+    async (files: FileList) => {
+      if (!documentName.trim() || documentName === "Nuevo Documento") {
+        toast({
+          title: "Error",
+          description: "Por favor, cambia el nombre del documento antes de subir archivos.",
+          variant: "destructive",
+        })
+        return
       }
-      setRows((prev) => [newRow, ...prev])
 
-      toast({
-        title: "Archivo procesado",
-        description: `Los datos de ${previewModal.fileMetadata.filename} han sido agregados exitosamente.`,
-      })
-    }
-  }
+      // Crear documento si no existe
+      let docId = currentDocumentId
+      if (!docId) {
+        try {
+          docId = addDocument({
+            name: documentName,
+            description: documentDescription,
+            user_id: user?.id || "demo-user",
+            fields,
+            rows: [],
+          })
+          setCurrentDocumentId(docId)
+        } catch (error) {
+          console.error("Error creating document:", error)
+          toast({
+            title: "Error",
+            description: "Error al crear el documento.",
+            variant: "destructive",
+          })
+          return
+        }
+      }
 
-  const saveDocument = () => {
-    if (!documentName.trim()) {
+      for (const file of Array.from(files)) {
+        try {
+          setUploadingFile(file.name)
+          const fileMetadata = await uploadFile(file)
+
+          // Simular extracción de datos basada en los campos definidos
+          const extractedData = simulateDataExtraction(file, fields)
+
+          // Asegurarse de que fileMetadata existe antes de abrir el modal
+          if (fileMetadata) {
+            setPreviewModal({
+              isOpen: true,
+              fileMetadata,
+              extractedData,
+            })
+          }
+        } catch (error) {
+          console.error("Error uploading file:", error)
+          toast({
+            title: "Error",
+            description: `Error al procesar el archivo ${file.name}`,
+            variant: "destructive",
+          })
+        } finally {
+          setUploadingFile(null)
+        }
+      }
+    },
+    [documentName, documentDescription, fields, currentDocumentId, user, addDocument, uploadFile, toast],
+  )
+
+  const handlePreviewConfirm = useCallback(
+    (data: Record<string, any>) => {
+      if (currentDocumentId && previewModal.fileMetadata) {
+        addRowToDocument(currentDocumentId, {
+          document_id: currentDocumentId,
+          data,
+          file_metadata: previewModal.fileMetadata,
+        })
+
+        // Agregar la fila a la vista local también
+        const newRow: DocumentRow = {
+          id: Date.now().toString(),
+          document_id: currentDocumentId,
+          data,
+          file_metadata: previewModal.fileMetadata,
+          created_at: new Date().toISOString(),
+        }
+        setRows((prev) => [newRow, ...prev])
+
+        toast({
+          title: "Archivo procesado",
+          description: `Los datos de ${previewModal.fileMetadata.filename} han sido agregados exitosamente.`,
+        })
+      }
+    },
+    [currentDocumentId, previewModal.fileMetadata, addRowToDocument, toast],
+  )
+
+  const closePreviewModal = useCallback(() => {
+    setPreviewModal({ isOpen: false })
+  }, [])
+
+  const saveDocument = useCallback(() => {
+    if (!documentName.trim() || documentName === "Nuevo Documento") {
       toast({
         title: "Error",
-        description: "Por favor, ingresa un nombre para el documento.",
+        description: "Por favor, cambia el nombre del documento.",
         variant: "destructive",
       })
       return
@@ -278,67 +402,110 @@ export default function CreateDocumentPage() {
         variant: "destructive",
       })
     }
-  }
+  }, [documentName, documentDescription, fields, rows, currentDocumentId, user, addDocument, toast, router])
 
-  const exportDocument = (format: "csv" | "pdf" | "excel") => {
-    console.log(`Exportando documento como ${format}`)
-    toast({
-      title: "Exportación iniciada",
-      description: `Preparando descarga en formato ${format.toUpperCase()}...`,
-    })
-  }
+  const exportDocument = useCallback(
+    (format: "csv" | "pdf" | "excel") => {
+      console.log(`Exportando documento como ${format}`)
+      toast({
+        title: "Exportación iniciada",
+        description: `Preparando descarga en formato ${format.toUpperCase()}...`,
+      })
+    },
+    [toast],
+  )
 
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Editable Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Crear Nuevo Documento</h1>
-          <p className="text-gray-600">Define tu estructura de datos y comienza a extraer información de documentos.</p>
-        </div>
-
-        {/* Document Info */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Información del Documento</CardTitle>
-            <CardDescription>Información básica sobre tu proyecto de documento</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="name">Nombre del Proyecto</Label>
+          {isEditingTitle ? (
+            <div className="flex items-center space-x-2 mb-2">
               <Input
-                id="name"
                 value={documentName}
                 onChange={(e) => setDocumentName(e.target.value)}
-                placeholder="Ingresa el nombre del proyecto..."
-                className="mt-1"
+                onKeyDown={handleTitleKeyPress}
+                onBlur={handleTitleSave}
+                className="text-3xl font-bold border-none p-0 h-auto text-gray-900 focus:ring-0"
+                autoFocus
               />
+              <Button size="icon" variant="ghost" onClick={handleTitleSave}>
+                <Check className="w-4 h-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  setDocumentName("Nuevo Documento")
+                  setIsEditingTitle(false)
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
-            <div>
-              <Label htmlFor="description">Descripción</Label>
-              <Textarea
-                id="description"
-                value={documentDescription}
-                onChange={(e) => setDocumentDescription(e.target.value)}
-                placeholder="Describe tu proyecto..."
-                className="mt-1"
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <h1
+              className="text-3xl font-bold text-gray-900 mb-2 cursor-pointer hover:text-gray-700 transition-colors"
+              onClick={handleTitleClick}
+            >
+              {documentName}
+            </h1>
+          )}
+          <p className="text-gray-600">Define tu estructura de datos y comienza a extraer información de documentos.</p>
+
+          {/* Description */}
+          <div className="mt-4">
+            <Textarea
+              value={documentDescription}
+              onChange={(e) => setDocumentDescription(e.target.value)}
+              placeholder="Agrega una descripción opcional para tu documento..."
+              className="resize-none"
+              rows={2}
+            />
+          </div>
+        </div>
 
         {/* Fields Configuration */}
         <Card className="mb-8">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Campos de Datos</CardTitle>
-              <CardDescription>Define la estructura de tu extracción de datos</CardDescription>
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle>Campos de Datos</CardTitle>
+                <CardDescription>Define la estructura de tu extracción de datos</CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {templates.length > 0 && (
+                  <Select onValueChange={loadTemplate}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Cargar plantilla" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          <div className="flex items-center space-x-2">
+                            <Layout className="w-4 h-4" />
+                            <span>{template.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setSaveTemplateModal({ isOpen: true })}
+                  disabled={fields.length === 0}
+                >
+                  <Layout className="w-4 h-4 mr-2" />
+                  Guardar Plantilla
+                </Button>
+                <Button onClick={addField} className="bg-black hover:bg-gray-800 text-white">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar Campo
+                </Button>
+              </div>
             </div>
-            <Button onClick={addField} className="bg-black hover:bg-gray-800 text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Agregar Campo
-            </Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -405,6 +572,18 @@ export default function CreateDocumentPage() {
                       placeholder="Descripción del campo..."
                       className="mt-1"
                     />
+                  </div>
+                  <div className="mt-3 flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`required-${field.id}`}
+                      checked={field.required}
+                      onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor={`required-${field.id}`} className="text-sm">
+                      Campo obligatorio
+                    </Label>
                   </div>
                 </div>
               ))}
@@ -547,17 +726,76 @@ export default function CreateDocumentPage() {
 
         {/* Save Actions */}
         <div className="flex justify-end space-x-4">
-          <Button variant="outline">Guardar como Plantilla</Button>
+          <Button variant="outline" onClick={() => router.push("/documents")}>
+            Cancelar
+          </Button>
           <Button onClick={saveDocument} className="bg-black hover:bg-gray-800 text-white">
             <Save className="w-4 h-4 mr-2" />
             Guardar Documento
           </Button>
         </div>
 
+        {/* Save Template Modal */}
+        <Dialog open={saveTemplateModal.isOpen} onOpenChange={(open) => setSaveTemplateModal({ isOpen: open })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Guardar como Plantilla</DialogTitle>
+              <DialogDescription>
+                Guarda la estructura actual de campos como una plantilla reutilizable
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="template-name">Nombre de la Plantilla</Label>
+                <Input
+                  id="template-name"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Ej: Plantilla de Facturas"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="template-description">Descripción</Label>
+                <Textarea
+                  id="template-description"
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  placeholder="Describe para qué se usará esta plantilla..."
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-sm mb-2">Campos incluidos ({fields.length}):</h4>
+                <div className="flex flex-wrap gap-1">
+                  {fields.map((field) => (
+                    <Badge key={field.id} variant="secondary" className="text-xs">
+                      {field.field_name || "Sin nombre"}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSaveTemplateModal({ isOpen: false })}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={saveAsTemplate}
+                disabled={!templateName.trim()}
+                className="bg-black hover:bg-gray-800 text-white"
+              >
+                Guardar Plantilla
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* File Preview Modal */}
         <FilePreviewModal
           isOpen={previewModal.isOpen}
-          onClose={() => setPreviewModal({ isOpen: false })}
+          onClose={closePreviewModal}
           onConfirm={handlePreviewConfirm}
           fields={fields}
           fileMetadata={previewModal.fileMetadata}
