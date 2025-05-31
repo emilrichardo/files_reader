@@ -9,6 +9,7 @@ interface AppContextType {
   documents: Document[]
   templates: Template[]
   loading: boolean
+  isHydrated: boolean
   addDocument: (document: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => string
   updateDocument: (id: string, updates: Partial<Document>) => void
   deleteDocument: (id: string) => void
@@ -25,92 +26,73 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
-// Función para generar IDs únicos
-const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
+// Función para generar IDs únicos de forma consistente
+const generateId = () => {
+  const timestamp = Date.now()
+  const random = Math.floor(Math.random() * 1000000)
+  return `${timestamp}-${random}`
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth()
   const [documents, setDocuments] = useState<Document[]>([])
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
 
-  // Cargar datos cuando cambia el estado de autenticación
+  // Marcar como hidratado después del primer render
   useEffect(() => {
-    if (!authLoading) {
+    setIsHydrated(true)
+  }, [])
+
+  // Cargar datos cuando cambia el estado de autenticación y está hidratado
+  useEffect(() => {
+    if (!authLoading && isHydrated) {
       loadData()
     }
-  }, [user, authLoading])
+  }, [user, authLoading, isHydrated])
 
-  // Guardar datos cuando cambien (solo si hay datos)
+  // Guardar datos cuando cambien (solo si está hidratado)
   useEffect(() => {
-    if (initialized && (documents.length > 0 || templates.length > 0)) {
+    if (isHydrated && !loading) {
       saveToLocalStorage()
     }
-  }, [documents, templates, initialized])
+  }, [documents, templates, isHydrated, loading])
 
   const loadData = () => {
+    if (typeof window === "undefined") return
+
     try {
       setLoading(true)
 
-      if (user) {
-        // Usuario logueado: cargar desde localStorage o inicializar vacío
-        console.log("Loading data for authenticated user:", user.email)
-        const savedDocuments = localStorage.getItem(`app_documents_${user.id}`)
-        const savedTemplates = localStorage.getItem(`app_templates_${user.id}`)
+      const key = user ? `_${user.id}` : "_anonymous"
 
-        if (savedDocuments) {
-          try {
-            const parsedDocs = JSON.parse(savedDocuments)
-            setDocuments(Array.isArray(parsedDocs) ? parsedDocs : [])
-          } catch (e) {
-            console.error("Error parsing saved documents:", e)
-            setDocuments([])
-          }
-        } else {
+      // Cargar documentos
+      const savedDocuments = localStorage.getItem(`app_documents${key}`)
+      if (savedDocuments) {
+        try {
+          const parsedDocs = JSON.parse(savedDocuments)
+          setDocuments(Array.isArray(parsedDocs) ? parsedDocs : [])
+        } catch (e) {
+          console.error("Error parsing saved documents:", e)
           setDocuments([])
         }
+      } else {
+        setDocuments([])
+      }
 
-        if (savedTemplates) {
-          try {
-            const parsedTemplates = JSON.parse(savedTemplates)
-            setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : [])
-          } catch (e) {
-            console.error("Error parsing saved templates:", e)
-            setTemplates([])
-          }
-        } else {
+      // Cargar plantillas
+      const savedTemplates = localStorage.getItem(`app_templates${key}`)
+      if (savedTemplates) {
+        try {
+          const parsedTemplates = JSON.parse(savedTemplates)
+          setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : [])
+        } catch (e) {
+          console.error("Error parsing saved templates:", e)
           setTemplates([])
         }
       } else {
-        // Usuario no logueado: cargar desde localStorage general o inicializar vacío
-        console.log("Loading data for anonymous user")
-        const savedDocuments = localStorage.getItem("app_documents_anonymous")
-        const savedTemplates = localStorage.getItem("app_templates_anonymous")
-
-        if (savedDocuments) {
-          try {
-            const parsedDocs = JSON.parse(savedDocuments)
-            setDocuments(Array.isArray(parsedDocs) ? parsedDocs : [])
-          } catch (e) {
-            console.error("Error parsing saved documents:", e)
-            setDocuments([])
-          }
-        } else {
-          setDocuments([])
-        }
-
-        if (savedTemplates) {
-          try {
-            const parsedTemplates = JSON.parse(savedTemplates)
-            setTemplates(Array.isArray(parsedTemplates) ? parsedTemplates : [])
-          } catch (e) {
-            console.error("Error parsing saved templates:", e)
-            setTemplates([])
-          }
-        } else {
-          setTemplates([])
-        }
+        setTemplates([])
       }
 
       console.log("Data loaded successfully")
@@ -120,11 +102,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setTemplates([])
     } finally {
       setLoading(false)
-      setInitialized(true)
     }
   }
 
   const saveToLocalStorage = () => {
+    if (typeof window === "undefined") return
+
     try {
       const key = user ? `_${user.id}` : "_anonymous"
       localStorage.setItem(`app_documents${key}`, JSON.stringify(documents))
@@ -136,7 +119,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   const refreshData = async () => {
-    loadData()
+    if (isHydrated) {
+      loadData()
+    }
   }
 
   // Funciones para documentos
@@ -301,6 +286,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         documents,
         templates,
         loading,
+        isHydrated,
         addDocument,
         updateDocument,
         deleteDocument,

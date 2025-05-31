@@ -12,7 +12,7 @@ import { useApp } from "@/contexts/app-context"
 export default function HomePage() {
   const router = useRouter()
   const { user, signInWithGoogle, loading: authLoading } = useAuth()
-  const { documents, templates, loading: appLoading } = useApp()
+  const { documents, templates, loading: appLoading, isHydrated } = useApp()
   const [isSigningIn, setIsSigningIn] = useState(false)
 
   const handleSignIn = async () => {
@@ -26,10 +26,8 @@ export default function HomePage() {
     }
   }
 
-  const recentDocuments = documents.slice(0, 3)
-  const recentTemplates = templates.slice(0, 3)
-
-  if (authLoading || appLoading) {
+  // No renderizar contenido hasta que esté hidratado
+  if (!isHydrated || authLoading || appLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -40,6 +38,9 @@ export default function HomePage() {
     )
   }
 
+  const recentDocuments = documents.slice(0, 3)
+  const recentTemplates = templates.slice(0, 3)
+
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
       <div className="max-w-7xl mx-auto">
@@ -48,7 +49,7 @@ export default function HomePage() {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                {user ? `Bienvenido, ${user.email?.split("@")[0]}` : "Bienvenido a Invitu"}
+                {user ? `Bienvenido, ${user.email?.split("@")[0] || "Usuario"}` : "Bienvenido a Invitu"}
               </h1>
               <p className="text-gray-600">
                 {user
@@ -222,10 +223,10 @@ export default function HomePage() {
                           <div>
                             <h4 className="font-medium text-gray-900">{doc.name}</h4>
                             <p className="text-sm text-gray-600">
-                              {doc.rows.length} entradas • {new Date(doc.updated_at).toLocaleDateString()}
+                              {doc.rows?.length || 0} entradas • {new Date(doc.updated_at).toLocaleDateString()}
                             </p>
                           </div>
-                          <Badge variant="secondary">{doc.fields.length} campos</Badge>
+                          <Badge variant="secondary">{doc.fields?.length || 0} campos</Badge>
                         </div>
                       ))}
                     </div>
@@ -272,7 +273,7 @@ export default function HomePage() {
                               {new Date(template.created_at).toLocaleDateString()}
                             </p>
                           </div>
-                          <Badge variant="secondary">{template.fields.length} campos</Badge>
+                          <Badge variant="secondary">{template.fields?.length || 0} campos</Badge>
                         </div>
                       ))}
                     </div>
@@ -309,13 +310,13 @@ export default function HomePage() {
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-gray-900">
-                      {documents.reduce((acc, doc) => acc + doc.rows.length, 0)}
+                      {documents.reduce((acc, doc) => acc + (doc.rows?.length || 0), 0)}
                     </div>
                     <div className="text-sm text-gray-600">Entradas de Datos</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-gray-900">
-                      {documents.reduce((acc, doc) => acc + doc.fields.length, 0)}
+                      {documents.reduce((acc, doc) => acc + (doc.fields?.length || 0), 0)}
                     </div>
                     <div className="text-sm text-gray-600">Campos Totales</div>
                   </div>
