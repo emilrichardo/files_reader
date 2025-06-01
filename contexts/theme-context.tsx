@@ -27,6 +27,7 @@ interface ThemeContextType {
   loadUserSettings: (userId: string) => Promise<void>
   isLoadingSettings: boolean
   isAdmin: boolean
+  forceReload: () => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -128,14 +129,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
-  const [lastLoadedUserId, setLastLoadedUserId] = useState<string | null>(null)
 
   // Initialize
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  // Cargar configuración cuando el usuario cambie
+  // Cargar configuración cuando el usuario cambie o al inicio
   useEffect(() => {
     if (!authLoading) {
       if (user) {
@@ -148,13 +148,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, authLoading])
 
-  // Función para cargar configuración global para usuarios públicos (sin verificar roles)
+  // Función para cargar configuración global para usuarios públicos
   const loadGlobalSettingsForPublic = async () => {
     if (isLoadingSettings) return
 
     setIsLoadingSettings(true)
     try {
       console.log("🌍 [THEME] Loading global settings for public user")
+
+      // Usar la nueva función getGlobalSettings que prioriza configuración de superadmin
       const { data: globalSettings } = await getGlobalSettings()
 
       if (globalSettings) {
@@ -178,14 +180,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const loadUserSettings = async (userId: string) => {
-    // Evitar cargas duplicadas
-    if (isLoadingSettings || lastLoadedUserId === userId) {
-      console.log("🎨 [THEME] Settings already loading or loaded for this user, skipping...")
+    // Permitir carga si no está cargando actualmente
+    if (isLoadingSettings) {
+      console.log("🎨 [THEME] Settings currently loading, skipping...")
       return
     }
 
     setIsLoadingSettings(true)
-    setLastLoadedUserId(userId)
 
     try {
       console.log("🎨 [THEME] Loading user settings for:", userId, "isSuperAdmin:", isSuperAdmin)
@@ -233,6 +234,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const forceReload = () => {
+    console.log("🔄 [THEME] Force reload requested")
+    setIsLoadingSettings(false)
+    if (user) {
+      loadUserSettings(user.id)
+    } else {
+      loadGlobalSettingsForPublic()
+    }
+  }
+
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("🔧 [THEME] Attempting to update settings:", updates)
     console.log("🔧 [THEME] Current user:", user?.email, "isSuperAdmin:", isSuperAdmin)
@@ -269,9 +280,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       setSettings(updatedSettings)
       console.log("✅ [THEME] Local settings updated:", updatedSettings)
-
-      // Resetear el flag de carga para permitir recargas futuras si es necesario
-      setLastLoadedUserId(null)
     } catch (error) {
       console.error("❌ [THEME] Error updating settings:", error)
       throw error
@@ -410,6 +418,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         loadUserSettings,
         isLoadingSettings,
         isAdmin: isSuperAdmin,
+        forceReload,
       }}
     >
       {children}

@@ -34,35 +34,54 @@ export default function UsersPage() {
   // Debug: Permitir acceso a emilrichardo@gmail.com siempre
   const canAccess = isSuperAdmin || user?.email === "emilrichardo@gmail.com"
 
-  // Cargar usuarios usando la API de administración de Supabase
+  // Cargar usuarios usando solo las tablas disponibles
   useEffect(() => {
     const loadUsers = async () => {
       if (canAccess) {
         try {
           setIsLoading(true)
-          console.log("🔍 [USERS] Loading users...")
+          console.log("🔍 [USERS] Loading users from user_roles table...")
 
-          // Obtener usuarios autenticados usando la API de administración
-          const { data: authData, error: authError } = await supabase.auth.admin.listUsers()
+          // Obtener todos los roles de usuarios
+          const { data: userRoles, error: rolesError } = await supabase
+            .from("user_roles")
+            .select("*")
+            .order("created_at", { ascending: false })
 
-          if (authError) {
-            console.error("❌ [USERS] Error loading auth users:", authError)
-            // Fallback: crear usuarios de ejemplo si no podemos acceder a auth.users
+          if (rolesError) {
+            console.error("❌ [USERS] Error loading user roles:", rolesError)
+            // Crear usuario mock para el superadmin actual
             const mockUsers = [
               {
                 id: user?.id || "mock-1",
                 email: user?.email || "emilrichardo@gmail.com",
+                name: "Emil Richardo",
                 created_at: new Date().toISOString(),
-                user_metadata: { name: "Emil Richardo" },
+                role: "superadmin" as const,
+                assigned_at: new Date().toISOString(),
               },
             ]
-            console.log("📝 [USERS] Using mock users due to auth error")
-            await processUsers(mockUsers)
+            setUsers(mockUsers)
             return
           }
 
-          console.log("✅ [USERS] Auth users loaded:", authData.users.length)
-          await processUsers(authData.users)
+          console.log("✅ [USERS] User roles loaded:", userRoles.length)
+
+          // Crear usuarios basados en los roles
+          const usersWithRoles: UserWithRole[] = userRoles.map((roleData) => ({
+            id: roleData.user_id,
+            email: roleData.user_id === user?.id ? user.email : `user-${roleData.user_id.slice(0, 8)}@example.com`,
+            name:
+              roleData.user_id === user?.id
+                ? user?.user_metadata?.name || "Emil Richardo"
+                : `Usuario ${roleData.user_id.slice(0, 8)}`,
+            created_at: roleData.created_at || new Date().toISOString(),
+            role: roleData.role,
+            assigned_at: roleData.assigned_at,
+          }))
+
+          console.log("✅ [USERS] Users processed:", usersWithRoles.length)
+          setUsers(usersWithRoles)
         } catch (error) {
           console.error("💥 [USERS] Error loading users:", error)
           toast({
@@ -73,35 +92,6 @@ export default function UsersPage() {
         } finally {
           setIsLoading(false)
         }
-      }
-    }
-
-    const processUsers = async (authUsers: any[]) => {
-      try {
-        // Obtener roles de user_roles
-        const { data: userRoles, error: rolesError } = await supabase.from("user_roles").select("*")
-
-        if (rolesError) {
-          console.error("❌ [USERS] Error loading user roles:", rolesError)
-        }
-
-        // Combinar datos
-        const usersWithRoles: UserWithRole[] = authUsers.map((authUser) => {
-          const roleData = userRoles?.find((role) => role.user_id === authUser.id)
-          return {
-            id: authUser.id,
-            email: authUser.email,
-            name: authUser.user_metadata?.name || authUser.user_metadata?.full_name,
-            created_at: authUser.created_at,
-            role: roleData?.role || "user",
-            assigned_at: roleData?.assigned_at,
-          }
-        })
-
-        console.log("✅ [USERS] Users processed:", usersWithRoles.length)
-        setUsers(usersWithRoles)
-      } catch (error) {
-        console.error("💥 [USERS] Error processing users:", error)
       }
     }
 
