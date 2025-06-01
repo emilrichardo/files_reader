@@ -20,8 +20,16 @@ import type { Document, DocumentRow, DocumentField, FileMetadata } from "@/lib/t
 export default function DocumentDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { getDocument, deleteDocument, addRowToDocument, updateDocument, deleteDocumentRow, templates, addTemplate } =
-    useApp()
+  const {
+    getDocument,
+    deleteDocument,
+    addRowToDocument,
+    updateDocument,
+    deleteDocumentRow,
+    templates,
+    addTemplate,
+    documents,
+  } = useApp()
   const { user } = useAuth()
   const { toast } = useToast()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
@@ -58,6 +66,21 @@ export default function DocumentDetailPage() {
     }
     setLoading(false)
   }, [params.id, getDocument])
+
+  // Agregar después del primer useEffect:
+  useEffect(() => {
+    const docId = params.id as string
+    const doc = getDocument(docId)
+    if (doc) {
+      setDocument(doc)
+      setTempName(doc.name)
+      setFields(doc.fields || [])
+      setRows(doc.rows || [])
+      // Limpiar filas pendientes al recargar
+      setPendingRows([])
+    }
+    setLoading(false)
+  }, [params.id, getDocument, documents]) // Agregar 'documents' como dependencia
 
   // Guardar nombre del documento
   const saveName = async () => {
@@ -183,15 +206,22 @@ export default function DocumentDetailPage() {
     )
   }
 
+  // Y modificar la función saveRow para refrescar el documento después de guardar:
   const saveRow = async (row: DocumentRow) => {
     if (!document) return
 
     try {
       await addRowToDocument(document.id, row)
 
+      // Refrescar el documento desde el contexto
+      const updatedDoc = getDocument(document.id)
+      if (updatedDoc) {
+        setDocument(updatedDoc)
+        setRows(updatedDoc.rows || [])
+      }
+
       // Mover de pendientes a guardadas
       setPendingRows(pendingRows.filter((r) => r.id !== row.id))
-      setRows([...rows, { ...row, id: `saved-${Date.now()}` }])
 
       toast({
         title: "Fila guardada",

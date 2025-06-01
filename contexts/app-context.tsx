@@ -268,28 +268,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           finalRow = { ...finalRow, id: data.id }
           console.log("Row created in database with ID:", data.id)
         }
-      }
 
-      // Actualizar en el estado local
-      setDocuments((prev) =>
-        prev.map((doc) => {
-          if (doc.id === documentId) {
-            const updatedDoc = {
-              ...doc,
-              rows: [...(doc.rows || []), finalRow],
-              updated_at: new Date().toISOString(),
+        // Refrescar documentos inmediatamente después de guardar
+        await refreshDocuments()
+      } else {
+        // Actualizar en el estado local para modo offline
+        setDocuments((prev) =>
+          prev.map((doc) => {
+            if (doc.id === documentId) {
+              const updatedDoc = {
+                ...doc,
+                rows: [...(doc.rows || []), finalRow],
+                updated_at: new Date().toISOString(),
+              }
+              console.log("Row added to document:", finalRow)
+              console.log("Updated document:", updatedDoc)
+              return updatedDoc
             }
-            console.log("Row added to document:", finalRow)
-            console.log("Updated document:", updatedDoc)
-            return updatedDoc
-          }
-          return doc
-        }),
-      )
-
-      // Forzar un refresco de documentos para asegurar sincronización
-      if (user) {
-        setTimeout(() => refreshDocuments(), 500)
+            return doc
+          }),
+        )
       }
 
       console.log("Row added successfully to document:", documentId)

@@ -112,7 +112,13 @@ export const getDocuments = async (userId: string) => {
       .from("documents")
       .select(`
         *,
-        document_rows (*)
+        document_rows (
+          id,
+          document_id,
+          data,
+          file_metadata,
+          created_at
+        )
       `)
       .eq("user_id", userId)
       .order("updated_at", { ascending: false })
@@ -126,10 +132,21 @@ export const getDocuments = async (userId: string) => {
     const documents =
       data?.map((doc) => ({
         ...doc,
-        rows: doc.document_rows || [],
+        rows: (doc.document_rows || []).map((row: any) => ({
+          id: row.id,
+          document_id: row.document_id,
+          data: row.data || {},
+          file_metadata: row.file_metadata,
+          created_at: row.created_at,
+        })),
       })) || []
 
     console.log("Documents retrieved successfully:", documents)
+    console.log(
+      "Total rows loaded:",
+      documents.reduce((acc, doc) => acc + (doc.rows?.length || 0), 0),
+    )
+
     return { data: documents, error: null }
   } catch (error) {
     console.error("Error getting documents:", error)
