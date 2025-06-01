@@ -2,8 +2,9 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { getUserSettings, updateUserSettings, getGlobalSettings, getCurrentUserRole } from "@/lib/database"
+import { getUserSettings, updateUserSettings, getGlobalSettings, getSuperAdminSettings } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
+import { useAuth } from "./auth-context"
 
 interface ThemeContextType {
   settings: UserSettings
@@ -123,73 +124,105 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const { user, isSuperAdmin, loading: authLoading } = useAuth()
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
 
   // Initialize
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  // Modificar la función loadUserSettings para mejorar la carga de configuración global
+  // Cargar configuración cuando el usuario cambie
+  useEffect(() => {
+    if (!authLoading && user) {
+      console.log("🎨 [THEME] User changed, loading settings for:", user.email)
+      loadUserSettings(user.id)
+    } else if (!authLoading && !user) {
+      console.log("🎨 [THEME] No user, loading global settings")
+      loadGlobalSettingsForPublic()
+    }
+  }, [user, authLoading])
+
+  // Función para cargar configuración global para usuarios públicos (sin verificar roles)
+  const loadGlobalSettingsForPublic = async () => {
+    if (isLoadingSettings) return
+
+    setIsLoadingSettings(true)
+    try {
+      console.log("🌍 [THEME] Loading global settings for public user")
+      const { data: globalSettings } = await getGlobalSettings()
+
+      if (globalSettings) {
+        console.log("✅ [THEME] Global settings loaded for public:", globalSettings)
+        const mergedSettings = {
+          ...defaultSettings,
+          ...globalSettings,
+          user_id: "public",
+        }
+        setSettings(mergedSettings)
+      } else {
+        console.log("⚠️ [THEME] No global settings found, using defaults")
+        setSettings({ ...defaultSettings, user_id: "public" })
+      }
+    } catch (error) {
+      console.error("❌ [THEME] Error loading global settings:", error)
+      setSettings({ ...defaultSettings, user_id: "public" })
+    } finally {
+      setIsLoadingSettings(false)
+    }
+  }
+
   const loadUserSettings = async (userId: string) => {
     if (isLoadingSettings) {
-      console.log("Settings already loading, skipping...")
+      console.log("🎨 [THEME] Settings already loading, skipping...")
       return
     }
 
     setIsLoadingSettings(true)
 
     try {
-      console.log("Loading user settings for:", userId)
-
-      // Verificar si el usuario es superadmin
-      const userRole = await getCurrentUserRole()
-      const isSuperAdmin = userRole === "superadmin"
-      setIsAdmin(isSuperAdmin)
-
-      console.log("User role determined:", userRole, "isSuperAdmin:", isSuperAdmin)
+      console.log("🎨 [THEME] Loading user settings for:", userId)
 
       let settingsData = null
 
       if (isSuperAdmin) {
         // Si es superadmin, cargar sus propias configuraciones
-        console.log("Loading superadmin's own settings")
+        console.log("👑 [THEME] Loading superadmin's own settings")
         const { data: userSettings } = await getUserSettings(userId)
         settingsData = userSettings
       } else {
-        // Si no es superadmin, cargar configuración global de cualquier superadmin
-        console.log("Loading global settings from superadmin")
-        const { data: globalSettings } = await getGlobalSettings()
-        if (globalSettings) {
-          console.log("Global settings found:", globalSettings)
-          settingsData = globalSettings
+        // Si no es superadmin, cargar configuración de superadmin usando función específica
+        console.log("🌍 [THEME] Loading superadmin settings for regular user")
+        const { data: superAdminSettings } = await getSuperAdminSettings()
+        if (superAdminSettings) {
+          console.log("✅ [THEME] Superadmin settings found:", superAdminSettings)
+          settingsData = superAdminSettings
         } else {
-          console.log("No global settings found, using defaults")
+          console.log("⚠️ [THEME] No superadmin settings found, using defaults")
           settingsData = defaultSettings
         }
       }
 
       if (settingsData) {
-        console.log("Settings loaded successfully:", settingsData)
+        console.log("✅ [THEME] Settings loaded successfully:", settingsData)
         const mergedSettings = {
           ...defaultSettings,
           ...settingsData,
           api_keys: settingsData.api_keys || {},
-          user_id: userId, // Asegurar que el user_id sea el correcto
+          user_id: userId,
         }
         setSettings(mergedSettings)
       } else {
         const newSettings = { ...defaultSettings, user_id: userId }
         if (isSuperAdmin) {
           try {
-            console.log("Creating default settings for superadmin")
+            console.log("🔧 [THEME] Creating default settings for superadmin")
             await updateUserSettings(userId, newSettings)
             setSettings(newSettings)
           } catch (createError) {
-            console.error("Error creating default settings:", createError)
+            console.error("❌ [THEME] Error creating default settings:", createError)
             setSettings(newSettings)
           }
         } else {
@@ -197,38 +230,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (error) {
-      console.error("Error in loadUserSettings:", error)
+      console.error("❌ [THEME] Error in loadUserSettings:", error)
       setSettings({ ...defaultSettings, user_id: userId })
     } finally {
       setIsLoadingSettings(false)
     }
   }
 
-  // Modificar la función updateSettings para verificar permisos correctamente
   const updateSettings = async (updates: Partial<UserSettings>) => {
-    console.log("Updating settings:", updates, "isAdmin:", isAdmin)
+    console.log("🔧 [THEME] Updating settings:", updates, "isSuperAdmin:", isSuperAdmin)
 
     try {
-      // Verificar rol actual antes de permitir cambios
-      const currentRole = await getCurrentUserRole()
-      const canModify = currentRole === "superadmin"
-
-      console.log("Current role:", currentRole, "Can modify:", canModify)
-
-      if (!canModify) {
+      if (!isSuperAdmin) {
         throw new Error("Solo los superadministradores pueden cambiar la configuración")
       }
 
-      // Solo guardar en la base de datos si hay usuario autenticado
-      if (settings.user_id && settings.user_id !== "demo-user") {
-        console.log("Saving settings to database for user:", settings.user_id)
-        const { error } = await updateUserSettings(settings.user_id, updates)
-        if (error) {
-          console.error("Error updating settings in database:", error)
-          throw error
-        } else {
-          console.log("Settings saved to database successfully")
-        }
+      if (!user) {
+        throw new Error("Usuario no autenticado")
+      }
+
+      console.log("💾 [THEME] Saving settings to database for user:", user.id)
+      const { error } = await updateUserSettings(user.id, updates)
+      if (error) {
+        console.error("❌ [THEME] Error updating settings in database:", error)
+        throw error
+      } else {
+        console.log("✅ [THEME] Settings saved to database successfully")
       }
 
       // Actualizar estado local después de guardar exitosamente
@@ -239,7 +266,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
       setSettings(updatedSettings)
     } catch (error) {
-      console.error("Error updating settings:", error)
+      console.error("❌ [THEME] Error updating settings:", error)
       throw error
     }
   }
@@ -359,7 +386,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         isLoaded,
         loadUserSettings,
         isLoadingSettings,
-        isAdmin,
+        isAdmin: isSuperAdmin,
       }}
     >
       {children}

@@ -22,36 +22,95 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Mejorar la función getGlobalSettings
+// Función simplificada para obtener configuración global sin verificar roles
 export const getGlobalSettings = async () => {
   try {
-    console.log("Getting global settings from superadmin")
+    console.log("Getting global settings (public access)")
 
-    // Buscar configuración de cualquier superadmin
+    // Buscar configuración más reciente que tenga configuración de tema/diseño
     const { data, error } = await supabase
       .from("user_settings")
-      .select(`
-        *,
-        user_roles!inner(role)
-      `)
-      .eq("user_roles.role", "superadmin")
+      .select("*")
+      .not("project_name", "is", null)
+      .not("color_scheme", "is", null)
       .order("updated_at", { ascending: false })
       .limit(1)
 
     if (error && error.code !== "PGRST116") {
-      console.error("Supabase error getting global settings:", error)
+      console.error("Error getting global settings:", error)
       return { data: null, error }
     }
 
     if (data && data.length > 0) {
-      console.log("Global settings retrieved successfully from superadmin:", data[0])
+      console.log("Global settings retrieved successfully:", data[0])
       return { data: data[0], error: null }
     } else {
-      console.log("No global settings found from superadmin")
+      console.log("No global settings found")
       return { data: null, error: null }
     }
   } catch (error) {
     console.error("Error getting global settings:", error)
+    return { data: null, error }
+  }
+}
+
+// Función específica para obtener configuración de superadmin (solo para usuarios autenticados)
+export const getSuperAdminSettings = async () => {
+  try {
+    console.log("Getting superadmin settings (authenticated access)")
+
+    // Verificar que hay un usuario autenticado
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      console.log("No authenticated user, cannot access superadmin settings")
+      return { data: null, error: null }
+    }
+
+    // Primero obtener todos los usuarios con rol superadmin
+    const { data: superAdmins, error: roleError } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "superadmin")
+
+    if (roleError) {
+      console.error("Error getting superadmin users:", roleError)
+      return { data: null, error: roleError }
+    }
+
+    if (!superAdmins || superAdmins.length === 0) {
+      console.log("No superadmin users found")
+      return { data: null, error: null }
+    }
+
+    // Obtener los user_ids de los superadmins
+    const superAdminIds = superAdmins.map((admin) => admin.user_id)
+    console.log("Found superadmin IDs:", superAdminIds)
+
+    // Buscar configuración de cualquier superadmin
+    const { data: settings, error: settingsError } = await supabase
+      .from("user_settings")
+      .select("*")
+      .in("user_id", superAdminIds)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+
+    if (settingsError) {
+      console.error("Error getting superadmin settings:", settingsError)
+      return { data: null, error: settingsError }
+    }
+
+    if (settings && settings.length > 0) {
+      console.log("Superadmin settings retrieved successfully:", settings[0])
+      return { data: settings[0], error: null }
+    } else {
+      console.log("No superadmin settings found")
+      return { data: null, error: null }
+    }
+  } catch (error) {
+    console.error("Error getting superadmin settings:", error)
     return { data: null, error }
   }
 }
