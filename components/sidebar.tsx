@@ -46,8 +46,51 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* User Info */}
-      <div className="border-b p-4">
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 p-4">
+        {navigation.map((item) => {
+          const isActive = pathname === item.href
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
+              onClick={() => setOpen(false)}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.name}
+            </Link>
+          )
+        })}
+
+        {/* Admin/SuperAdmin Menu */}
+        {isAdmin && (
+          <Link
+            href="/users"
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors border border-purple-200",
+              pathname === "/users"
+                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                : "text-purple-700 hover:bg-purple-50",
+            )}
+            onClick={() => setOpen(false)}
+          >
+            <Users className="h-4 w-4" />
+            Usuarios
+            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs ml-auto">
+              {isSuperAdmin ? "SA" : "Admin"}
+            </Badge>
+          </Link>
+        )}
+      </nav>
+
+      {/* User Info / Login - Siempre en la parte inferior */}
+      <div className="p-4 border-t mt-auto">
         {loading ? (
           <div className="flex items-center gap-2">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -77,57 +120,6 @@ export default function Sidebar() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">No autenticado</p>
-          </div>
-        )}
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-4">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              onClick={() => setOpen(false)}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.name}
-            </Link>
-          )
-        })}
-
-        {/* SuperAdmin Menu */}
-        {isAdmin && (
-          <Link
-            href="/users"
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors border border-purple-200",
-              pathname === "/users"
-                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                : "text-purple-700 hover:bg-purple-50",
-            )}
-            onClick={() => setOpen(false)}
-          >
-            <Users className="h-4 w-4" />
-            Usuarios
-            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs ml-auto">
-              {isSuperAdmin ? "SA" : "Admin"}
-            </Badge>
-          </Link>
-        )}
-      </nav>
-      {/* Google Sign In - Solo si no está autenticado */}
-      {!user && !loading && (
-        <div className="p-4 border-t mt-auto">
           <Button variant="outline" size="sm" onClick={signInWithGoogle} className="w-full justify-center gap-2">
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -149,8 +141,8 @@ export default function Sidebar() {
             </svg>
             Iniciar con Google
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 

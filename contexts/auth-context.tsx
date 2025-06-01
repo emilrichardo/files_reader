@@ -133,10 +133,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (mounted) {
               setUserRole(role)
-              setLoading(false) // ✅ Importante: establecer loading a false aquí
+              setLoading(false)
             }
           } else {
-            setLoading(false) // ✅ También establecer loading a false si no hay usuario
+            setLoading(false)
           }
         }
       } catch (error) {
@@ -159,27 +159,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          // Solo registrar si es un nuevo sign in
+          // Registrar usuario automáticamente si es nuevo
           if (event === "SIGNED_IN") {
             console.log("🔐 User signed in, ensuring registration...")
             await ensureUserIsRegistered(session.user)
           }
 
-          // Solo obtener rol si el usuario cambió
-          if (!user || user.id !== session.user.id) {
-            console.log("🔍 Getting role for new/different user...")
-            const role = await getCurrentUserRole(session.user.id)
-            console.log("🎯 Role for", session.user.email, ":", role)
+          // Obtener rol del usuario SIEMPRE
+          console.log("🔍 Getting role after auth change...")
+          const role = await getCurrentUserRole(session.user.id)
+          console.log("🎯 Role after auth change for", session.user.email, ":", role)
 
-            if (mounted) {
-              setUserRole(role)
-              setLoading(false)
-            }
-          } else {
-            // Usuario es el mismo, solo actualizar loading
-            if (mounted) {
-              setLoading(false)
-            }
+          if (mounted) {
+            setUserRole(role)
+            setLoading(false)
           }
         } else {
           setUserRole("user")
