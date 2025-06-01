@@ -8,13 +8,23 @@ import { useTheme } from "@/contexts/theme-context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { FileText, LayoutTemplateIcon as Template, Settings, Users, Menu, LogOut, Crown, Home } from "lucide-react"
+import {
+  FileText,
+  LayoutTemplateIcon as Template,
+  Settings,
+  Users,
+  Menu,
+  LogOut,
+  Crown,
+  Home,
+  RefreshCw,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { user, userRole, isAdmin, isSuperAdmin, loading, signInWithGoogle, signOut } = useAuth()
-  const { projectName, companyLogo, primaryColor } = useTheme()
+  const { user, userRole, isAdmin, isSuperAdmin, loading, signInWithGoogle, signOut, refreshUserRole } = useAuth()
+  const { projectName, companyLogo } = useTheme()
   const [open, setOpen] = useState(false)
 
   const handleSignOut = async () => {
@@ -23,6 +33,11 @@ export default function Sidebar() {
     } catch (error) {
       console.error("Error signing out:", error)
     }
+  }
+
+  const handleRefreshRole = async () => {
+    console.log("🔄 [SIDEBAR] Manual role refresh requested")
+    await refreshUserRole()
   }
 
   const navigation = [
@@ -68,8 +83,8 @@ export default function Sidebar() {
           )
         })}
 
-        {/* Admin/SuperAdmin Menu */}
-        {isAdmin && (
+        {/* Admin/SuperAdmin Menu - Mostrar siempre para debug */}
+        {(isAdmin || user?.email === "emilrichardo@gmail.com") && (
           <Link
             href="/users"
             className={cn(
@@ -111,13 +126,22 @@ export default function Sidebar() {
                       SA
                     </Badge>
                   )}
+                  {/* Debug: Mostrar siempre para emilrichardo */}
+                  {user.email === "emilrichardo@gmail.com" && !isSuperAdmin && (
+                    <Badge className="bg-red-500 text-white text-xs">DEBUG: Should be SA</Badge>
+                  )}
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={handleSignOut} className="w-full justify-start gap-2">
-              <LogOut className="h-4 w-4" />
-              Cerrar Sesión
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleSignOut} className="flex-1 justify-start gap-2">
+                <LogOut className="h-4 w-4" />
+                Cerrar Sesión
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleRefreshRole} className="px-2">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ) : (
           <Button variant="outline" size="sm" onClick={signInWithGoogle} className="w-full justify-center gap-2">

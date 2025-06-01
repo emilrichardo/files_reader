@@ -31,18 +31,22 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
 
+  // Debug: Permitir acceso a emilrichardo@gmail.com siempre
+  const canAccess = isSuperAdmin || user?.email === "emilrichardo@gmail.com"
+
   // Cargar usuarios
   useEffect(() => {
     const load = async () => {
-      if (isSuperAdmin) {
+      if (canAccess) {
         try {
           setIsLoading(true)
+          console.log("🔍 [USERS] Loading users...")
 
           // Obtener todos los usuarios de auth.users
           const { data: authUsers, error: authError } = await supabase.from("auth.users").select("*")
 
           if (authError) {
-            console.error("Error loading auth users:", authError)
+            console.error("❌ [USERS] Error loading auth users:", authError)
             toast({
               title: "Error",
               description: "No se pudieron cargar los usuarios",
@@ -55,7 +59,7 @@ export default function UsersPage() {
           const { data: userRoles, error: rolesError } = await supabase.from("user_roles").select("*")
 
           if (rolesError) {
-            console.error("Error loading user roles:", rolesError)
+            console.error("❌ [USERS] Error loading user roles:", rolesError)
           }
 
           // Combinar datos
@@ -71,9 +75,10 @@ export default function UsersPage() {
             }
           })
 
+          console.log("✅ [USERS] Users loaded:", usersWithRoles.length)
           setUsers(usersWithRoles)
         } catch (error) {
-          console.error("Error loading users:", error)
+          console.error("💥 [USERS] Error loading users:", error)
           toast({
             title: "Error",
             description: "Error al cargar usuarios",
@@ -85,7 +90,7 @@ export default function UsersPage() {
       }
     }
     load()
-  }, [isSuperAdmin, toast])
+  }, [canAccess, toast])
 
   // Filtrar usuarios
   useEffect(() => {
@@ -181,14 +186,17 @@ export default function UsersPage() {
     )
   }
 
-  // Verificar permisos - solo SuperAdmins pueden acceder
-  if (!isSuperAdmin) {
+  // Verificar permisos
+  if (!canAccess) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
           <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4">Acceso Denegado</h2>
           <p className="text-gray-600 mb-6">Solo los SuperAdministradores pueden acceder a la gestión de usuarios.</p>
+          <p className="text-sm text-gray-500 mb-4">
+            Debug: isSuperAdmin={isSuperAdmin ? "true" : "false"}, email={user?.email}
+          </p>
           <button
             onClick={() => router.push("/")}
             className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg"
@@ -207,6 +215,9 @@ export default function UsersPage() {
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl font-bold mb-2">Gestión de Usuarios</h1>
           <p className="text-gray-600">Administra usuarios y asigna roles en el sistema</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Debug: Acceso permitido para {user?.email} (isSuperAdmin: {isSuperAdmin ? "true" : "false"})
+          </p>
         </div>
 
         {/* Stats Cards */}
@@ -351,7 +362,7 @@ export default function UsersPage() {
                       <Select
                         value={userItem.role}
                         onValueChange={(value) => handleRoleChange(userItem.id, value)}
-                        disabled={userItem.id === user?.id} // No permitir cambiar el propio rol
+                        disabled={userItem.id === user?.id}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />

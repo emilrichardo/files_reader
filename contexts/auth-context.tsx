@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
@@ -37,42 +36,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userId: string,
   ): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
     try {
-      console.log("🔍 Getting role for user ID:", userId)
+      console.log("🔍 [AUTH] Getting role for user ID:", userId)
 
       const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
 
       if (error) {
-        console.error("❌ Error getting user role:", error)
+        console.error("❌ [AUTH] Error getting user role:", error)
         return "user"
       }
 
       if (!data) {
-        console.log("⚠️ No role data found for user, returning default")
+        console.log("⚠️ [AUTH] No role data found for user, returning default")
         return "user"
       }
 
-      console.log("✅ Role found for user:", data.role)
+      console.log("✅ [AUTH] Role found for user:", data.role)
       return data.role as "admin" | "user" | "premium" | "moderator" | "superadmin"
     } catch (error) {
-      console.error("💥 Error getting user role:", error)
+      console.error("💥 [AUTH] Error getting user role:", error)
       return "user"
     }
   }
 
   const refreshUserRole = async () => {
     if (user) {
-      console.log("🔄 Refreshing role for user:", user.email)
+      console.log("🔄 [AUTH] Refreshing role for user:", user.email)
       const role = await getCurrentUserRole(user.id)
-      console.log("🎯 Role retrieved:", role)
+      console.log("🎯 [AUTH] Role retrieved:", role)
       setUserRole(role)
     }
   }
 
   const ensureUserIsRegistered = async (user: User) => {
     try {
-      console.log("👤 Checking if user is registered:", user.email)
+      console.log("👤 [AUTH] Checking if user is registered:", user.email)
 
-      // Verificar si el usuario ya tiene un rol asignado
       const { data: existingRole, error: checkError } = await supabase
         .from("user_roles")
         .select("*")
@@ -80,13 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single()
 
       if (checkError && checkError.code !== "PGRST116") {
-        console.error("❌ Error checking existing role:", checkError)
+        console.error("❌ [AUTH] Error checking existing role:", checkError)
         return
       }
 
-      // Si no existe, crear un rol por defecto
       if (!existingRole) {
-        console.log("📝 Registering new user:", user.email)
+        console.log("📝 [AUTH] Registering new user:", user.email)
         const { error } = await supabase.from("user_roles").insert({
           user_id: user.id,
           role: "user",
@@ -94,42 +91,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         if (error) {
-          console.error("❌ Error registering new user:", error)
+          console.error("❌ [AUTH] Error registering new user:", error)
         } else {
-          console.log("✅ New user registered successfully:", user.email)
+          console.log("✅ [AUTH] New user registered successfully:", user.email)
         }
       } else {
-        console.log("✅ User already registered with role:", existingRole.role)
+        console.log("✅ [AUTH] User already registered with role:", existingRole.role)
       }
     } catch (error) {
-      console.error("💥 Error ensuring user registration:", error)
+      console.error("💥 [AUTH] Error ensuring user registration:", error)
     }
   }
 
   useEffect(() => {
     let mounted = true
 
-    // Obtener sesión inicial
     const initializeAuth = async () => {
       try {
-        console.log("🚀 Initializing auth...")
+        console.log("🚀 [AUTH] Initializing auth...")
+
         const {
           data: { session },
+          error,
         } = await supabase.auth.getSession()
 
-        console.log("📋 Initial session:", session?.user?.email || "No session")
+        if (error) {
+          console.error("❌ [AUTH] Error getting session:", error)
+          if (mounted) setLoading(false)
+          return
+        }
+
+        console.log("📋 [AUTH] Initial session:", session?.user?.email || "No session")
 
         if (mounted) {
           if (session?.user) {
             setUser(session.user)
-            console.log("👤 User set, getting role...")
+            console.log("👤 [AUTH] User set, getting role...")
 
-            // Asegurar que el usuario esté registrado
             await ensureUserIsRegistered(session.user)
 
-            // Obtener rol inmediatamente
             const role = await getCurrentUserRole(session.user.id)
-            console.log("🎯 Initial role for", session.user.email, ":", role)
+            console.log("🎯 [AUTH] Initial role for", session.user.email, ":", role)
 
             if (mounted) {
               setUserRole(role)
@@ -140,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (error) {
-        console.error("💥 Error initializing auth:", error)
+        console.error("💥 [AUTH] Error initializing auth:", error)
         if (mounted) {
           setLoading(false)
         }
@@ -149,26 +151,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializeAuth()
 
-    // Escuchar cambios de autenticación
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔄 Auth state change:", event, session?.user?.email || "No user")
+      console.log("🔄 [AUTH] Auth state change:", event, session?.user?.email || "No user")
 
       if (mounted) {
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          // Registrar usuario automáticamente si es nuevo
           if (event === "SIGNED_IN") {
-            console.log("🔐 User signed in, ensuring registration...")
+            console.log("🔐 [AUTH] User signed in, ensuring registration...")
             await ensureUserIsRegistered(session.user)
           }
 
-          // Obtener rol del usuario SIEMPRE
-          console.log("🔍 Getting role after auth change...")
+          console.log("🔍 [AUTH] Getting role after auth change...")
           const role = await getCurrentUserRole(session.user.id)
-          console.log("🎯 Role after auth change for", session.user.email, ":", role)
+          console.log("🎯 [AUTH] Role after auth change for", session.user.email, ":", role)
 
           if (mounted) {
             setUserRole(role)
@@ -202,15 +201,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
     setUserRole("user")
     setLoading(false)
-    // Forzar recarga de la página para limpiar completamente el estado
     window.location.href = "/"
   }
 
   const isAdmin = userRole === "admin" || userRole === "superadmin"
   const isSuperAdmin = userRole === "superadmin"
 
-  console.log("📊 Current auth state:", {
+  // Log detallado del estado actual
+  console.log("📊 [AUTH] Current auth state:", {
     userEmail: user?.email,
+    userId: user?.id,
     userRole,
     isAdmin,
     isSuperAdmin,
