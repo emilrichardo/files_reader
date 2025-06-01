@@ -83,8 +83,8 @@ export default function Sidebar() {
           )
         })}
 
-        {/* Admin/SuperAdmin Menu - Mostrar siempre para debug */}
-        {(isAdmin || user?.email === "emilrichardo@gmail.com") && (
+        {/* Admin/SuperAdmin Menu - Mostrar cuando sea admin o superadmin */}
+        {(isAdmin || isSuperAdmin) && (
           <Link
             href="/users"
             className={cn(

@@ -1,59 +1,69 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 import { useToast } from "@/hooks/use-toast"
-import { Save, Palette, User, Shield } from "lucide-react"
+import { Save, Palette, Shield, Key, Upload, X } from "lucide-react"
 import AuthGuard from "@/components/auth-guard"
 
 export default function SettingsPage() {
   const { user, loading } = useAuth()
-  const { theme, updateTheme } = useTheme()
+  const { settings, updateSettings, fontFamilies, colorSchemes } = useTheme()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
 
   // Estados locales para el formulario
   const [projectName, setProjectName] = useState("")
-  const [primaryColor, setPrimaryColor] = useState("")
-  const [secondaryColor, setSecondaryColor] = useState("")
-  const [logoUrl, setLogoUrl] = useState("")
-  const [description, setDescription] = useState("")
-  const [notifications, setNotifications] = useState(true)
-  const [language, setLanguage] = useState("es")
-  const [showContent, setShowContent] = useState(false)
+  const [apiEndpoint, setApiEndpoint] = useState("")
+  const [apiKeys, setApiKeys] = useState({
+    openai: "",
+    google_vision: "",
+    supabase: "",
+  })
+  const [theme, setTheme] = useState("light")
+  const [colorScheme, setColorScheme] = useState("blue")
+  const [customColor, setCustomColor] = useState("")
+  const [fontFamily, setFontFamily] = useState("Inter")
+  const [styleMode, setStyleMode] = useState("flat")
+  const [companyLogo, setCompanyLogo] = useState("")
+  const [logoFile, setLogoFile] = useState<File | null>(null)
 
+  // Cargar configuraciones
   useEffect(() => {
-    setShowContent(!loading && !!user)
-  }, [loading, user])
-
-  // Cargar configuraciones del tema
-  useEffect(() => {
-    if (theme) {
-      setProjectName(theme.projectName || "")
-      setPrimaryColor(theme.primaryColor || "#000000")
-      setSecondaryColor(theme.secondaryColor || "#666666")
-      setLogoUrl(theme.logoUrl || "")
-      setDescription(theme.description || "")
+    if (settings) {
+      setProjectName(settings.project_name || "")
+      setApiEndpoint(settings.api_endpoint || "")
+      setApiKeys(settings.api_keys || { openai: "", google_vision: "", supabase: "" })
+      setTheme(settings.theme || "light")
+      setColorScheme(settings.color_scheme || "blue")
+      setCustomColor(settings.custom_color || "")
+      setFontFamily(settings.font_family || "Inter")
+      setStyleMode(settings.style_mode || "flat")
+      setCompanyLogo(settings.company_logo || "")
     }
-  }, [theme])
+  }, [settings])
 
   const handleSave = async () => {
     setIsLoading(true)
     try {
-      await updateTheme({
-        projectName,
-        primaryColor,
-        secondaryColor,
-        logoUrl,
-        description,
+      await updateSettings({
+        project_name: projectName,
+        api_endpoint: apiEndpoint,
+        api_keys: apiKeys,
+        theme,
+        color_scheme: colorScheme,
+        custom_color: customColor,
+        font_family: fontFamily,
+        style_mode: styleMode,
+        company_logo: companyLogo,
       })
 
       toast({
@@ -70,6 +80,23 @@ export default function SettingsPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setLogoFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setCompanyLogo(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const removeLogo = () => {
+    setCompanyLogo("")
+    setLogoFile(null)
   }
 
   if (loading) {
@@ -90,7 +117,7 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración</h1>
@@ -98,8 +125,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Configuración del Proyecto */}
+          {/* Configuración Principal */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Configuración del Proyecto */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -121,100 +149,180 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="logo-url">URL del Logo</Label>
+                    <Label htmlFor="api-endpoint">API Endpoint</Label>
                     <Input
-                      id="logo-url"
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="https://ejemplo.com/logo.png"
+                      id="api-endpoint"
+                      value={apiEndpoint}
+                      onChange={(e) => setApiEndpoint(e.target.value)}
+                      placeholder="https://api.ejemplo.com"
                       className="mt-1"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe tu proyecto..."
-                    className="mt-1"
-                    rows={3}
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="theme">Tema</Label>
+                    <Select value={theme} onValueChange={setTheme}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Claro</SelectItem>
+                        <SelectItem value="dark">Oscuro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="style-mode">Modo de Estilo</Label>
+                    <Select value={styleMode} onValueChange={setStyleMode}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="flat">Plano</SelectItem>
+                        <SelectItem value="rounded">Redondeado</SelectItem>
+                        <SelectItem value="sharp">Angular</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="primary-color">Color Primario</Label>
+                    <Label htmlFor="color-scheme">Esquema de Color</Label>
+                    <Select value={colorScheme} onValueChange={setColorScheme}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(colorSchemes).map(([key, value]) => (
+                          <SelectItem key={key} value={key}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: value }} />
+                              {key.charAt(0).toUpperCase() + key.slice(1)}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="custom-color">Color Personalizado</Label>
                     <div className="flex gap-2 mt-1">
                       <Input
-                        id="primary-color"
+                        id="custom-color"
                         type="color"
-                        value={primaryColor}
-                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        value={customColor}
+                        onChange={(e) => setCustomColor(e.target.value)}
                         className="w-16 h-10 p-1 border rounded"
                       />
                       <Input
-                        value={primaryColor}
-                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        value={customColor}
+                        onChange={(e) => setCustomColor(e.target.value)}
                         placeholder="#000000"
                         className="flex-1"
                       />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="secondary-color">Color Secundario</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        id="secondary-color"
-                        type="color"
-                        value={secondaryColor}
-                        onChange={(e) => setSecondaryColor(e.target.value)}
-                        className="w-16 h-10 p-1 border rounded"
-                      />
-                      <Input
-                        value={secondaryColor}
-                        onChange={(e) => setSecondaryColor(e.target.value)}
-                        placeholder="#666666"
-                        className="flex-1"
-                      />
-                    </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="font-family">Tipografía</Label>
+                  <Select value={fontFamily} onValueChange={setFontFamily}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fontFamilies.map((font) => (
+                        <SelectItem key={font} value={font}>
+                          <span style={{ fontFamily: font }}>{font}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="company-logo">Logo de la Empresa</Label>
+                  <div className="mt-2">
+                    {companyLogo ? (
+                      <div className="flex items-center gap-4">
+                        <img
+                          src={companyLogo || "/placeholder.svg"}
+                          alt="Logo"
+                          className="h-16 w-auto border rounded"
+                        />
+                        <Button variant="outline" size="sm" onClick={removeLogo}>
+                          <X className="w-4 h-4 mr-2" />
+                          Remover
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                        <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600 mb-2">Sube tu logo</p>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                          id="logo-upload"
+                        />
+                        <Button variant="outline" size="sm" asChild>
+                          <label htmlFor="logo-upload" className="cursor-pointer">
+                            Seleccionar archivo
+                          </label>
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Configuración de Usuario */}
+            {/* Configuración de APIs */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5" />
-                  Configuración de Usuario
+                  <Key className="w-5 h-5" />
+                  Configuración de APIs
                 </CardTitle>
-                <CardDescription>Ajusta tus preferencias personales</CardDescription>
+                <CardDescription>Configura las claves de API para servicios externos</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="notifications">Notificaciones</Label>
-                    <p className="text-sm text-gray-500">Recibir notificaciones por email</p>
-                  </div>
-                  <Switch id="notifications" checked={notifications} onCheckedChange={setNotifications} />
-                </div>
-
+              <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="language">Idioma</Label>
-                  <Select value={language} onValueChange={setLanguage}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="es">Español</SelectItem>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="fr">Français</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="openai-key">OpenAI API Key</Label>
+                  <Input
+                    id="openai-key"
+                    type="password"
+                    value={apiKeys.openai}
+                    onChange={(e) => setApiKeys({ ...apiKeys, openai: e.target.value })}
+                    placeholder="sk-..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="google-vision-key">Google Vision API Key</Label>
+                  <Input
+                    id="google-vision-key"
+                    type="password"
+                    value={apiKeys.google_vision}
+                    onChange={(e) => setApiKeys({ ...apiKeys, google_vision: e.target.value })}
+                    placeholder="AIza..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="supabase-key">Supabase API Key</Label>
+                  <Input
+                    id="supabase-key"
+                    type="password"
+                    value={apiKeys.supabase}
+                    onChange={(e) => setApiKeys({ ...apiKeys, supabase: e.target.value })}
+                    placeholder="eyJ..."
+                    className="mt-1"
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -231,21 +339,34 @@ export default function SettingsPage() {
               <CardContent>
                 <div className="border rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center gap-3 mb-3">
-                    {logoUrl ? (
-                      <img src={logoUrl || "/placeholder.svg"} alt="Logo" className="w-8 h-8 rounded" />
+                    {companyLogo ? (
+                      <img src={companyLogo || "/placeholder.svg"} alt="Logo" className="w-8 h-8 rounded" />
                     ) : (
                       <div
                         className="w-8 h-8 rounded flex items-center justify-center text-white text-sm font-bold"
-                        style={{ backgroundColor: primaryColor }}
+                        style={{
+                          backgroundColor: customColor || colorSchemes[colorScheme as keyof typeof colorSchemes],
+                        }}
                       >
                         {projectName ? projectName[0].toUpperCase() : "P"}
                       </div>
                     )}
-                    <span className="font-semibold" style={{ color: primaryColor }}>
+                    <span
+                      className="font-semibold"
+                      style={{
+                        color: customColor || colorSchemes[colorScheme as keyof typeof colorSchemes],
+                        fontFamily: fontFamily,
+                      }}
+                    >
                       {projectName || "Mi Proyecto"}
                     </span>
                   </div>
-                  {description && <p className="text-sm text-gray-600">{description}</p>}
+                  <div className="text-sm text-gray-600" style={{ fontFamily: fontFamily }}>
+                    Tema: {theme === "light" ? "Claro" : "Oscuro"}
+                  </div>
+                  <div className="text-sm text-gray-600" style={{ fontFamily: fontFamily }}>
+                    Estilo: {styleMode}
+                  </div>
                 </div>
               </CardContent>
             </Card>
