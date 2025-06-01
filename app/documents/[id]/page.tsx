@@ -3,16 +3,31 @@
 import { useEffect, useState, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Trash2, Download, FileText, Plus, Upload, Save, Edit, Check, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Trash2,
+  Download,
+  FileText,
+  Plus,
+  Upload,
+  Save,
+  Edit,
+  Check,
+  X,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useApp } from "@/contexts/app-context"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { useFileUpload } from "@/hooks/use-file-upload"
+import { useDynamicStyles } from "@/hooks/use-dynamic-styles"
 import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
 import type { Document, DocumentRow, DocumentField, FileMetadata } from "@/lib/types"
@@ -33,6 +48,7 @@ export default function DocumentDetailPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
+  const { getPrimaryButtonStyles } = useDynamicStyles()
 
   const [document, setDocument] = useState<Document | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,6 +60,7 @@ export default function DocumentDetailPage() {
   // Estados para campos
   const [fields, setFields] = useState<DocumentField[]>([])
   const [isEditingFields, setIsEditingFields] = useState(false)
+  const [isFieldsCollapsed, setIsFieldsCollapsed] = useState(true)
 
   // Estados para filas
   const [rows, setRows] = useState<DocumentRow[]>([])
@@ -81,6 +98,27 @@ export default function DocumentDetailPage() {
     }
     setLoading(false)
   }, [params.id, getDocument, documents]) // Agregar 'documents' como dependencia
+
+  // Guardar nombre del documento cuando se quita el mouse
+  const saveNameOnBlur = async () => {
+    if (!document || !tempName.trim() || tempName.trim() === document.name) return
+
+    try {
+      await updateDocument(document.id, { name: tempName.trim() })
+      setDocument({ ...document, name: tempName.trim() })
+      setIsEditingName(false)
+      toast({
+        title: "Nombre actualizado",
+        description: "El nombre del documento ha sido actualizado.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar el nombre.",
+        variant: "destructive",
+      })
+    }
+  }
 
   // Guardar nombre del documento
   const saveName = async () => {
@@ -364,7 +402,13 @@ export default function DocumentDetailPage() {
 
     try {
       await addRowToDocument(document.id, newRow)
-      setRows([...rows, { ...newRow, id: `saved-${Date.now()}` }])
+
+      // Refrescar el documento desde el contexto
+      const updatedDoc = getDocument(document.id)
+      if (updatedDoc) {
+        setDocument(updatedDoc)
+        setRows(updatedDoc.rows || [])
+      }
 
       setShowPreviewModal(false)
       setCurrentFile(null)
@@ -408,7 +452,7 @@ export default function DocumentDetailPage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Documento no encontrado</h3>
               <p className="text-gray-600 mb-6">El documento que buscas no existe o ha sido eliminado.</p>
               <Link href="/documents">
-                <Button className="bg-black hover:bg-gray-800 text-white">
+                <Button style={getPrimaryButtonStyles()}>
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Volver a Documentos
                 </Button>
@@ -447,6 +491,7 @@ export default function DocumentDetailPage() {
                         setIsEditingName(false)
                       }
                     }}
+                    onBlur={saveNameOnBlur}
                     autoFocus
                   />
                   <Button size="icon" variant="outline" onClick={saveName}>
@@ -486,157 +531,171 @@ export default function DocumentDetailPage() {
         </div>
 
         <div className="grid gap-8">
-          {/* Estructura de campos */}
+          {/* Estructura de campos - Colapsable */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Estructura de Campos</CardTitle>
-                <CardDescription>Define los campos que contendrá tu documento</CardDescription>
-              </div>
-              <div className="flex space-x-2">
-                {templates.length > 0 && (
-                  <Select onValueChange={loadTemplate}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Cargar plantilla" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {templates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          {template.name} ({template.fields.length} campos)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Button onClick={saveAsTemplate} variant="outline">
-                  <Save className="w-4 h-4 mr-2" />
-                  Guardar Plantilla
-                </Button>
-                {isEditingFields ? (
-                  <div className="flex space-x-2">
-                    <Button onClick={saveFields} className="bg-green-600 hover:bg-green-700 text-white">
-                      <Check className="w-4 h-4 mr-2" />
-                      Guardar Campos
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setFields(document.fields || [])
-                        setIsEditingFields(false)
-                      }}
-                      variant="outline"
-                    >
-                      <X className="w-4 h-4 mr-2" />
-                      Cancelar
-                    </Button>
-                  </div>
-                ) : (
-                  <Button onClick={() => setIsEditingFields(true)} variant="outline">
-                    <Edit className="w-4 h-4 mr-2" />
-                    Editar Campos
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isEditingFields ? (
-                <div className="space-y-4">
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-200">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Nombre</th>
-                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Tipo</th>
-                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
-                            Descripción
-                          </th>
-                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Requerido</th>
-                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">
-                            Acciones
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fields.map((field) => (
-                          <tr key={field.id}>
-                            <td className="border border-gray-200 p-2">
-                              <Input
-                                value={field.field_name}
-                                onChange={(e) => updateField(field.id, { field_name: e.target.value })}
-                                placeholder="nombre_campo"
-                              />
-                            </td>
-                            <td className="border border-gray-200 p-2">
-                              <Select
-                                value={field.type}
-                                onValueChange={(value: any) => updateField(field.id, { type: value })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="text">Texto</SelectItem>
-                                  <SelectItem value="number">Número</SelectItem>
-                                  <SelectItem value="date">Fecha</SelectItem>
-                                  <SelectItem value="boolean">Booleano</SelectItem>
-                                  <SelectItem value="email">Email</SelectItem>
-                                  <SelectItem value="url">URL</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="border border-gray-200 p-2">
-                              <Input
-                                value={field.description || ""}
-                                onChange={(e) => updateField(field.id, { description: e.target.value })}
-                                placeholder="Descripción..."
-                              />
-                            </td>
-                            <td className="border border-gray-200 p-2 text-center">
-                              <input
-                                type="checkbox"
-                                checked={field.required}
-                                onChange={(e) => updateField(field.id, { required: e.target.checked })}
-                                className="rounded"
-                              />
-                            </td>
-                            <td className="border border-gray-200 p-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => removeField(field.id)}
-                                disabled={fields.length === 1}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Button onClick={addField} variant="outline">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Agregar Campo
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {fields.map((field) => (
-                    <div key={field.id} className="p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">{field.field_name}</h4>
-                        <Badge variant="secondary">{field.type}</Badge>
-                      </div>
-                      {field.description && <p className="text-sm text-gray-600 mb-2">{field.description}</p>}
-                      {field.required && (
-                        <Badge variant="destructive" className="text-xs mt-2">
-                          Obligatorio
-                        </Badge>
-                      )}
+            <Collapsible open={!isFieldsCollapsed} onOpenChange={(open) => setIsFieldsCollapsed(!open)}>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="flex flex-row items-center justify-between cursor-pointer hover:bg-gray-50">
+                  <div className="flex items-center space-x-2">
+                    {isFieldsCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    <div>
+                      <CardTitle>Estructura de Campos</CardTitle>
+                      <CardDescription>
+                        {fields.length} campos definidos -{" "}
+                        {isFieldsCollapsed ? "Click para expandir" : "Click para colapsar"}
+                      </CardDescription>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
+                  </div>
+                  <div className="flex space-x-2">
+                    {templates.length > 0 && (
+                      <Select onValueChange={loadTemplate}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Cargar plantilla" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name} ({template.fields.length} campos)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button onClick={saveAsTemplate} variant="outline">
+                      <Save className="w-4 h-4 mr-2" />
+                      Guardar Plantilla
+                    </Button>
+                    {isEditingFields ? (
+                      <div className="flex space-x-2">
+                        <Button onClick={saveFields} style={getPrimaryButtonStyles()}>
+                          <Check className="w-4 h-4 mr-2" />
+                          Guardar Campos
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setFields(document.fields || [])
+                            setIsEditingFields(false)
+                          }}
+                          variant="outline"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancelar
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button onClick={() => setIsEditingFields(true)} variant="outline">
+                        <Edit className="w-4 h-4 mr-2" />
+                        Editar Campos
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  {isEditingFields ? (
+                    <div className="space-y-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse border border-gray-200">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Nombre</th>
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Tipo</th>
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                                Descripción
+                              </th>
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                                Requerido
+                              </th>
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">
+                                Acciones
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fields.map((field) => (
+                              <tr key={field.id}>
+                                <td className="border border-gray-200 p-2">
+                                  <Input
+                                    value={field.field_name}
+                                    onChange={(e) => updateField(field.id, { field_name: e.target.value })}
+                                    placeholder="nombre_campo"
+                                  />
+                                </td>
+                                <td className="border border-gray-200 p-2">
+                                  <Select
+                                    value={field.type}
+                                    onValueChange={(value: any) => updateField(field.id, { type: value })}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="text">Texto</SelectItem>
+                                      <SelectItem value="number">Número</SelectItem>
+                                      <SelectItem value="date">Fecha</SelectItem>
+                                      <SelectItem value="boolean">Booleano</SelectItem>
+                                      <SelectItem value="email">Email</SelectItem>
+                                      <SelectItem value="url">URL</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="border border-gray-200 p-2">
+                                  <Input
+                                    value={field.description || ""}
+                                    onChange={(e) => updateField(field.id, { description: e.target.value })}
+                                    placeholder="Descripción..."
+                                  />
+                                </td>
+                                <td className="border border-gray-200 p-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={field.required}
+                                    onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                                    className="rounded"
+                                  />
+                                </td>
+                                <td className="border border-gray-200 p-2">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => removeField(field.id)}
+                                    disabled={fields.length === 1}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <Button onClick={addField} variant="outline">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Agregar Campo
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {fields.map((field) => (
+                        <div key={field.id} className="p-4 border border-gray-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium">{field.field_name}</h4>
+                            <Badge variant="secondary">{field.type}</Badge>
+                          </div>
+                          {field.description && <p className="text-sm text-gray-600 mb-2">{field.description}</p>}
+                          {field.required && (
+                            <Badge variant="destructive" className="text-xs mt-2">
+                              Obligatorio
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
           </Card>
 
           {/* Tabla de datos */}
@@ -650,7 +709,7 @@ export default function DocumentDetailPage() {
                 </CardDescription>
               </div>
               <div className="flex space-x-2">
-                <Button onClick={addRow} className="bg-black hover:bg-gray-800 text-white">
+                <Button onClick={addRow} style={getPrimaryButtonStyles()}>
                   <Plus className="w-4 h-4 mr-2" />
                   Agregar Fila
                 </Button>
@@ -703,11 +762,7 @@ export default function DocumentDetailPage() {
                             <td className="border border-gray-200 p-2">
                               <div className="flex space-x-1">
                                 {isPending && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => saveRow(row)}
-                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                  >
+                                  <Button size="sm" onClick={() => saveRow(row)} style={getPrimaryButtonStyles()}>
                                     <Save className="w-3 h-3" />
                                   </Button>
                                 )}
@@ -758,7 +813,10 @@ export default function DocumentDetailPage() {
                       handleFileUpload(e.dataTransfer.files)
                     }}
                     onDragOver={(e) => e.preventDefault()}
-                    onClick={() => document.getElementById("file-upload")?.click()}
+                    onClick={() => {
+                      const input = document.getElementById("file-upload") as HTMLInputElement
+                      if (input) input.click()
+                    }}
                   >
                     <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
