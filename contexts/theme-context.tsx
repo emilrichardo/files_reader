@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { getUserSettings, updateUserSettings } from "@/lib/database"
+import { getUserSettings, updateUserSettings, getGlobalSettings, getCurrentUserRole } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
 
 interface ThemeContextType {
@@ -25,6 +25,7 @@ interface ThemeContextType {
   isLoaded: boolean
   loadUserSettings: (userId: string) => Promise<void>
   isLoadingSettings: boolean
+  isAdmin: boolean
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -125,6 +126,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Initialize
   useEffect(() => {
@@ -143,26 +145,49 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     try {
       console.log("Loading user settings for:", userId)
-      const { data, error } = await getUserSettings(userId)
 
-      if (error) {
-        console.error("Error loading user settings:", error)
-        setSettings({ ...defaultSettings, user_id: userId })
-      } else if (data) {
-        console.log("User settings loaded from database:", data)
+      // Verificar si el usuario es admin
+      const userRole = await getCurrentUserRole()
+      const userIsAdmin = userRole === "admin" || userRole === "superadmin"
+      setIsAdmin(userIsAdmin)
+
+      let settingsData = null
+
+      if (userIsAdmin) {
+        // Si es admin, cargar sus propias configuraciones
+        const { data: userSettings } = await getUserSettings(userId)
+        settingsData = userSettings
+      } else {
+        // Si no es admin, cargar configuración global de admins
+        const { data: globalSettings } = await getGlobalSettings()
+        if (globalSettings) {
+          settingsData = globalSettings
+        } else {
+          // Si no hay configuración global, cargar configuración personal
+          const { data: userSettings } = await getUserSettings(userId)
+          settingsData = userSettings
+        }
+      }
+
+      if (settingsData) {
+        console.log("Settings loaded from database:", settingsData)
         const mergedSettings = {
           ...defaultSettings,
-          ...data,
-          api_keys: data.api_keys || {},
+          ...settingsData,
+          api_keys: settingsData.api_keys || {},
         }
         setSettings(mergedSettings)
       } else {
         const newSettings = { ...defaultSettings, user_id: userId }
-        try {
-          await updateUserSettings(userId, newSettings)
-          setSettings(newSettings)
-        } catch (createError) {
-          console.error("Error creating default settings:", createError)
+        if (userIsAdmin) {
+          try {
+            await updateUserSettings(userId, newSettings)
+            setSettings(newSettings)
+          } catch (createError) {
+            console.error("Error creating default settings:", createError)
+            setSettings(newSettings)
+          }
+        } else {
           setSettings(newSettings)
         }
       }
@@ -224,6 +249,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     console.log("Updating settings:", updates)
 
     try {
+      // Solo admins pueden cambiar configuraciones globales
+      if (!isAdmin) {
+        // Filtrar configuraciones que solo admins pueden cambiar
+        const {
+          project_name,
+          color_scheme,
+          custom_color,
+          font_family,
+          style_mode,
+          company_logo,
+          company_logo_type,
+          ...allowedUpdates
+        } = updates
+
+        if (Object.keys(allowedUpdates).length === 0) {
+          throw new Error("No tienes permisos para cambiar estas configuraciones")
+        }
+
+        updates = allowedUpdates
+      }
+
       // Solo guardar en la base de datos si hay usuario autenticado
       if (settings.user_id && settings.user_id !== "demo-user") {
         console.log("Saving settings to database for user:", settings.user_id)
@@ -365,6 +411,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         isLoaded,
         loadUserSettings,
         isLoadingSettings,
+        isAdmin,
       }}
     >
       {children}

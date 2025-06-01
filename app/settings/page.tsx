@@ -11,12 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 import { useToast } from "@/hooks/use-toast"
-import { Save, Palette, Shield, Key, Upload, X } from "lucide-react"
+import { Save, Palette, Shield, Key, Upload, X, Lock } from "lucide-react"
 import AuthGuard from "@/components/auth-guard"
 
 export default function SettingsPage() {
   const { user, loading } = useAuth()
-  const { settings, updateSettings, fontFamilies, colorSchemes } = useTheme()
+  const { settings, updateSettings, fontFamilies, colorSchemes, isAdmin } = useTheme()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
 
@@ -54,17 +54,23 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setIsLoading(true)
     try {
-      await updateSettings({
-        project_name: projectName,
+      const updates: any = {
         api_endpoint: apiEndpoint,
         api_keys: apiKeys,
         theme,
-        color_scheme: colorScheme,
-        custom_color: customColor,
-        font_family: fontFamily,
-        style_mode: styleMode,
-        company_logo: companyLogo,
-      })
+      }
+
+      // Solo admins pueden cambiar configuraciones globales
+      if (isAdmin) {
+        updates.project_name = projectName
+        updates.color_scheme = colorScheme
+        updates.custom_color = customColor
+        updates.font_family = fontFamily
+        updates.style_mode = styleMode
+        updates.company_logo = companyLogo
+      }
+
+      await updateSettings(updates)
 
       toast({
         title: "Configuración guardada",
@@ -74,7 +80,7 @@ export default function SettingsPage() {
       console.error("Error saving settings:", error)
       toast({
         title: "Error",
-        description: "No se pudieron guardar los cambios.",
+        description: error instanceof Error ? error.message : "No se pudieron guardar los cambios.",
         variant: "destructive",
       })
     } finally {
@@ -121,7 +127,15 @@ export default function SettingsPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración</h1>
-          <p className="text-gray-600">Personaliza tu experiencia y configuraciones del proyecto</p>
+          <p className="text-gray-600">
+            Personaliza tu experiencia y configuraciones del proyecto
+            {!isAdmin && (
+              <span className="block text-sm text-amber-600 mt-1">
+                <Lock className="w-4 h-4 inline mr-1" />
+                Algunas configuraciones solo pueden ser modificadas por administradores
+              </span>
+            )}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -133,8 +147,12 @@ export default function SettingsPage() {
                 <CardTitle className="flex items-center gap-2">
                   <Palette className="w-5 h-5" />
                   Configuración del Proyecto
+                  {!isAdmin && <Lock className="w-4 h-4 text-amber-500" />}
                 </CardTitle>
-                <CardDescription>Personaliza la apariencia y configuración de tu proyecto</CardDescription>
+                <CardDescription>
+                  Personaliza la apariencia y configuración de tu proyecto
+                  {!isAdmin && " (Solo administradores)"}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -146,6 +164,7 @@ export default function SettingsPage() {
                       onChange={(e) => setProjectName(e.target.value)}
                       placeholder="Mi Proyecto"
                       className="mt-1"
+                      disabled={!isAdmin}
                     />
                   </div>
                   <div>
@@ -175,7 +194,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <Label htmlFor="style-mode">Modo de Estilo</Label>
-                    <Select value={styleMode} onValueChange={setStyleMode}>
+                    <Select value={styleMode} onValueChange={setStyleMode} disabled={!isAdmin}>
                       <SelectTrigger className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
@@ -191,7 +210,7 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="color-scheme">Esquema de Color</Label>
-                    <Select value={colorScheme} onValueChange={setColorScheme}>
+                    <Select value={colorScheme} onValueChange={setColorScheme} disabled={!isAdmin}>
                       <SelectTrigger className="mt-1">
                         <SelectValue />
                       </SelectTrigger>
@@ -216,12 +235,14 @@ export default function SettingsPage() {
                         value={customColor}
                         onChange={(e) => setCustomColor(e.target.value)}
                         className="w-16 h-10 p-1 border rounded"
+                        disabled={!isAdmin}
                       />
                       <Input
                         value={customColor}
                         onChange={(e) => setCustomColor(e.target.value)}
                         placeholder="#000000"
                         className="flex-1"
+                        disabled={!isAdmin}
                       />
                     </div>
                   </div>
@@ -229,7 +250,7 @@ export default function SettingsPage() {
 
                 <div>
                   <Label htmlFor="font-family">Tipografía</Label>
-                  <Select value={fontFamily} onValueChange={setFontFamily}>
+                  <Select value={fontFamily} onValueChange={setFontFamily} disabled={!isAdmin}>
                     <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
@@ -253,7 +274,7 @@ export default function SettingsPage() {
                           alt="Logo"
                           className="h-16 w-auto border rounded"
                         />
-                        <Button variant="outline" size="sm" onClick={removeLogo}>
+                        <Button variant="outline" size="sm" onClick={removeLogo} disabled={!isAdmin}>
                           <X className="w-4 h-4 mr-2" />
                           Remover
                         </Button>
@@ -268,9 +289,10 @@ export default function SettingsPage() {
                           onChange={handleLogoUpload}
                           className="hidden"
                           id="logo-upload"
+                          disabled={!isAdmin}
                         />
-                        <Button variant="outline" size="sm" asChild>
-                          <label htmlFor="logo-upload" className="cursor-pointer">
+                        <Button variant="outline" size="sm" asChild disabled={!isAdmin}>
+                          <label htmlFor="logo-upload" className={isAdmin ? "cursor-pointer" : "cursor-not-allowed"}>
                             Seleccionar archivo
                           </label>
                         </Button>
@@ -389,6 +411,12 @@ export default function SettingsPage() {
                     <Label className="text-sm font-medium">Registrado</Label>
                     <p className="text-sm text-gray-600">{new Date(user.created_at).toLocaleDateString("es-ES")}</p>
                   </div>
+                  {isAdmin && (
+                    <div>
+                      <Label className="text-sm font-medium">Permisos</Label>
+                      <p className="text-sm text-green-600">Administrador</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

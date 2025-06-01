@@ -10,6 +10,9 @@ import {
   updateDocument as updateDocumentInDB,
   createDocumentRow,
   deleteDocumentRow as deleteDocumentRowFromDB,
+  createTemplate,
+  getTemplates,
+  deleteTemplate as deleteTemplateFromDB,
 } from "@/lib/database"
 import { mockDocuments, mockTemplates } from "@/lib/mock-data"
 import type { Document, Template, DocumentRow } from "@/lib/types"
@@ -29,10 +32,11 @@ interface AppContextType {
   addRowToDocument: (documentId: string, row: DocumentRow) => Promise<void>
   updateDocumentRow: (documentId: string, rowId: string, data: Record<string, any>) => Promise<void>
   deleteDocumentRow: (documentId: string, rowId: string) => Promise<void>
-  addTemplate: (template: Omit<Template, "id" | "created_at">) => string
-  deleteTemplate: (id: string) => void
+  addTemplate: (template: Omit<Template, "id" | "created_at">) => Promise<string>
+  deleteTemplate: (id: string) => Promise<void>
   loading: boolean
   refreshDocuments: () => Promise<void>
+  refreshTemplates: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextType>({
@@ -45,16 +49,17 @@ const AppContext = createContext<AppContextType>({
   addRowToDocument: async () => {},
   updateDocumentRow: async () => {},
   deleteDocumentRow: async () => {},
-  addTemplate: () => "",
-  deleteTemplate: () => {},
+  addTemplate: async () => "",
+  deleteTemplate: async () => {},
   loading: true,
   refreshDocuments: async () => {},
+  refreshTemplates: async () => {},
 })
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const [documents, setDocuments] = useState<Document[]>([])
-  const [templates, setTemplates] = useState<Template[]>(mockTemplates)
+  const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
 
   // Función para refrescar documentos
@@ -80,15 +85,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Cargar documentos cuando el usuario cambia
+  // Función para refrescar plantillas
+  const refreshTemplates = async () => {
+    if (user) {
+      try {
+        console.log("Refreshing templates for user:", user.id)
+        const { data, error } = await getTemplates(user.id)
+        if (error) {
+          console.error("Error loading templates:", error)
+          setTemplates(mockTemplates)
+        } else if (data) {
+          console.log("Templates refreshed successfully:", data.length, "templates")
+          setTemplates(data)
+        }
+      } catch (error) {
+        console.error("Error in refreshTemplates:", error)
+        setTemplates(mockTemplates)
+      }
+    } else {
+      console.log("No user, using mock templates")
+      setTemplates(mockTemplates)
+    }
+  }
+
+  // Cargar datos cuando el usuario cambia
   useEffect(() => {
-    const loadDocuments = async () => {
+    const loadData = async () => {
       setLoading(true)
-      await refreshDocuments()
+      await Promise.all([refreshDocuments(), refreshTemplates()])
       setLoading(false)
     }
 
-    loadDocuments()
+    loadData()
   }, [user])
 
   const addDocument = async (docData: any): Promise<string> => {
@@ -101,10 +129,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         console.log("Creating document with data:", documentData)
 
+        // Asegurar que los campos tengan la estructura correcta
+        const processedFields = (documentData.fields || []).map((field: any, index: number) => ({
+          ...field,
+          id: field.id || `field-${Date.now()}-${index}`,
+          order: index,
+          formats: field.formats || [],
+          variants: field.variants || [],
+        }))
+
         // Guardar documento en la base de datos
         const { data, error } = await createDocument({
           ...documentData,
           user_id: user.id,
+          fields: processedFields,
         })
 
         if (error) {
@@ -121,7 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Crear el documento con el ID devuelto por la base de datos
         const newDoc: Document = {
           ...data,
-          fields: documentData.fields || [],
+          fields: processedFields,
           rows: [],
         }
 
@@ -131,8 +169,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           for (const row of rows) {
             console.log("Adding row:", row)
             const { data: rowData, error: rowError } = await createDocumentRow({
-              ...row,
               document_id: newDoc.id,
+              data: row.data || {},
+              file_metadata: row.file_metadata,
             })
 
             if (rowError) {
@@ -184,8 +223,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       if (user) {
         console.log("Updating document in database:", id, updates)
+
+        // Procesar campos si están incluidos en las actualizaciones
+        const processedUpdates = { ...updates }
+        if (updates.fields) {
+          processedUpdates.fields = updates.fields.map((field, index) => ({
+            ...field,
+            order: index,
+            formats: field.formats || [],
+            variants: field.variants || [],
+          }))
+        }
+
         // Actualizar en la base de datos
-        const { error } = await updateDocumentInDB(id, updates)
+        const { error } = await updateDocumentInDB(id, processedUpdates)
         if (error) {
           console.error("Error updating document in database:", error)
           throw error
@@ -272,7 +323,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (data) {
           console.log("Row created in database with ID:", data.id)
-          finalRow = { ...finalRow, id: data.id }
+          finalRow = { ...finalRow, id: data.id, created_at: data.created_at, updated_at: data.updated_at }
         }
 
         // Refrescar documentos para obtener la versión más actualizada
@@ -411,19 +462,80 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const addTemplate = (templateData: Omit<Template, "id" | "created_at">) => {
-    const now = new Date().toISOString()
-    const newTemplate: Template = {
-      id: Date.now().toString(),
-      created_at: now,
-      ...templateData,
+  const addTemplate = async (templateData: Omit<Template, "id" | "created_at">): Promise<string> => {
+    try {
+      if (user) {
+        console.log("Creating template in database:", templateData)
+
+        // Procesar campos para asegurar estructura correcta
+        const processedFields = templateData.fields.map((field, index) => ({
+          ...field,
+          id: field.id || `field-${Date.now()}-${index}`,
+          order: index,
+          formats: field.formats || [],
+          variants: field.variants || [],
+        }))
+
+        const { data, error } = await createTemplate({
+          ...templateData,
+          fields: processedFields,
+        })
+
+        if (error) {
+          console.error("Error creating template in database:", error)
+          throw error
+        }
+
+        if (!data) {
+          throw new Error("No data returned from createTemplate")
+        }
+
+        console.log("Template created successfully:", data.id)
+
+        // Refrescar plantillas
+        await refreshTemplates()
+        return data.id
+      } else {
+        // Modo offline
+        const now = new Date().toISOString()
+        const newTemplate: Template = {
+          id: Date.now().toString(),
+          created_at: now,
+          ...templateData,
+        }
+        setTemplates((prev) => [newTemplate, ...prev])
+        return newTemplate.id
+      }
+    } catch (error) {
+      console.error("Error in addTemplate:", error)
+      // Fallback a modo offline
+      const now = new Date().toISOString()
+      const newTemplate: Template = {
+        id: Date.now().toString(),
+        created_at: now,
+        ...templateData,
+      }
+      setTemplates((prev) => [newTemplate, ...prev])
+      return newTemplate.id
     }
-    setTemplates((prev) => [newTemplate, ...prev])
-    return newTemplate.id
   }
 
-  const deleteTemplate = (id: string) => {
-    setTemplates((prev) => prev.filter((template) => template.id !== id))
+  const deleteTemplate = async (id: string) => {
+    try {
+      if (user) {
+        const { error } = await deleteTemplateFromDB(id)
+        if (error) {
+          console.error("Error deleting template from database:", error)
+          throw error
+        }
+      }
+
+      setTemplates((prev) => prev.filter((template) => template.id !== id))
+      console.log("Template deleted successfully")
+    } catch (error) {
+      console.error("Error in deleteTemplate:", error)
+      setTemplates((prev) => prev.filter((template) => template.id !== id))
+    }
   }
 
   return (
@@ -442,6 +554,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteTemplate,
         loading,
         refreshDocuments,
+        refreshTemplates,
       }}
     >
       {children}

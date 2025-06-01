@@ -22,21 +22,73 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
+// Función para obtener configuración global (solo para admins)
+export const getGlobalSettings = async () => {
+  try {
+    console.log("Getting global settings")
+
+    // Buscar configuración de un superadmin o admin
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select(`
+        *,
+        user_roles!inner(role)
+      `)
+      .in("user_roles.role", ["superadmin", "admin"])
+      .order("user_roles.role", { ascending: true }) // superadmin primero
+      .limit(1)
+      .single()
+
+    if (error && error.code !== "PGRST116") {
+      console.error("Supabase error getting global settings:", error)
+    } else if (!error) {
+      console.log("Global settings retrieved successfully:", data)
+    }
+
+    return { data, error }
+  } catch (error) {
+    console.error("Error getting global settings:", error)
+    return { data: null, error }
+  }
+}
+
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>) => {
   try {
     console.log("Updating user settings for user:", userId, settings)
 
+    // Verificar si el usuario es admin para permitir cambios globales
+    const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
+
+    const isAdmin = roleData?.role === "admin" || roleData?.role === "superadmin"
+
+    // Si no es admin, filtrar solo configuraciones personales
+    let settingsToUpdate = { ...settings }
+    if (!isAdmin) {
+      // Los usuarios normales solo pueden cambiar configuraciones personales
+      const {
+        project_name,
+        color_scheme,
+        custom_color,
+        font_family,
+        style_mode,
+        company_logo,
+        company_logo_type,
+        ...personalSettings
+      } = settings
+      settingsToUpdate = personalSettings
+    }
+
     // Asegurarse de que el objeto de configuración tenga la estructura correcta
-    const settingsToUpdate = {
+    const finalSettings = {
       user_id: userId,
-      ...settings,
+      ...settingsToUpdate,
       updated_at: new Date().toISOString(),
     }
 
     // Usar upsert para crear o actualizar según sea necesario
     const { data, error } = await supabase
       .from("user_settings")
-      .upsert(settingsToUpdate, {
+      .upsert(finalSettings, {
         onConflict: "user_id",
       })
       .select()
@@ -243,13 +295,21 @@ export const getCurrentUserRole = async (): Promise<"admin" | "user" | "premium"
 // Servicios para Templates
 export const getTemplates = async (userId: string) => {
   try {
+    console.log("Getting templates for user:", userId)
+
     const { data, error } = await supabase
       .from("templates")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
 
-    return { data, error }
+    if (error) {
+      console.error("Error getting templates:", error)
+      return { data: null, error }
+    }
+
+    console.log("Templates retrieved successfully:", data?.length, "templates")
+    return { data, error: null }
   } catch (error) {
     console.error("Error getting templates:", error)
     return { data: null, error }
@@ -258,9 +318,26 @@ export const getTemplates = async (userId: string) => {
 
 export const createTemplate = async (template: Omit<Template, "id" | "created_at">) => {
   try {
-    const { data, error } = await supabase.from("templates").insert(template).select().single()
+    console.log("Creating template:", template.name)
 
-    return { data, error }
+    const { data, error } = await supabase
+      .from("templates")
+      .insert({
+        name: template.name,
+        description: template.description,
+        user_id: template.user_id,
+        fields: template.fields || [],
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Error creating template:", error)
+      return { data: null, error }
+    }
+
+    console.log("Template created successfully:", data.id)
+    return { data, error: null }
   } catch (error) {
     console.error("Error creating template:", error)
     return { data: null, error }
@@ -280,9 +357,17 @@ export const updateTemplate = async (id: string, updates: Partial<Template>) => 
 
 export const deleteTemplate = async (id: string) => {
   try {
+    console.log("Deleting template:", id)
+
     const { error } = await supabase.from("templates").delete().eq("id", id)
 
-    return { error }
+    if (error) {
+      console.error("Error deleting template:", error)
+      return { error }
+    }
+
+    console.log("Template deleted successfully:", id)
+    return { error: null }
   } catch (error) {
     console.error("Error deleting template:", error)
     return { error }
