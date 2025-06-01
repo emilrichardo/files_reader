@@ -29,6 +29,7 @@ export default function CreateTemplatePage() {
       type: "text",
       description: "Título del documento",
       formats: [],
+      variants: [],
       required: true,
       order: 0,
     },
@@ -41,6 +42,7 @@ export default function CreateTemplatePage() {
       type: "text",
       description: "",
       formats: [],
+      variants: [],
       required: false,
       order: fields.length,
     }
@@ -165,7 +167,7 @@ export default function CreateTemplatePage() {
             <div className="space-y-4">
               {fields.map((field, index) => (
                 <div key={field.id} className="p-4 border border-gray-200 rounded-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Nombre del Campo *</Label>
                       <Input
@@ -191,6 +193,36 @@ export default function CreateTemplatePage() {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <Label>Descripción</Label>
+                    <Textarea
+                      value={field.description || ""}
+                      onChange={(e) => updateField(field.id, { description: e.target.value })}
+                      placeholder="Descripción del campo..."
+                      className="mt-1"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <Label>Variantes</Label>
+                      <Input
+                        value={field.variants?.join(", ") || ""}
+                        onChange={(e) =>
+                          updateField(field.id, {
+                            variants: e.target.value
+                              .split(",")
+                              .map((f) => f.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                        placeholder="variante1, variante2"
+                        className="mt-1"
+                      />
+                    </div>
                     <div>
                       <Label>Formatos</Label>
                       <Input
@@ -207,37 +239,32 @@ export default function CreateTemplatePage() {
                         className="mt-1"
                       />
                     </div>
-                    <div className="flex items-end">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => removeField(field.id)}
-                        disabled={fields.length === 1}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`required-${field.id}`}
+                        checked={field.required}
+                        onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                        className="rounded"
+                      />
+                      <Label htmlFor={`required-${field.id}`} className="text-sm">
+                        Campo obligatorio
+                      </Label>
                     </div>
-                  </div>
-                  <div className="mt-3">
-                    <Label>Descripción</Label>
-                    <Input
-                      value={field.description || ""}
-                      onChange={(e) => updateField(field.id, { description: e.target.value })}
-                      placeholder="Descripción del campo..."
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="mt-3 flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id={`required-${field.id}`}
-                      checked={field.required}
-                      onChange={(e) => updateField(field.id, { required: e.target.checked })}
-                      className="rounded"
-                    />
-                    <Label htmlFor={`required-${field.id}`} className="text-sm">
-                      Campo obligatorio
-                    </Label>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeField(field.id)}
+                      disabled={fields.length === 1}
+                      className="text-red-500"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Eliminar
+                    </Button>
                   </div>
                 </div>
               ))}

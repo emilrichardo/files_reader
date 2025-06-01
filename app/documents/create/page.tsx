@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
+import { Textarea } from "@/components/ui/textarea"
 import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
 
 export default function CreateDocumentPage() {
@@ -34,6 +35,7 @@ export default function CreateDocumentPage() {
       type: "text",
       description: "Título del documento",
       formats: [],
+      variants: [],
       required: true,
       order: 0,
     },
@@ -66,6 +68,7 @@ export default function CreateDocumentPage() {
       type: "text",
       description: "",
       formats: [],
+      variants: [],
       required: false,
       order: fields.length,
     }
@@ -424,6 +427,7 @@ export default function CreateDocumentPage() {
                       <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Nombre</th>
                       <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Tipo</th>
                       <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Descripción</th>
+                      <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Variantes</th>
                       <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Formatos</th>
                       <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Requerido</th>
                       <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">Acciones</th>
@@ -458,10 +462,25 @@ export default function CreateDocumentPage() {
                           </Select>
                         </td>
                         <td className="border border-gray-200 p-2">
-                          <Input
+                          <Textarea
                             value={field.description || ""}
                             onChange={(e) => updateField(field.id, { description: e.target.value })}
                             placeholder="Descripción..."
+                            className="min-h-[60px]"
+                          />
+                        </td>
+                        <td className="border border-gray-200 p-2">
+                          <Input
+                            value={field.variants?.join(", ") || ""}
+                            onChange={(e) =>
+                              updateField(field.id, {
+                                variants: e.target.value
+                                  .split(",")
+                                  .map((f) => f.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                            placeholder="variante1, variante2"
                           />
                         </td>
                         <td className="border border-gray-200 p-2">

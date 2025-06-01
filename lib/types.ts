@@ -23,6 +23,7 @@ export interface DocumentField {
   type: "text" | "date" | "number" | "boolean" | "email" | "url"
   description?: string
   formats?: string[]
+  variants?: string[]
   required: boolean
   order: number
 }
