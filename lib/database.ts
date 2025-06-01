@@ -119,34 +119,20 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
   try {
     console.log("Updating user settings for user:", userId, settings)
 
-    // Verificar si el usuario es admin para permitir cambios globales
+    // Verificar si el usuario es superadmin
     const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
 
-    const isAdmin = roleData?.role === "admin" || roleData?.role === "superadmin"
+    const isSuperAdmin = roleData?.role === "superadmin"
+    console.log("User role check - isSuperAdmin:", isSuperAdmin, "role:", roleData?.role)
 
-    // Si no es admin, filtrar solo configuraciones personales
-    let settingsToUpdate = { ...settings }
-    if (!isAdmin) {
-      // Los usuarios normales solo pueden cambiar configuraciones personales
-      const {
-        project_name,
-        color_scheme,
-        custom_color,
-        font_family,
-        style_mode,
-        company_logo,
-        company_logo_type,
-        ...personalSettings
-      } = settings
-      settingsToUpdate = personalSettings
-    }
-
-    // Asegurarse de que el objeto de configuración tenga la estructura correcta
+    // Preparar configuración para guardar
     const finalSettings = {
       user_id: userId,
-      ...settingsToUpdate,
+      ...settings,
       updated_at: new Date().toISOString(),
     }
+
+    console.log("Final settings to save:", finalSettings)
 
     // Usar upsert para crear o actualizar según sea necesario
     const { data, error } = await supabase

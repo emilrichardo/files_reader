@@ -198,7 +198,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const { data: userSettings } = await getUserSettings(userId)
         settingsData = userSettings
       } else {
-        // Si no es superadmin, cargar configuración de superadmin usando función específica
+        // Si no es superadmin, cargar configuración de superadmin
         console.log("🌍 [THEME] Loading superadmin settings for regular user")
         const { data: superAdminSettings } = await getSuperAdminSettings()
         if (superAdminSettings) {
@@ -207,7 +207,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.log("⚠️ [THEME] No superadmin settings found, trying global settings")
           const { data: globalSettings } = await getGlobalSettings()
-          settingsData = globalSettings || defaultSettings
+          settingsData = globalSettings
         }
       }
 
@@ -221,19 +221,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
         setSettings(mergedSettings)
       } else {
+        console.log("⚠️ [THEME] No settings found, using defaults")
         const newSettings = { ...defaultSettings, user_id: userId }
-        if (isSuperAdmin) {
-          try {
-            console.log("🔧 [THEME] Creating default settings for superadmin")
-            await updateUserSettings(userId, newSettings)
-            setSettings(newSettings)
-          } catch (createError) {
-            console.error("❌ [THEME] Error creating default settings:", createError)
-            setSettings(newSettings)
-          }
-        } else {
-          setSettings(newSettings)
-        }
+        setSettings(newSettings)
       }
     } catch (error) {
       console.error("❌ [THEME] Error in loadUserSettings:", error)
@@ -261,9 +251,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       console.log("💾 [THEME] Saving settings to database for user:", user.id)
 
       // Actualizar en la base de datos
-      await updateUserSettings(user.id, updates)
+      const { data, error } = await updateUserSettings(user.id, updates)
 
-      console.log("✅ [THEME] Settings saved to database successfully")
+      if (error) {
+        console.error("❌ [THEME] Database error:", error)
+        throw error
+      }
+
+      console.log("✅ [THEME] Settings saved to database successfully:", data)
 
       // Actualizar estado local después de guardar exitosamente
       const updatedSettings = {
