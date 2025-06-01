@@ -37,45 +37,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userId: string,
   ): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
     try {
-      console.log("Getting role for user ID:", userId)
+      console.log("🔍 Getting role for user ID:", userId)
 
       const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
 
       if (error) {
-        console.error("Error getting user role:", error)
+        console.error("❌ Error getting user role:", error)
         return "user"
       }
 
       if (!data) {
-        console.log("No role data found for user, returning default")
+        console.log("⚠️ No role data found for user, returning default")
         return "user"
       }
 
-      console.log("Role found for user:", data.role)
+      console.log("✅ Role found for user:", data.role)
       return data.role as "admin" | "user" | "premium" | "moderator" | "superadmin"
     } catch (error) {
-      console.error("Error getting user role:", error)
+      console.error("💥 Error getting user role:", error)
       return "user"
     }
   }
 
   const refreshUserRole = async () => {
     if (user) {
-      console.log("Refreshing role for user:", user.email)
+      console.log("🔄 Refreshing role for user:", user.email)
       const role = await getCurrentUserRole(user.id)
-      console.log("Role retrieved:", role)
+      console.log("🎯 Role retrieved:", role)
       setUserRole(role)
     }
   }
 
   const ensureUserIsRegistered = async (user: User) => {
     try {
+      console.log("👤 Checking if user is registered:", user.email)
+
       // Verificar si el usuario ya tiene un rol asignado
-      const { data: existingRole } = await supabase.from("user_roles").select("*").eq("user_id", user.id).single()
+      const { data: existingRole, error: checkError } = await supabase
+        .from("user_roles")
+        .select("*")
+        .eq("user_id", user.id)
+        .single()
+
+      if (checkError && checkError.code !== "PGRST116") {
+        console.error("❌ Error checking existing role:", checkError)
+        return
+      }
 
       // Si no existe, crear un rol por defecto
       if (!existingRole) {
-        console.log("Registering new user:", user.email)
+        console.log("📝 Registering new user:", user.email)
         const { error } = await supabase.from("user_roles").insert({
           user_id: user.id,
           role: "user",
@@ -83,13 +94,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         if (error) {
-          console.error("Error registering new user:", error)
+          console.error("❌ Error registering new user:", error)
         } else {
-          console.log("New user registered successfully:", user.email)
+          console.log("✅ New user registered successfully:", user.email)
         }
+      } else {
+        console.log("✅ User already registered with role:", existingRole.role)
       }
     } catch (error) {
-      console.error("Error ensuring user registration:", error)
+      console.error("💥 Error ensuring user registration:", error)
     }
   }
 
@@ -99,27 +112,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Obtener sesión inicial
     const initializeAuth = async () => {
       try {
-        console.log("Initializing auth...")
+        console.log("🚀 Initializing auth...")
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
-        console.log("Initial session:", session?.user?.email || "No session")
+        console.log("📋 Initial session:", session?.user?.email || "No session")
 
         if (mounted) {
           if (session?.user) {
             setUser(session.user)
+            console.log("👤 User set, getting role...")
+
+            // Asegurar que el usuario esté registrado
+            await ensureUserIsRegistered(session.user)
+
             // Obtener rol inmediatamente
             const role = await getCurrentUserRole(session.user.id)
-            console.log("Initial role for", session.user.email, ":", role)
+            console.log("🎯 Initial role for", session.user.email, ":", role)
+
             if (mounted) {
               setUserRole(role)
+              setLoading(false) // ✅ Importante: establecer loading a false aquí
             }
+          } else {
+            setLoading(false) // ✅ También establecer loading a false si no hay usuario
           }
-          setLoading(false)
         }
       } catch (error) {
-        console.error("Error initializing auth:", error)
+        console.error("💥 Error initializing auth:", error)
         if (mounted) {
           setLoading(false)
         }
@@ -132,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state change:", event, session?.user?.email || "No user")
+      console.log("🔄 Auth state change:", event, session?.user?.email || "No user")
 
       if (mounted) {
         setUser(session?.user ?? null)
@@ -140,20 +161,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           // Registrar usuario automáticamente si es nuevo
           if (event === "SIGNED_IN") {
+            console.log("🔐 User signed in, ensuring registration...")
             await ensureUserIsRegistered(session.user)
           }
 
           // Obtener rol del usuario
+          console.log("🔍 Getting role after auth change...")
           const role = await getCurrentUserRole(session.user.id)
-          console.log("Role after auth change for", session.user.email, ":", role)
+          console.log("🎯 Role after auth change for", session.user.email, ":", role)
+
           if (mounted) {
             setUserRole(role)
+            setLoading(false) // ✅ Establecer loading a false después de obtener el rol
           }
         } else {
           setUserRole("user")
+          setLoading(false) // ✅ También establecer loading a false si no hay usuario
         }
-
-        setLoading(false)
       }
     })
 
@@ -177,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     setUserRole("user")
+    setLoading(false)
     // Forzar recarga de la página para limpiar completamente el estado
     window.location.href = "/"
   }
@@ -184,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = userRole === "admin" || userRole === "superadmin"
   const isSuperAdmin = userRole === "superadmin"
 
-  console.log("Current auth state:", {
+  console.log("📊 Current auth state:", {
     userEmail: user?.email,
     userRole,
     isAdmin,
