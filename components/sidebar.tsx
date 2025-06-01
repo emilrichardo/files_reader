@@ -17,8 +17,20 @@ import {
   LogIn,
   Crown,
   Home,
+  BarChart2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+import {
+  Sidebar as Root,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar"
 
 const navigation = [
   { name: "Inicio", href: "/", icon: Home },
@@ -29,7 +41,15 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, userRole, isAdmin, isSuperAdmin, loading, signInWithGoogle, signOut } = useAuth()
+  const {
+    user,
+    userRole,
+    isAdmin: isSuperAdmin,
+    isSuperAdmin: isReallySuperAdmin,
+    loading,
+    signInWithGoogle,
+    signOut,
+  } = useAuth()
   const [open, setOpen] = useState(false)
 
   const handleSignOut = async () => {
@@ -40,7 +60,7 @@ export function Sidebar() {
     }
   }
 
-  const SidebarContent = () => (
+  const SidebarContentComponent = () => (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-16 items-center border-b px-4">
@@ -66,7 +86,7 @@ export function Sidebar() {
                   <Badge variant="outline" className="text-xs">
                     {userRole}
                   </Badge>
-                  {isSuperAdmin && (
+                  {isReallySuperAdmin && (
                     <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs">
                       <Crown className="w-3 h-3 mr-1" />
                       SA
@@ -145,14 +165,82 @@ export function Sidebar() {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="flex flex-col p-0">
-          <SidebarContent />
+          <SidebarContentComponent />
         </SheetContent>
       </Sheet>
 
       {/* Desktop Sidebar */}
       <div className="hidden border-r bg-muted/40 md:block w-64">
-        <SidebarContent />
+        <SidebarContentComponent />
       </div>
     </>
+  )
+}
+
+export default function AppSidebar() {
+  const pathname = usePathname()
+
+  // Determinar si el usuario es admin (esto debería venir de tu contexto de autenticación)
+  const isAdmin = true // Reemplazar con tu lógica real
+
+  const navItems = [
+    {
+      title: "Dashboard",
+      icon: Home,
+      href: "/",
+    },
+    {
+      title: "Documentos",
+      icon: FileText,
+      href: "/documents",
+    },
+    {
+      title: "Plantillas",
+      icon: FileText,
+      href: "/templates",
+    },
+    {
+      title: "Estadísticas",
+      icon: BarChart2,
+      href: "/stats",
+    },
+    {
+      title: "Configuración",
+      icon: Settings,
+      href: "/settings",
+    },
+  ]
+
+  // Agregar el ítem de Usuarios solo para administradores
+  if (isAdmin) {
+    navItems.push({
+      title: "Usuarios",
+      icon: Users,
+      href: "/users",
+    })
+  }
+
+  return (
+    <Root>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Navegación</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+                    <Link href={item.href}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Root>
   )
 }
