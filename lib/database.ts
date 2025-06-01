@@ -206,19 +206,34 @@ export const checkIsSuperAdmin = async () => {
   }
 }
 
-// Función para obtener el rol del usuario actual
-export const getCurrentUserRole = async () => {
+// Función para obtener el rol del usuario actual - MEJORADA
+export const getCurrentUserRole = async (): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
   try {
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (!user) return "user"
+
+    if (!user) {
+      console.log("No user found, returning default role")
+      return "user"
+    }
+
+    console.log("Getting role for user ID:", user.id, "Email:", user.email)
 
     const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
 
-    if (error || !data) return "user"
+    if (error) {
+      console.error("Error getting user role:", error)
+      return "user"
+    }
 
-    return data.role
+    if (!data) {
+      console.log("No role data found for user, returning default")
+      return "user"
+    }
+
+    console.log("Role found for user:", data.role)
+    return data.role as "admin" | "user" | "premium" | "moderator" | "superadmin"
   } catch (error) {
     console.error("Error getting user role:", error)
     return "user"

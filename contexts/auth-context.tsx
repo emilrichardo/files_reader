@@ -36,65 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUserRole = async () => {
     if (user) {
+      console.log("Refreshing role for user:", user.email)
       const role = await getCurrentUserRole()
+      console.log("Role retrieved:", role)
       setUserRole(role)
-      console.log("User role refreshed:", role)
     }
-  }
-
-  useEffect(() => {
-    // Obtener sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    // Escuchar cambios
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-
-      // Obtener rol del usuario cuando se autentica
-      if (session?.user) {
-        // Registrar usuario automáticamente si es nuevo
-        if (event === "SIGNED_IN") {
-          await ensureUserIsRegistered(session.user)
-        }
-
-        const role = await getCurrentUserRole()
-        setUserRole(role)
-        console.log("User authenticated with role:", role)
-      } else {
-        setUserRole("user")
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  // Obtener rol cuando el usuario cambia
-  useEffect(() => {
-    if (user) {
-      refreshUserRole()
-    }
-  }, [user])
-
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) throw error
-  }
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    setUserRole("user")
   }
 
   const ensureUserIsRegistered = async (user: User) => {
@@ -122,8 +68,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  useEffect(() => {
+    // Obtener sesión inicial
+    const initializeAuth = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        console.log("Initial session:", session?.user?.email || "No session")
+
+        if (session?.user) {
+          setUser(session.user)
+          // Obtener rol inmediatamente
+          const role = await getCurrentUserRole()
+          console.log("Initial role for", session.user.email, ":", role)
+          setUserRole(role)
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error("Error initializing auth:", error)
+        setLoading(false)
+      }
+    }
+
+    initializeAuth()
+
+    // Escuchar cambios de autenticación
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change:", event, session?.user?.email || "No user")
+
+      setUser(session?.user ?? null)
+
+      if (session?.user) {
+        // Registrar usuario automáticamente si es nuevo
+        if (event === "SIGNED_IN") {
+          await ensureUserIsRegistered(session.user)
+        }
+
+        // Obtener rol del usuario
+        const role = await getCurrentUserRole()
+        console.log("Role after auth change for", session.user.email, ":", role)
+        setUserRole(role)
+      } else {
+        setUserRole("user")
+      }
+
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+    if (error) throw error
+  }
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+    setUserRole("user")
+    // Forzar recarga de la página para limpiar completamente el estado
+    window.location.href = "/"
+  }
+
   const isAdmin = userRole === "admin" || userRole === "superadmin"
   const isSuperAdmin = userRole === "superadmin"
+
+  console.log("Current auth state:", {
+    userEmail: user?.email,
+    userRole,
+    isAdmin,
+    isSuperAdmin,
+    loading,
+  })
 
   return (
     <AuthContext.Provider
