@@ -3,9 +3,12 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { SidebarProvider, SidebarRail } from "@/components/ui/sidebar"
-import AppSidebar from "@/components/sidebar"
 import { Toaster } from "@/components/ui/toaster"
+import { AuthProvider } from "@/contexts/auth-context"
+import { AppProvider } from "@/contexts/app-context"
+import { ThemeProvider as CustomThemeProvider } from "@/contexts/theme-context"
+import { ThemeLoader } from "@/components/theme-loader"
+import Sidebar from "@/components/sidebar"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,14 +27,19 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <SidebarProvider>
-            <div className="flex min-h-screen">
-              <AppSidebar />
-              <main className="flex-1 p-6">{children}</main>
-            </div>
-            <SidebarRail />
-            <Toaster />
-          </SidebarProvider>
+          <AuthProvider>
+            <CustomThemeProvider>
+              <ThemeLoader>
+                <AppProvider>
+                  <div className="flex min-h-screen">
+                    <Sidebar />
+                    <main className="flex-1 p-6">{children}</main>
+                  </div>
+                  <Toaster />
+                </AppProvider>
+              </ThemeLoader>
+            </CustomThemeProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -4,52 +4,17 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { useTheme } from "@/contexts/theme-context"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import {
-  FileText,
-  LayoutTemplateIcon as Template,
-  Settings,
-  Users,
-  Menu,
-  LogOut,
-  LogIn,
-  Crown,
-  Home,
-  BarChart2,
-} from "lucide-react"
+import { FileText, LayoutTemplateIcon as Template, Settings, Users, Menu, LogOut, Crown, Home } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-import {
-  Sidebar as Root,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
-
-const navigation = [
-  { name: "Inicio", href: "/", icon: Home },
-  { name: "Documentos", href: "/documents", icon: FileText },
-  { name: "Plantillas", href: "/templates", icon: Template },
-  { name: "Configuración", href: "/settings", icon: Settings },
-]
-
-export function Sidebar() {
+export default function Sidebar() {
   const pathname = usePathname()
-  const {
-    user,
-    userRole,
-    isAdmin: isSuperAdmin,
-    isSuperAdmin: isReallySuperAdmin,
-    loading,
-    signInWithGoogle,
-    signOut,
-  } = useAuth()
+  const { user, userRole, isAdmin, isSuperAdmin, loading, signInWithGoogle, signOut } = useAuth()
+  const { projectName, companyLogo, primaryColor } = useTheme()
   const [open, setOpen] = useState(false)
 
   const handleSignOut = async () => {
@@ -60,13 +25,24 @@ export function Sidebar() {
     }
   }
 
+  const navigation = [
+    { name: "Inicio", href: "/", icon: Home },
+    { name: "Documentos", href: "/documents", icon: FileText },
+    { name: "Plantillas", href: "/templates", icon: Template },
+    { name: "Configuración", href: "/settings", icon: Settings },
+  ]
+
   const SidebarContentComponent = () => (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex h-16 items-center border-b px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <FileText className="h-6 w-6" />
-          Invitu
+          {companyLogo ? (
+            <img src={companyLogo || "/placeholder.svg"} alt="Logo" className="h-8 w-auto" />
+          ) : (
+            <FileText className="h-6 w-6" />
+          )}
+          {projectName}
         </Link>
       </div>
 
@@ -86,7 +62,7 @@ export function Sidebar() {
                   <Badge variant="outline" className="text-xs">
                     {userRole}
                   </Badge>
-                  {isReallySuperAdmin && (
+                  {isSuperAdmin && (
                     <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs">
                       <Crown className="w-3 h-3 mr-1" />
                       SA
@@ -103,10 +79,6 @@ export function Sidebar() {
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">No autenticado</p>
-            <Button variant="default" size="sm" onClick={signInWithGoogle} className="w-full justify-start gap-2">
-              <LogIn className="h-4 w-4" />
-              Iniciar Sesión
-            </Button>
           </div>
         )}
       </div>
@@ -134,7 +106,7 @@ export function Sidebar() {
         })}
 
         {/* SuperAdmin Menu */}
-        {isSuperAdmin && (
+        {isAdmin && (
           <Link
             href="/users"
             className={cn(
@@ -147,10 +119,38 @@ export function Sidebar() {
           >
             <Users className="h-4 w-4" />
             Usuarios
-            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs ml-auto">SA</Badge>
+            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs ml-auto">
+              {isSuperAdmin ? "SA" : "Admin"}
+            </Badge>
           </Link>
         )}
       </nav>
+      {/* Google Sign In - Solo si no está autenticado */}
+      {!user && !loading && (
+        <div className="p-4 border-t mt-auto">
+          <Button variant="outline" size="sm" onClick={signInWithGoogle} className="w-full justify-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            Iniciar con Google
+          </Button>
+        </div>
+      )}
     </div>
   )
 
@@ -174,73 +174,5 @@ export function Sidebar() {
         <SidebarContentComponent />
       </div>
     </>
-  )
-}
-
-export default function AppSidebar() {
-  const pathname = usePathname()
-
-  // Determinar si el usuario es admin (esto debería venir de tu contexto de autenticación)
-  const isAdmin = true // Reemplazar con tu lógica real
-
-  const navItems = [
-    {
-      title: "Dashboard",
-      icon: Home,
-      href: "/",
-    },
-    {
-      title: "Documentos",
-      icon: FileText,
-      href: "/documents",
-    },
-    {
-      title: "Plantillas",
-      icon: FileText,
-      href: "/templates",
-    },
-    {
-      title: "Estadísticas",
-      icon: BarChart2,
-      href: "/stats",
-    },
-    {
-      title: "Configuración",
-      icon: Settings,
-      href: "/settings",
-    },
-  ]
-
-  // Agregar el ítem de Usuarios solo para administradores
-  if (isAdmin) {
-    navItems.push({
-      title: "Usuarios",
-      icon: Users,
-      href: "/users",
-    })
-  }
-
-  return (
-    <Root>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navegación</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
-                    <Link href={item.href}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Root>
   )
 }
