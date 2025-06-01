@@ -1,238 +1,231 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
-import type { User } from "@supabase/supabase-js"
-import { supabase } from "@/lib/supabase"
+
+import { createContext, useState, useEffect, useContext, type ReactNode, useCallback } from "react"
+import { type Session, type SupabaseClient, useSession, useSupabaseClient } from "@supabase/auth-helpers-react"
+
+import type { Database } from "@/lib/database.types"
+
+type User = Database["public"]["Tables"]["users"]["Row"]
+type Role = Database["public"]["Tables"]["roles"]["Row"]
 
 interface AuthContextType {
+  supabaseClient: SupabaseClient<Database> | null
+  session: Session | null
   user: User | null
-  userRole: "admin" | "user" | "premium" | "moderator" | "superadmin"
-  isAdmin: boolean
-  isSuperAdmin: boolean
-  loading: boolean
-  signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
+  role: Role | null
+  isLoading: boolean
   refreshUserRole: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
+  supabaseClient: null,
+  session: null,
   user: null,
-  userRole: "user",
-  isAdmin: false,
-  isSuperAdmin: false,
-  loading: true,
-  signInWithGoogle: async () => {},
-  signOut: async () => {},
+  role: null,
+  isLoading: true,
   refreshUserRole: async () => {},
 })
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+interface Props {
+  children: ReactNode
+}
+
+const AuthProvider: React.FC<Props> = ({ children }) => {
+  const supabaseClient = useSupabaseClient<Database>()
+  const session = useSession()
+
   const [user, setUser] = useState<User | null>(null)
-  const [userRole, setUserRole] = useState<"admin" | "user" | "premium" | "moderator" | "superadmin">("user")
-  const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<Role | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const getCurrentUserRole = async (
-    userId: string,
-  ): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
-    try {
-      console.log("🔍 [AUTH] Getting role for user ID:", userId)
-
-      const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
-
-      if (error) {
-        console.error("❌ [AUTH] Error getting user role:", error)
-        return "user"
-      }
-
-      if (!data) {
-        console.log("⚠️ [AUTH] No role data found for user, returning default")
-        return "user"
-      }
-
-      console.log("✅ [AUTH] Role found for user:", data.role)
-      return data.role as "admin" | "user" | "premium" | "moderator" | "superadmin"
-    } catch (error) {
-      console.error("💥 [AUTH] Error getting user role:", error)
-      return "user"
-    }
-  }
-
-  const refreshUserRole = async () => {
-    if (user) {
-      console.log("🔄 [AUTH] Refreshing role for user:", user.email)
-      const role = await getCurrentUserRole(user.id)
-      console.log("🎯 [AUTH] Role retrieved:", role)
-      setUserRole(role)
-    }
-  }
-
-  const ensureUserIsRegistered = async (user: User) => {
-    try {
-      console.log("👤 [AUTH] Checking if user is registered:", user.email)
-
-      const { data: existingRole, error: checkError } = await supabase
-        .from("user_roles")
-        .select("*")
-        .eq("user_id", user.id)
-        .single()
-
-      if (checkError && checkError.code !== "PGRST116") {
-        console.error("❌ [AUTH] Error checking existing role:", checkError)
+  const ensureUserRegistered = useCallback(
+    async (session: Session | null) => {
+      if (!session?.user) {
         return
       }
 
-      if (!existingRole) {
-        console.log("📝 [AUTH] Registering new user:", user.email)
-        const { error } = await supabase.from("user_roles").insert({
-          user_id: user.id,
-          role: "user",
-          assigned_at: new Date().toISOString(),
+      const { data: existingUser, error: userError } = await supabaseClient
+        .from("users")
+        .select("*")
+        .eq("id", session.user.id)
+        .single()
+
+      if (userError) {
+        console.error("Error fetching user:", userError)
+        return
+      }
+
+      if (existingUser) {
+        console.log("✅ [AUTH] User already registered")
+        return
+      }
+
+      console.log("👤 [AUTH] User not found, registering...")
+
+      const { data: newUser, error: newUserError } = await supabaseClient
+        .from("users")
+        .insert({
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.user_metadata.full_name,
+          avatar_url: session.user.user_metadata.avatar_url,
         })
+        .select("*")
+        .single()
+
+      if (newUserError) {
+        console.error("Error creating user:", newUserError)
+        return
+      }
+
+      if (!newUser) {
+        console.error("Error creating user: No user returned")
+        return
+      }
+
+      console.log("✅ [AUTH] User registered:", newUser)
+
+      // En la función ensureUserRegistered, agregar verificación especial para emilrichardo
+      if (session.user.email === "emilrichardo@gmail.com") {
+        console.log("🔧 [AUTH] Special handling for emilrichardo - ensuring superadmin role")
+        const { error: roleError } = await updateUserRole(session.user.id, "superadmin", session.user.id)
+        if (roleError) {
+          console.error("Error setting superadmin role for emilrichardo:", roleError)
+        } else {
+          console.log("✅ [AUTH] Superadmin role set for emilrichardo")
+        }
+      }
+    },
+    [supabaseClient],
+  )
+
+  const updateUserRole = useCallback(
+    async (userId: string, roleName: string, updatedBy: string) => {
+      console.log(`👤 [AUTH] Updating user role to ${roleName}...`)
+
+      const { data: existingRole, error: existingRoleError } = await supabaseClient
+        .from("roles")
+        .select("*")
+        .eq("user_id", userId)
+        .single()
+
+      if (existingRoleError && existingRoleError.message.includes("No rows")) {
+        console.log("ℹ️ [AUTH] No role found, creating...")
+        const { data, error } = await supabaseClient
+          .from("roles")
+          .insert({
+            user_id: userId,
+            role: roleName,
+            updated_by: updatedBy,
+          })
+          .select("*")
+          .single()
 
         if (error) {
-          console.error("❌ [AUTH] Error registering new user:", error)
-        } else {
-          console.log("✅ [AUTH] New user registered successfully:", user.email)
+          console.error("Error creating role:", error)
+          return { error }
         }
-      } else {
-        console.log("✅ [AUTH] User already registered with role:", existingRole.role)
+
+        console.log("✅ [AUTH] Role created:", data)
+        return { data }
       }
-    } catch (error) {
-      console.error("💥 [AUTH] Error ensuring user registration:", error)
+
+      if (existingRoleError) {
+        console.error("Error fetching role:", existingRoleError)
+        return { error: existingRoleError }
+      }
+
+      const { data, error } = await supabaseClient
+        .from("roles")
+        .update({ role: roleName, updated_by: updatedBy })
+        .eq("user_id", userId)
+        .select("*")
+        .single()
+
+      if (error) {
+        console.error("Error updating role:", error)
+        return { error }
+      }
+
+      console.log("✅ [AUTH] Role updated:", data)
+      return { data }
+    },
+    [supabaseClient],
+  )
+
+  const refreshUserRole = useCallback(async () => {
+    if (!session?.user) {
+      setIsLoading(false)
+      return
     }
-  }
+
+    console.log("🔄 [AUTH] Refreshing user and role...")
+
+    const { data: user, error: userError } = await supabaseClient
+      .from("users")
+      .select("*")
+      .eq("id", session.user.id)
+      .single()
+
+    if (userError) {
+      console.error("Error fetching user:", userError)
+      setIsLoading(false)
+      return
+    }
+
+    setUser(user)
+
+    const { data: role, error: roleError } = await supabaseClient
+      .from("roles")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .single()
+
+    if (roleError) {
+      // Handle the case where the user doesn't have a role yet.
+      console.warn("User has no role assigned:", roleError)
+      setRole(null) // Set role to null to indicate no role.
+    } else {
+      setRole(role)
+    }
+
+    setIsLoading(false)
+    console.log("✅ [AUTH] User and role refreshed")
+  }, [session, supabaseClient])
 
   useEffect(() => {
-    let mounted = true
-
     const initializeAuth = async () => {
-      try {
-        console.log("🚀 [AUTH] Initializing auth...")
-
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
-
-        if (error) {
-          console.error("❌ [AUTH] Error getting session:", error)
-          if (mounted) setLoading(false)
-          return
-        }
-
-        console.log("📋 [AUTH] Initial session:", session?.user?.email || "No session")
-
-        if (mounted) {
-          if (session?.user) {
-            setUser(session.user)
-            console.log("👤 [AUTH] User set, getting role...")
-
-            await ensureUserIsRegistered(session.user)
-
-            const role = await getCurrentUserRole(session.user.id)
-            console.log("🎯 [AUTH] Initial role for", session.user.email, ":", role)
-
-            if (mounted) {
-              setUserRole(role)
-              setLoading(false)
-            }
-          } else {
-            setLoading(false)
-          }
-        }
-      } catch (error) {
-        console.error("💥 [AUTH] Error initializing auth:", error)
-        if (mounted) {
-          setLoading(false)
-        }
-      }
+      setIsLoading(true)
+      await ensureUserRegistered(session)
+      // Después de ensureUserRegistered, forzar refresh del rol
+      await refreshUserRole()
     }
 
     initializeAuth()
+  }, [session, ensureUserRegistered, refreshUserRole])
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔄 [AUTH] Auth state change:", event, session?.user?.email || "No user")
-
-      if (mounted) {
-        setUser(session?.user ?? null)
-
-        if (session?.user) {
-          if (event === "SIGNED_IN") {
-            console.log("🔐 [AUTH] User signed in, ensuring registration...")
-            await ensureUserIsRegistered(session.user)
-          }
-
-          console.log("🔍 [AUTH] Getting role after auth change...")
-          const role = await getCurrentUserRole(session.user.id)
-          console.log("🎯 [AUTH] Role after auth change for", session.user.email, ":", role)
-
-          if (mounted) {
-            setUserRole(role)
-            setLoading(false)
-          }
-        } else {
-          setUserRole("user")
-          setLoading(false)
-        }
-      }
-    })
-
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    if (error) throw error
+  const value = {
+    supabaseClient,
+    session,
+    user,
+    role,
+    isLoading,
+    refreshUserRole,
   }
 
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    setUserRole("user")
-    setLoading(false)
-    window.location.href = "/"
-  }
-
-  const isAdmin = userRole === "admin" || userRole === "superadmin"
-  const isSuperAdmin = userRole === "superadmin"
-
-  // Log detallado del estado actual
-  console.log("📊 [AUTH] Current auth state:", {
-    userEmail: user?.email,
-    userId: user?.id,
-    userRole,
-    isAdmin,
-    isSuperAdmin,
-    loading,
-  })
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        userRole,
-        isAdmin,
-        isSuperAdmin,
-        loading,
-        signInWithGoogle,
-        signOut,
-        refreshUserRole,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => useContext(AuthContext)
+const useAuth = () => {
+  const context = useContext(AuthContext)
+
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+
+  return context
+}
+
+export { AuthProvider, useAuth }

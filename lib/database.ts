@@ -22,12 +22,12 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Modificar la función getGlobalSettings para que solo busque configuración de superadmin
+// Mejorar la función getGlobalSettings
 export const getGlobalSettings = async () => {
   try {
     console.log("Getting global settings from superadmin")
 
-    // Buscar configuración de un superadmin
+    // Buscar configuración de cualquier superadmin
     const { data, error } = await supabase
       .from("user_settings")
       .select(`
@@ -35,16 +35,21 @@ export const getGlobalSettings = async () => {
         user_roles!inner(role)
       `)
       .eq("user_roles.role", "superadmin")
+      .order("updated_at", { ascending: false })
       .limit(1)
-      .single()
 
     if (error && error.code !== "PGRST116") {
       console.error("Supabase error getting global settings:", error)
-    } else if (!error) {
-      console.log("Global settings retrieved successfully from superadmin:", data)
+      return { data: null, error }
     }
 
-    return { data, error }
+    if (data && data.length > 0) {
+      console.log("Global settings retrieved successfully from superadmin:", data[0])
+      return { data: data[0], error: null }
+    } else {
+      console.log("No global settings found from superadmin")
+      return { data: null, error: null }
+    }
   } catch (error) {
     console.error("Error getting global settings:", error)
     return { data: null, error }
@@ -257,7 +262,7 @@ export const checkIsSuperAdmin = async () => {
   }
 }
 
-// Función para obtener el rol del usuario actual - MEJORADA
+// Mejorar la función getCurrentUserRole
 export const getCurrentUserRole = async (): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
   try {
     const {
@@ -270,6 +275,31 @@ export const getCurrentUserRole = async (): Promise<"admin" | "user" | "premium"
     }
 
     console.log("Getting role for user ID:", user.id, "Email:", user.email)
+
+    // Verificación especial para emilrichardo
+    if (user.email === "emilrichardo@gmail.com") {
+      console.log("Special handling for emilrichardo - ensuring superadmin role")
+
+      // Asegurar que tenga rol de superadmin
+      const { error: roleError } = await supabase.from("user_roles").upsert(
+        {
+          user_id: user.id,
+          role: "superadmin",
+          assigned_by: user.id,
+          assigned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id",
+        },
+      )
+
+      if (roleError) {
+        console.error("Error ensuring superadmin role for emilrichardo:", roleError)
+      }
+
+      return "superadmin"
+    }
 
     const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
 

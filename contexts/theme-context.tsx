@@ -133,11 +133,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setIsLoaded(true)
   }, [])
 
-  // Modificar la función loadUserSettings para que cargue siempre la configuración del superadmin para usuarios normales
+  // Modificar la función loadUserSettings para mejorar la carga de configuración global
   const loadUserSettings = async (userId: string) => {
-    // Evitar cargas duplicadas
-    if (isLoadingSettings || settings.user_id === userId) {
-      console.log("Settings already loading or loaded for this user, skipping...")
+    if (isLoadingSettings) {
+      console.log("Settings already loading, skipping...")
       return
     }
 
@@ -151,35 +150,42 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const isSuperAdmin = userRole === "superadmin"
       setIsAdmin(isSuperAdmin)
 
+      console.log("User role determined:", userRole, "isSuperAdmin:", isSuperAdmin)
+
       let settingsData = null
 
       if (isSuperAdmin) {
         // Si es superadmin, cargar sus propias configuraciones
+        console.log("Loading superadmin's own settings")
         const { data: userSettings } = await getUserSettings(userId)
         settingsData = userSettings
       } else {
-        // Si no es superadmin, cargar configuración global de superadmin
+        // Si no es superadmin, cargar configuración global de cualquier superadmin
+        console.log("Loading global settings from superadmin")
         const { data: globalSettings } = await getGlobalSettings()
         if (globalSettings) {
+          console.log("Global settings found:", globalSettings)
           settingsData = globalSettings
         } else {
-          // Si no hay configuración global, cargar configuración por defecto
+          console.log("No global settings found, using defaults")
           settingsData = defaultSettings
         }
       }
 
       if (settingsData) {
-        console.log("Settings loaded from database:", settingsData)
+        console.log("Settings loaded successfully:", settingsData)
         const mergedSettings = {
           ...defaultSettings,
           ...settingsData,
           api_keys: settingsData.api_keys || {},
+          user_id: userId, // Asegurar que el user_id sea el correcto
         }
         setSettings(mergedSettings)
       } else {
         const newSettings = { ...defaultSettings, user_id: userId }
         if (isSuperAdmin) {
           try {
+            console.log("Creating default settings for superadmin")
             await updateUserSettings(userId, newSettings)
             setSettings(newSettings)
           } catch (createError) {
@@ -198,14 +204,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Modificar la función updateSettings para que solo permita cambios a superadmin
+  // Modificar la función updateSettings para verificar permisos correctamente
   const updateSettings = async (updates: Partial<UserSettings>) => {
-    console.log("Updating settings:", updates)
+    console.log("Updating settings:", updates, "isAdmin:", isAdmin)
 
     try {
-      // Solo superadmin puede cambiar configuraciones
-      if (!isAdmin) {
-        throw new Error("Solo los administradores pueden cambiar la configuración")
+      // Verificar rol actual antes de permitir cambios
+      const currentRole = await getCurrentUserRole()
+      const canModify = currentRole === "superadmin"
+
+      console.log("Current role:", currentRole, "Can modify:", canModify)
+
+      if (!canModify) {
+        throw new Error("Solo los superadministradores pueden cambiar la configuración")
       }
 
       // Solo guardar en la base de datos si hay usuario autenticado
@@ -229,7 +240,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setSettings(updatedSettings)
     } catch (error) {
       console.error("Error updating settings:", error)
-      // En caso de error, no actualizar el estado local
       throw error
     }
   }

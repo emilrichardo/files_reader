@@ -44,7 +44,8 @@ export default function Sidebar() {
     { name: "Inicio", href: "/", icon: Home },
     { name: "Documentos", href: "/documents", icon: FileText },
     { name: "Plantillas", href: "/templates", icon: Template },
-    { name: "Configuración", href: "/settings", icon: Settings },
+    // Solo mostrar configuración para superadmin
+    ...(isSuperAdmin ? [{ name: "Configuración", href: "/settings", icon: Settings }] : []),
   ]
 
   const SidebarContentComponent = () => (
