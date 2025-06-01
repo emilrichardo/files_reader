@@ -67,8 +67,17 @@ export interface UserSettings {
   style_mode: string
   company_logo?: string
   company_logo_type?: string
-  user_role: "admin" | "user" | "premium" | "moderator" | "superadmin"
   created_at?: string
+  updated_at: string
+}
+
+export interface UserRole {
+  id: string
+  user_id: string
+  role: "admin" | "user" | "premium" | "moderator" | "superadmin"
+  assigned_by?: string
+  assigned_at: string
+  created_at: string
   updated_at: string
 }
 
@@ -86,7 +95,8 @@ export interface UserWithRole {
   email: string
   name?: string
   avatar_url?: string
-  user_role: "admin" | "user" | "premium" | "moderator" | "superadmin"
+  role: "admin" | "user" | "premium" | "moderator" | "superadmin"
+  assigned_at: string
   created_at: string
   last_sign_in_at?: string
 }

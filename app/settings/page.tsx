@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
-import { getAllUsers, updateUserRole, logUserManagement } from "@/lib/database"
+import { getAllUsersWithRoles, updateUserRole, logUserManagement } from "@/lib/database"
 
 export default function SettingsPage() {
   const { user, userRole, isAdmin, isSuperAdmin } = useAuth()
@@ -62,7 +62,7 @@ export default function SettingsPage() {
 
     setLoadingUsers(true)
     try {
-      const { data, error } = await getAllUsers()
+      const { data, error } = await getAllUsersWithRoles()
       if (error) {
         toast({
           title: "Error",
@@ -94,7 +94,7 @@ export default function SettingsPage() {
     }
 
     try {
-      const { error } = await updateUserRole(userId, newRole)
+      const { error } = await updateUserRole(userId, newRole, user?.id)
       if (error) {
         toast({
           title: "Error",
@@ -104,7 +104,7 @@ export default function SettingsPage() {
       } else {
         // Log the action
         await logUserManagement(userId, "role_change", {
-          old_role: allUsers.find((u) => u.user_id === userId)?.user_role,
+          old_role: allUsers.find((u) => u.user_id === userId)?.role,
           new_role: newRole,
         })
 
@@ -285,20 +285,20 @@ export default function SettingsPage() {
                             </span>
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900">{userData.project_name || "Usuario"}</p>
+                            <p className="font-medium text-gray-900">Usuario</p>
                             <p className="text-sm text-gray-500">ID: {userData.user_id.substring(0, 8)}...</p>
                             <p className="text-xs text-gray-400">
-                              Creado: {new Date(userData.created_at).toLocaleDateString()}
+                              Asignado: {new Date(userData.assigned_at).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-3">
-                          <Badge className={getRoleBadgeColor(userData.user_role)}>
-                            {getRoleIcon(userData.user_role)}
-                            {userData.user_role}
+                          <Badge className={getRoleBadgeColor(userData.role)}>
+                            {getRoleIcon(userData.role)}
+                            {userData.role}
                           </Badge>
                           <Select
-                            value={userData.user_role}
+                            value={userData.role}
                             onValueChange={(newRole: "admin" | "user" | "premium" | "moderator" | "superadmin") =>
                               handleRoleChange(userData.user_id, newRole)
                             }

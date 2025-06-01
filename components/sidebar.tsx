@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Plus, Layout, Settings, LogOut, Menu, X } from "lucide-react"
+import { Home, FileText, Plus, Layout, Settings, LogOut, Menu, X, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { user, signInWithGoogle, signOut, loading } = useAuth()
+  const { user, signInWithGoogle, signOut, loading, isSuperAdmin } = useAuth()
   const { projectName, companyLogo, primaryColor, isDark } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -54,35 +54,55 @@ export default function Sidebar() {
       href: "/",
       icon: Home,
       requiresAuth: false,
+      requiresSuperAdmin: false,
     },
     {
       name: "Documentos",
       href: "/documents",
       icon: FileText,
       requiresAuth: true,
+      requiresSuperAdmin: false,
     },
     {
       name: "Crear Documento",
       href: "/documents/create",
       icon: Plus,
       requiresAuth: false,
+      requiresSuperAdmin: false,
     },
     {
       name: "Plantillas",
       href: "/templates",
       icon: Layout,
       requiresAuth: true,
+      requiresSuperAdmin: false,
+    },
+    {
+      name: "Usuarios",
+      href: "/users",
+      icon: Users,
+      requiresAuth: true,
+      requiresSuperAdmin: true,
     },
     {
       name: "Configuración",
       href: "/settings",
       icon: Settings,
       requiresAuth: true,
+      requiresSuperAdmin: false,
     },
   ]
 
-  // Filtrar elementos de navegación según el estado de autenticación
-  const filteredNavItems = navItems.filter((item) => !item.requiresAuth || user !== null)
+  // Filtrar elementos de navegación según el estado de autenticación y permisos
+  const filteredNavItems = navItems.filter((item) => {
+    // Si requiere autenticación y no hay usuario, no mostrar
+    if (item.requiresAuth && !user) return false
+
+    // Si requiere SuperAdmin y no es SuperAdmin, no mostrar
+    if (item.requiresSuperAdmin && !isSuperAdmin) return false
+
+    return true
+  })
 
   // Clases dinámicas para dark mode
   const sidebarBg = isDark ? "bg-gray-900" : "bg-white"
@@ -167,6 +187,9 @@ export default function Sidebar() {
               >
                 <item.icon className="h-5 w-5 mr-3" />
                 {item.name}
+                {item.requiresSuperAdmin && (
+                  <span className="ml-auto text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">SA</span>
+                )}
               </Link>
             ))}
           </nav>
@@ -268,6 +291,9 @@ export default function Sidebar() {
                 >
                   <item.icon className="h-5 w-5 mr-3" />
                   {item.name}
+                  {item.requiresSuperAdmin && (
+                    <span className="ml-auto text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">SA</span>
+                  )}
                 </Link>
               ))}
             </nav>

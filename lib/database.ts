@@ -1,7 +1,7 @@
 import { supabase } from "./supabase"
 import type { Document, Template, DocumentRow, UserSettings } from "./types"
 
-// Servicios para User Settings
+// Servicios para User Settings (solo configuraciones)
 export const getUserSettings = async (userId: string) => {
   try {
     console.log("Getting user settings for user:", userId)
@@ -54,31 +54,22 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
   }
 }
 
-// Servicios para gestión de usuarios (solo admins)
-export const getAllUsers = async () => {
+// Servicios para User Roles
+export const getUserRole = async (userId: string) => {
   try {
-    console.log("Getting all users (admin only)")
+    console.log("Getting user role for user:", userId)
 
-    const { data, error } = await supabase
-      .from("user_settings")
-      .select(`
-        user_id,
-        project_name,
-        user_role,
-        created_at,
-        updated_at
-      `)
-      .order("created_at", { ascending: false })
+    const { data, error } = await supabase.from("user_roles").select("*").eq("user_id", userId).single()
 
-    if (error) {
-      console.error("Error getting all users:", error)
+    if (error && error.code !== "PGRST116") {
+      console.error("Supabase error getting user role:", error)
       return { data: null, error }
     }
 
-    console.log("All users retrieved successfully:", data?.length, "users")
-    return { data, error: null }
+    console.log("User role retrieved successfully:", data?.role || "user")
+    return { data, error }
   } catch (error) {
-    console.error("Error getting all users:", error)
+    console.error("Error getting user role:", error)
     return { data: null, error }
   }
 }
@@ -86,14 +77,25 @@ export const getAllUsers = async () => {
 export const updateUserRole = async (
   userId: string,
   newRole: "admin" | "user" | "premium" | "moderator" | "superadmin",
+  assignedBy?: string,
 ) => {
   try {
     console.log("Updating user role:", userId, "to", newRole)
 
     const { data, error } = await supabase
-      .from("user_settings")
-      .update({ user_role: newRole, updated_at: new Date().toISOString() })
-      .eq("user_id", userId)
+      .from("user_roles")
+      .upsert(
+        {
+          user_id: userId,
+          role: newRole,
+          assigned_by: assignedBy,
+          assigned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "user_id",
+        },
+      )
       .select()
 
     if (error) {
@@ -105,6 +107,35 @@ export const updateUserRole = async (
     return { data, error: null }
   } catch (error) {
     console.error("Error updating user role:", error)
+    return { data: null, error }
+  }
+}
+
+// Servicios para gestión de usuarios (solo admins)
+export const getAllUsersWithRoles = async () => {
+  try {
+    console.log("Getting all users with roles (admin only)")
+
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select(`
+        user_id,
+        role,
+        assigned_at,
+        created_at,
+        updated_at
+      `)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error getting all users with roles:", error)
+      return { data: null, error }
+    }
+
+    console.log("All users with roles retrieved successfully:", data?.length, "users")
+    return { data, error: null }
+  } catch (error) {
+    console.error("Error getting all users with roles:", error)
     return { data: null, error }
   }
 }
@@ -144,11 +175,11 @@ export const checkIsAdmin = async () => {
     } = await supabase.auth.getUser()
     if (!user) return false
 
-    const { data, error } = await supabase.from("user_settings").select("user_role").eq("user_id", user.id).single()
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
 
     if (error || !data) return false
 
-    return data.user_role === "admin" || data.user_role === "superadmin"
+    return data.role === "admin" || data.role === "superadmin"
   } catch (error) {
     console.error("Error checking admin status:", error)
     return false
@@ -163,11 +194,11 @@ export const checkIsSuperAdmin = async () => {
     } = await supabase.auth.getUser()
     if (!user) return false
 
-    const { data, error } = await supabase.from("user_settings").select("user_role").eq("user_id", user.id).single()
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
 
     if (error || !data) return false
 
-    return data.user_role === "superadmin"
+    return data.role === "superadmin"
   } catch (error) {
     console.error("Error checking superadmin status:", error)
     return false
@@ -182,11 +213,11 @@ export const getCurrentUserRole = async () => {
     } = await supabase.auth.getUser()
     if (!user) return "user"
 
-    const { data, error } = await supabase.from("user_settings").select("user_role").eq("user_id", user.id).single()
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
 
     if (error || !data) return "user"
 
-    return data.user_role
+    return data.role
   } catch (error) {
     console.error("Error getting user role:", error)
     return "user"
