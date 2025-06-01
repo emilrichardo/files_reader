@@ -33,6 +33,7 @@ export interface DocumentRow {
   data: Record<string, any>
   file_metadata?: FileMetadata
   created_at: string
+  updated_at?: string
 }
 
 export interface FileMetadata {
@@ -50,6 +51,7 @@ export interface Template {
   user_id: string
   fields: DocumentField[]
   created_at: string
+  updated_at?: string
 }
 
 export interface UserSettings {
@@ -62,8 +64,29 @@ export interface UserSettings {
   color_scheme: string
   custom_color?: string
   font_family: string
-  style_mode: "flat" | "gradient" | "brutalist" | "border" | "glass" | "neumorphism"
+  style_mode: string
   company_logo?: string
-  company_logo_type?: "jpg" | "png" | "svg"
+  company_logo_type?: string
+  user_role: "admin" | "user" | "premium" | "moderator" | "superadmin"
+  created_at?: string
   updated_at: string
+}
+
+export interface UserManagement {
+  id: string
+  user_id: string
+  managed_by: string
+  action: string
+  details: Record<string, any>
+  created_at: string
+}
+
+export interface UserWithRole {
+  id: string
+  email: string
+  name?: string
+  avatar_url?: string
+  user_role: "admin" | "user" | "premium" | "moderator" | "superadmin"
+  created_at: string
+  last_sign_in_at?: string
 }

@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Save, Upload, X, Plus, Eye, EyeOff } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Save, Upload, X, Plus, Eye, EyeOff, Users, Shield, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,12 +11,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
+import { getAllUsers, updateUserRole, logUserManagement } from "@/lib/database"
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, userRole, isAdmin, isSuperAdmin } = useAuth()
   const { toast } = useToast()
   const {
     settings,
@@ -42,7 +44,112 @@ export default function SettingsPage() {
   const [tempProjectName, setTempProjectName] = useState(projectName)
   const [isSaving, setIsSaving] = useState(false)
 
+  // Estados para gestión de usuarios (solo admins)
+  const [allUsers, setAllUsers] = useState<any[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
   const optimalTextColor = getOptimalTextColor(primaryColor)
+
+  // Cargar usuarios si es admin
+  useEffect(() => {
+    if (isAdmin) {
+      loadAllUsers()
+    }
+  }, [isAdmin])
+
+  const loadAllUsers = async () => {
+    if (!isAdmin) return
+
+    setLoadingUsers(true)
+    try {
+      const { data, error } = await getAllUsers()
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Error al cargar usuarios.",
+          variant: "destructive",
+        })
+      } else if (data) {
+        setAllUsers(data)
+      }
+    } catch (error) {
+      console.error("Error loading users:", error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  const handleRoleChange = async (
+    userId: string,
+    newRole: "admin" | "user" | "premium" | "moderator" | "superadmin",
+  ) => {
+    // Solo superadmin puede asignar rol superadmin
+    if (newRole === "superadmin" && !isSuperAdmin) {
+      toast({
+        title: "Acceso denegado",
+        description: "Solo un SuperAdmin puede asignar el rol de SuperAdmin.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const { error } = await updateUserRole(userId, newRole)
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Error al actualizar el rol del usuario.",
+          variant: "destructive",
+        })
+      } else {
+        // Log the action
+        await logUserManagement(userId, "role_change", {
+          old_role: allUsers.find((u) => u.user_id === userId)?.user_role,
+          new_role: newRole,
+        })
+
+        toast({
+          title: "Rol actualizado",
+          description: `El rol del usuario ha sido actualizado a ${newRole}.`,
+        })
+
+        // Refresh users list
+        loadAllUsers()
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar el rol del usuario.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "superadmin":
+        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-300"
+      case "admin":
+        return "bg-red-100 text-red-800 border-red-200"
+      case "premium":
+        return "bg-purple-100 text-purple-800 border-purple-200"
+      case "moderator":
+        return "bg-blue-100 text-blue-800 border-blue-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
+    }
+  }
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case "superadmin":
+        return <Crown className="h-3 w-3 mr-1" />
+      case "admin":
+        return <Shield className="h-3 w-3 mr-1" />
+      default:
+        return null
+    }
+  }
 
   const handleAddApiKey = () => {
     if (newKeyName && newKeyValue) {
@@ -121,7 +228,13 @@ export default function SettingsPage() {
           {/* Profile Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Perfil de Usuario</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Perfil de Usuario
+                <Badge className={getRoleBadgeColor(userRole)}>
+                  {getRoleIcon(userRole)}
+                  {userRole}
+                </Badge>
+              </CardTitle>
               <CardDescription>Información básica de tu cuenta</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -130,12 +243,85 @@ export default function SettingsPage() {
                   <span className="text-xl font-medium text-gray-600">{user?.email?.[0]?.toUpperCase() || "U"}</span>
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{user?.name || user?.email || "Usuario"}</h3>
+                  <h3 className="font-medium text-gray-900">{user?.user_metadata?.name || user?.email || "Usuario"}</h3>
                   <p className="text-sm text-gray-500">{user?.email || "No autenticado"}</p>
+                  <p className="text-xs text-gray-400">Rol: {userRole}</p>
+                  {isSuperAdmin && <p className="text-xs text-purple-600 font-medium">✨ Acceso total al sistema</p>}
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* User Management Section - Solo para admins */}
+          {isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Gestión de Usuarios
+                  <Badge className={getRoleBadgeColor(userRole)}>
+                    {getRoleIcon(userRole)}
+                    {isSuperAdmin ? "SuperAdmin" : "Admin"}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  Gestiona roles y permisos de usuarios
+                  {isSuperAdmin && " (Acceso completo como SuperAdmin)"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingUsers ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {allUsers.map((userData) => (
+                      <div key={userData.user_id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-600">
+                              {userData.user_id.substring(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{userData.project_name || "Usuario"}</p>
+                            <p className="text-sm text-gray-500">ID: {userData.user_id.substring(0, 8)}...</p>
+                            <p className="text-xs text-gray-400">
+                              Creado: {new Date(userData.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <Badge className={getRoleBadgeColor(userData.user_role)}>
+                            {getRoleIcon(userData.user_role)}
+                            {userData.user_role}
+                          </Badge>
+                          <Select
+                            value={userData.user_role}
+                            onValueChange={(newRole: "admin" | "user" | "premium" | "moderator" | "superadmin") =>
+                              handleRoleChange(userData.user_id, newRole)
+                            }
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="premium">Premium</SelectItem>
+                              <SelectItem value="moderator">Moderator</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              {isSuperAdmin && <SelectItem value="superadmin">SuperAdmin</SelectItem>}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Project Settings */}
           <Card>

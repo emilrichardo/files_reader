@@ -54,6 +54,145 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
   }
 }
 
+// Servicios para gestión de usuarios (solo admins)
+export const getAllUsers = async () => {
+  try {
+    console.log("Getting all users (admin only)")
+
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select(`
+        user_id,
+        project_name,
+        user_role,
+        created_at,
+        updated_at
+      `)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error getting all users:", error)
+      return { data: null, error }
+    }
+
+    console.log("All users retrieved successfully:", data?.length, "users")
+    return { data, error: null }
+  } catch (error) {
+    console.error("Error getting all users:", error)
+    return { data: null, error }
+  }
+}
+
+export const updateUserRole = async (
+  userId: string,
+  newRole: "admin" | "user" | "premium" | "moderator" | "superadmin",
+) => {
+  try {
+    console.log("Updating user role:", userId, "to", newRole)
+
+    const { data, error } = await supabase
+      .from("user_settings")
+      .update({ user_role: newRole, updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .select()
+
+    if (error) {
+      console.error("Error updating user role:", error)
+      return { data: null, error }
+    }
+
+    console.log("User role updated successfully:", data)
+    return { data, error: null }
+  } catch (error) {
+    console.error("Error updating user role:", error)
+    return { data: null, error }
+  }
+}
+
+export const logUserManagement = async (userId: string, action: string, details: Record<string, any> = {}) => {
+  try {
+    console.log("Logging user management action:", action, "for user:", userId)
+
+    const { data, error } = await supabase
+      .from("user_management")
+      .insert({
+        user_id: userId,
+        managed_by: (await supabase.auth.getUser()).data.user?.id,
+        action,
+        details,
+      })
+      .select()
+
+    if (error) {
+      console.error("Error logging user management:", error)
+      return { data: null, error }
+    }
+
+    console.log("User management logged successfully:", data)
+    return { data, error: null }
+  } catch (error) {
+    console.error("Error logging user management:", error)
+    return { data: null, error }
+  }
+}
+
+// Función para verificar si el usuario actual es admin o superadmin
+export const checkIsAdmin = async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data, error } = await supabase.from("user_settings").select("user_role").eq("user_id", user.id).single()
+
+    if (error || !data) return false
+
+    return data.user_role === "admin" || data.user_role === "superadmin"
+  } catch (error) {
+    console.error("Error checking admin status:", error)
+    return false
+  }
+}
+
+// Función para verificar si el usuario actual es superadmin
+export const checkIsSuperAdmin = async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data, error } = await supabase.from("user_settings").select("user_role").eq("user_id", user.id).single()
+
+    if (error || !data) return false
+
+    return data.user_role === "superadmin"
+  } catch (error) {
+    console.error("Error checking superadmin status:", error)
+    return false
+  }
+}
+
+// Función para obtener el rol del usuario actual
+export const getCurrentUserRole = async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return "user"
+
+    const { data, error } = await supabase.from("user_settings").select("user_role").eq("user_id", user.id).single()
+
+    if (error || !data) return "user"
+
+    return data.user_role
+  } catch (error) {
+    console.error("Error getting user role:", error)
+    return "user"
+  }
+}
+
 // Servicios para Templates
 export const getTemplates = async (userId: string) => {
   try {
