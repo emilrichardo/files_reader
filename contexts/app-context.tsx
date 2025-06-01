@@ -18,7 +18,11 @@ import { useAuth } from "@/contexts/auth-context"
 interface AppContextType {
   documents: Document[]
   templates: Template[]
-  addDocument: (doc: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => Promise<string>
+  addDocument: (
+    doc:
+      | Omit<Document, "id" | "created_at" | "updated_at">
+      | Omit<Document, "id" | "created_at" | "updated_at" | "rows">,
+  ) => Promise<string>
   getDocument: (id: string) => Document | undefined
   updateDocument: (id: string, updates: Partial<Document>) => Promise<void>
   deleteDocument: (id: string) => Promise<void>
@@ -85,14 +89,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadDocuments()
   }, [user])
 
-  const addDocument = async (docData: Omit<Document, "id" | "created_at" | "updated_at" | "rows">): Promise<string> => {
+  const addDocument = async (docData: any): Promise<string> => {
     const now = new Date().toISOString()
 
     try {
       if (user) {
-        // Guardar en la base de datos
+        // Separar las filas de los datos del documento
+        const { rows = [], ...documentData } = docData
+
+        // Guardar documento en la base de datos
         const { data, error } = await createDocument({
-          ...docData,
+          ...documentData,
           user_id: user.id,
         })
 
@@ -108,10 +115,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Crear el documento con el ID devuelto por la base de datos
         const newDoc: Document = {
           ...data,
-          fields: docData.fields,
+          fields: documentData.fields,
           rows: [],
           created_at: data.created_at || now,
           updated_at: data.updated_at || now,
+        }
+
+        // Si hay filas, agregarlas una por una
+        if (rows.length > 0) {
+          console.log("Adding rows to document:", rows.length)
+          for (const row of rows) {
+            console.log("Adding row:", row)
+            const { data: rowData, error: rowError } = await createDocumentRow({
+              ...row,
+              document_id: newDoc.id,
+            })
+
+            if (rowError) {
+              console.error("Error creating row:", rowError)
+            } else if (rowData) {
+              newDoc.rows.push(rowData)
+              console.log("Row added successfully:", rowData)
+            }
+          }
         }
 
         setDocuments((prev) => [newDoc, ...prev])
@@ -123,7 +149,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           id: Date.now().toString(),
           created_at: now,
           updated_at: now,
-          rows: [],
+          rows: docData.rows || [],
           ...docData,
         }
         setDocuments((prev) => [newDoc, ...prev])
@@ -136,7 +162,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         id: Date.now().toString(),
         created_at: now,
         updated_at: now,
-        rows: [],
+        rows: docData.rows || [],
         ...docData,
       }
       setDocuments((prev) => [newDoc, ...prev])

@@ -5,10 +5,8 @@ import { useRouter } from "next/navigation"
 import { Save, Plus, Trash2, Upload, FileText, Edit, Check, X, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useApp } from "@/contexts/app-context"
 import { useAuth } from "@/contexts/auth-context"
@@ -20,7 +18,7 @@ import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
 export default function CreateDocumentPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { addDocument, addRowToDocument, templates, addTemplate } = useApp()
+  const { addDocument, templates, addTemplate } = useApp()
   const { user, signInWithGoogle } = useAuth()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
 
@@ -117,6 +115,7 @@ export default function CreateDocumentPage() {
       addTemplate({
         name: templateName.trim(),
         description: description || "Plantilla creada desde documento",
+        user_id: user?.id || "demo-user",
         fields: fields,
       })
       toast({
@@ -275,35 +274,20 @@ export default function CreateDocumentPage() {
         order: index,
       }))
 
-      // Crear el documento en la base de datos
-      console.log("Creating document with data:", {
+      // Crear el documento completo con las filas
+      const documentData = {
         name: documentTitle,
         description,
         user_id: user.id,
         fields: processedFields,
-      })
-
-      const documentId = await addDocument({
-        name: documentTitle,
-        description,
-        user_id: user.id,
-        fields: processedFields,
-      })
-
-      console.log("Document created with ID:", documentId)
-
-      // Si hay filas, agregarlas una por una
-      if (rows.length > 0) {
-        console.log("Adding rows to document:", rows.length)
-        for (const row of rows) {
-          console.log("Adding row:", row)
-          await addRowToDocument(documentId, {
-            ...row,
-            document_id: documentId,
-          })
-        }
-        console.log("All rows added successfully")
+        rows: rows, // Incluir las filas directamente
       }
+
+      console.log("Creating document with complete data:", documentData)
+
+      const documentId = await addDocument(documentData)
+
+      console.log("Document created successfully with ID:", documentId)
 
       toast({
         title: "Documento creado",
@@ -383,27 +367,6 @@ export default function CreateDocumentPage() {
         </div>
 
         <div className="grid gap-8">
-          {/* Información del documento */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Información del Documento</CardTitle>
-              <CardDescription>Describe el propósito y contexto de este documento</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div>
-                <Label htmlFor="description">Descripción</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe el propósito de este documento..."
-                  className="mt-1"
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Plantillas */}
           {templates.length > 0 && (
             <Card>

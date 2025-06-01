@@ -121,22 +121,7 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<UserSettings>(() => {
-    // Cargar desde localStorage al inicio
-    if (typeof window !== "undefined") {
-      const savedSettings = localStorage.getItem("invitu_theme_settings")
-      if (savedSettings) {
-        try {
-          const parsed = JSON.parse(savedSettings)
-          console.log("Loaded settings from localStorage:", parsed)
-          return { ...defaultSettings, ...parsed }
-        } catch (e) {
-          console.error("Error parsing saved settings:", e)
-        }
-      }
-    }
-    return defaultSettings
-  })
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
 
   // Initialize
@@ -152,14 +137,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error("Error loading user settings:", error)
-        // Mantener configuraciones locales
-        const localSettings = localStorage.getItem("invitu_theme_settings")
-        if (localSettings) {
-          const parsed = JSON.parse(localSettings)
-          setSettings({ ...parsed, user_id: userId })
-        } else {
-          setSettings({ ...defaultSettings, user_id: userId })
-        }
+        // Para usuarios autenticados, usar configuraciones por defecto
+        setSettings({ ...defaultSettings, user_id: userId })
       } else if (data) {
         console.log("User settings loaded from database:", data)
         const mergedSettings = {
@@ -168,31 +147,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           api_keys: data.api_keys || {},
         }
         setSettings(mergedSettings)
-        // Actualizar localStorage
-        localStorage.setItem("invitu_theme_settings", JSON.stringify(mergedSettings))
       } else {
         // No hay configuraciones, crear las por defecto
         const newSettings = { ...defaultSettings, user_id: userId }
         try {
           await updateUserSettings(userId, newSettings)
           setSettings(newSettings)
-          localStorage.setItem("invitu_theme_settings", JSON.stringify(newSettings))
         } catch (createError) {
           console.error("Error creating default settings:", createError)
           setSettings(newSettings)
-          localStorage.setItem("invitu_theme_settings", JSON.stringify(newSettings))
         }
       }
     } catch (error) {
       console.error("Error in loadUserSettings:", error)
-      // Fallback a localStorage
-      const localSettings = localStorage.getItem("invitu_theme_settings")
-      if (localSettings) {
-        const parsed = JSON.parse(localSettings)
-        setSettings({ ...parsed, user_id: userId })
-      } else {
-        setSettings({ ...defaultSettings, user_id: userId })
-      }
+      setSettings({ ...defaultSettings, user_id: userId })
     }
   }
 
@@ -239,9 +207,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.head.appendChild(link)
     }
 
-    // Guardar en localStorage SIEMPRE
-    localStorage.setItem("invitu_theme_settings", JSON.stringify(settings))
-    console.log("Settings applied and saved to localStorage:", settings)
+    console.log("Settings applied:", settings)
   }, [settings, isLoaded])
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
@@ -251,11 +217,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Actualizar estado local inmediatamente
     setSettings(updatedSettings)
 
-    // Guardar en localStorage inmediatamente
-    localStorage.setItem("invitu_theme_settings", JSON.stringify(updatedSettings))
-    console.log("Settings updated locally:", updatedSettings)
-
-    // Intentar guardar en la base de datos si hay usuario autenticado
+    // Solo guardar en la base de datos si hay usuario autenticado
     if (settings.user_id && settings.user_id !== "demo-user") {
       try {
         console.log("Saving settings to database for user:", settings.user_id)
@@ -268,6 +230,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error("Error updating settings:", error)
       }
+    } else {
+      console.log("No authenticated user, settings not persisted")
     }
   }
 
