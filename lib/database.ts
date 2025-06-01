@@ -22,35 +22,12 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Función para obtener configuración global (la más reciente de cualquier superadmin)
+// Función simplificada para obtener configuración global sin verificar roles
 export const getGlobalSettings = async () => {
   try {
     console.log("Getting global settings (public access)")
 
-    // Primero intentar obtener configuración de superadmin
-    const { data: superAdmins } = await supabase.from("user_roles").select("user_id").eq("role", "superadmin")
-
-    if (superAdmins && superAdmins.length > 0) {
-      const superAdminIds = superAdmins.map((admin) => admin.user_id)
-      console.log("Found superadmin IDs for global settings:", superAdminIds)
-
-      // Buscar configuración de cualquier superadmin
-      const { data: settings, error } = await supabase
-        .from("user_settings")
-        .select("*")
-        .in("user_id", superAdminIds)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-
-      if (error) {
-        console.error("Error getting superadmin settings for global:", error)
-      } else if (settings && settings.length > 0) {
-        console.log("Global settings from superadmin retrieved successfully:", settings[0])
-        return { data: settings[0], error: null }
-      }
-    }
-
-    // Si no hay superadmin o no tiene configuración, buscar cualquier configuración
+    // Buscar configuración más reciente que tenga configuración de tema/diseño
     const { data, error } = await supabase
       .from("user_settings")
       .select("*")
@@ -59,13 +36,13 @@ export const getGlobalSettings = async () => {
       .order("updated_at", { ascending: false })
       .limit(1)
 
-    if (error) {
-      console.error("Error getting fallback global settings:", error)
+    if (error && error.code !== "PGRST116") {
+      console.error("Error getting global settings:", error)
       return { data: null, error }
     }
 
     if (data && data.length > 0) {
-      console.log("Fallback global settings retrieved successfully:", data[0])
+      console.log("Global settings retrieved successfully:", data[0])
       return { data: data[0], error: null }
     } else {
       console.log("No global settings found")
