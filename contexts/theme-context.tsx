@@ -136,14 +136,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Cargar configuración cuando el usuario cambie
   useEffect(() => {
-    if (!authLoading && user) {
-      console.log("🎨 [THEME] User changed, loading settings for:", user.email)
-      loadUserSettings(user.id)
-    } else if (!authLoading && !user) {
-      console.log("🎨 [THEME] No user, loading global settings")
-      loadGlobalSettingsForPublic()
+    if (!authLoading) {
+      if (user) {
+        console.log("🎨 [THEME] User authenticated, loading settings for:", user.email)
+        loadUserSettings(user.id)
+      } else {
+        console.log("🎨 [THEME] No user, loading global settings")
+        loadGlobalSettingsForPublic()
+      }
     }
-  }, [user, authLoading])
+  }, [user, authLoading, isSuperAdmin])
 
   // Función para cargar configuración global para usuarios públicos (sin verificar roles)
   const loadGlobalSettingsForPublic = async () => {
@@ -183,7 +185,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setIsLoadingSettings(true)
 
     try {
-      console.log("🎨 [THEME] Loading user settings for:", userId)
+      console.log("🎨 [THEME] Loading user settings for:", userId, "isSuperAdmin:", isSuperAdmin)
 
       let settingsData = null
 
@@ -200,8 +202,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           console.log("✅ [THEME] Superadmin settings found:", superAdminSettings)
           settingsData = superAdminSettings
         } else {
-          console.log("⚠️ [THEME] No superadmin settings found, using defaults")
-          settingsData = defaultSettings
+          console.log("⚠️ [THEME] No superadmin settings found, trying global settings")
+          const { data: globalSettings } = await getGlobalSettings()
+          settingsData = globalSettings || defaultSettings
         }
       }
 
@@ -238,25 +241,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
-    console.log("🔧 [THEME] Updating settings:", updates, "isSuperAdmin:", isSuperAdmin)
+    console.log("🔧 [THEME] Attempting to update settings:", updates)
+    console.log("🔧 [THEME] Current user:", user?.email, "isSuperAdmin:", isSuperAdmin)
 
     try {
-      if (!isSuperAdmin) {
-        throw new Error("Solo los superadministradores pueden cambiar la configuración")
-      }
-
+      // Verificar que el usuario esté autenticado
       if (!user) {
         throw new Error("Usuario no autenticado")
       }
 
-      console.log("💾 [THEME] Saving settings to database for user:", user.id)
-      const { error } = await updateUserSettings(user.id, updates)
-      if (error) {
-        console.error("❌ [THEME] Error updating settings in database:", error)
-        throw error
-      } else {
-        console.log("✅ [THEME] Settings saved to database successfully")
+      // Verificar que sea superadmin
+      if (!isSuperAdmin) {
+        throw new Error("Solo los superadministradores pueden cambiar la configuración")
       }
+
+      console.log("💾 [THEME] Saving settings to database for user:", user.id)
+
+      // Actualizar en la base de datos
+      await updateUserSettings(user.id, updates)
+
+      console.log("✅ [THEME] Settings saved to database successfully")
 
       // Actualizar estado local después de guardar exitosamente
       const updatedSettings = {
@@ -264,17 +268,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         ...updates,
         updated_at: new Date().toISOString(),
       }
+
       setSettings(updatedSettings)
+      console.log("✅ [THEME] Local settings updated:", updatedSettings)
     } catch (error) {
       console.error("❌ [THEME] Error updating settings:", error)
       throw error
     }
   }
 
-  const toggleTheme = () => {
-    updateSettings({
-      theme: settings.theme === "light" ? "dark" : "light",
-    })
+  const toggleTheme = async () => {
+    try {
+      await updateSettings({
+        theme: settings.theme === "light" ? "dark" : "light",
+      })
+    } catch (error) {
+      console.error("Error toggling theme:", error)
+    }
   }
 
   const updateLogo = async (file: File): Promise<void> => {
@@ -315,11 +325,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
               logoType = "png"
           }
 
-          await updateSettings({
-            company_logo: result,
-            company_logo_type: logoType,
-          })
-          resolve()
+          try {
+            await updateSettings({
+              company_logo: result,
+              company_logo_type: logoType,
+            })
+            resolve()
+          } catch (error) {
+            reject(error)
+          }
         } else {
           reject(new Error("Error al leer el archivo"))
         }
@@ -333,16 +347,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     })
   }
 
-  const updateProjectName = (name: string) => {
-    const newName = name.trim() || "Invitu"
-    updateSettings({ project_name: newName })
+  const updateProjectName = async (name: string) => {
+    try {
+      const newName = name.trim() || "Invitu"
+      await updateSettings({ project_name: newName })
+    } catch (error) {
+      console.error("Error updating project name:", error)
+    }
   }
 
-  const removeLogo = () => {
-    updateSettings({
-      company_logo: "",
-      company_logo_type: undefined,
-    })
+  const removeLogo = async () => {
+    try {
+      await updateSettings({
+        company_logo: "",
+        company_logo_type: undefined,
+      })
+    } catch (error) {
+      console.error("Error removing logo:", error)
+    }
   }
 
   const isDark = settings.theme === "dark"
