@@ -134,7 +134,14 @@ export default function Sidebar() {
 
         {!loading && user && (
           <div className="flex items-center">
-            <span className={`text-sm mr-2 max-w-[100px] truncate ${textColor}`}>{user.name || user.email}</span>
+            <div className="flex items-center gap-2 mr-2">
+              <span className={`text-sm max-w-[100px] truncate ${textColor}`}>{user.name || user.email}</span>
+              {isSuperAdmin && (
+                <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+                  SuperAdmin
+                </span>
+              )}
+            </div>
             <div
               className={`w-8 h-8 rounded-full ${isDark ? "bg-gray-700" : "bg-gray-200"} flex items-center justify-center`}
             >
@@ -209,8 +216,15 @@ export default function Sidebar() {
                   >
                     <span className={`font-medium ${textColor}`}>{user.email?.[0]?.toUpperCase() || "U"}</span>
                   </div>
-                  <div>
-                    <p className={`text-sm font-medium ${textColor}`}>{user.name || user.email}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className={`text-sm font-medium ${textColor}`}>{user.name || user.email}</p>
+                      {isSuperAdmin && (
+                        <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-0.5 rounded-full font-medium">
+                          SuperAdmin
+                        </span>
+                      )}
+                    </div>
                     <p className={`text-xs ${textColorMuted} truncate`}>{user.email}</p>
                   </div>
                 </div>
@@ -315,7 +329,14 @@ export default function Sidebar() {
                     <span className={`font-medium ${textColor}`}>{user.email?.[0]?.toUpperCase() || "U"}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium truncate ${textColor}`}>{user.name || user.email}</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-sm font-medium truncate ${textColor}`}>{user.name || user.email}</p>
+                      {isSuperAdmin && (
+                        <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+                          SA
+                        </span>
+                      )}
+                    </div>
                     <p className={`text-xs ${textColorMuted} truncate`}>{user.email}</p>
                   </div>
                 </div>

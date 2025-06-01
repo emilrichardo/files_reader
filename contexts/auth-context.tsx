@@ -52,12 +52,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Escuchar cambios
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
 
       // Obtener rol del usuario cuando se autentica
       if (session?.user) {
+        // Registrar usuario automáticamente si es nuevo
+        if (event === "SIGNED_IN") {
+          await ensureUserIsRegistered(session.user)
+        }
+
         const role = await getCurrentUserRole()
         setUserRole(role)
         console.log("User authenticated with role:", role)
@@ -90,6 +95,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     setUserRole("user")
+  }
+
+  const ensureUserIsRegistered = async (user: User) => {
+    try {
+      // Verificar si el usuario ya tiene un rol asignado
+      const { data: existingRole } = await supabase.from("user_roles").select("*").eq("user_id", user.id).single()
+
+      // Si no existe, crear un rol por defecto
+      if (!existingRole) {
+        console.log("Registering new user:", user.email)
+        const { error } = await supabase.from("user_roles").insert({
+          user_id: user.id,
+          role: "user",
+          assigned_at: new Date().toISOString(),
+        })
+
+        if (error) {
+          console.error("Error registering new user:", error)
+        } else {
+          console.log("New user registered successfully:", user.email)
+        }
+      }
+    } catch (error) {
+      console.error("Error ensuring user registration:", error)
+    }
   }
 
   const isAdmin = userRole === "admin" || userRole === "superadmin"

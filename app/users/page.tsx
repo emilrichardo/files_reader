@@ -69,33 +69,54 @@ export default function UsersPage() {
     setFilteredUsers(filtered)
   }, [allUsers, searchTerm, roleFilter])
 
+  // Agregar función para obtener usuarios de auth.users que no están en user_roles:
+
   const loadAllUsers = async () => {
     setLoading(true)
     try {
+      // Obtener todos los usuarios de auth.users
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
+      if (authError) {
+        throw authError
+      }
+
       // Obtener roles de usuarios
       const { data: rolesData, error: rolesError } = await getAllUsersWithRoles()
       if (rolesError) {
         throw rolesError
       }
 
-      // Obtener detalles de usuarios de auth.users
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
-      if (authError) {
-        throw authError
-      }
+      // Crear mapa de usuarios con roles
+      const rolesMap = new Map(rolesData?.map((role) => [role.user_id, role]) || [])
 
-      // Combinar datos
-      const usersWithDetails: UserWithDetails[] =
-        rolesData?.map((roleData) => {
-          const authUser = authUsers.users.find((au) => au.id === roleData.user_id)
+      // Combinar datos y agregar usuarios sin rol
+      const usersWithDetails: UserWithDetails[] = authUsers.users.map((authUser) => {
+        const roleData = rolesMap.get(authUser.id)
+
+        if (roleData) {
+          // Usuario con rol existente
           return {
             ...roleData,
-            email: authUser?.email,
-            name: authUser?.user_metadata?.name || authUser?.user_metadata?.full_name,
-            last_sign_in_at: authUser?.last_sign_in_at,
-            email_confirmed_at: authUser?.email_confirmed_at,
+            email: authUser.email,
+            name: authUser.user_metadata?.name || authUser.user_metadata?.full_name,
+            last_sign_in_at: authUser.last_sign_in_at,
+            email_confirmed_at: authUser.email_confirmed_at,
           }
-        }) || []
+        } else {
+          // Usuario sin rol - crear entrada por defecto
+          return {
+            user_id: authUser.id,
+            role: "user" as const,
+            assigned_at: authUser.created_at,
+            created_at: authUser.created_at,
+            updated_at: authUser.updated_at || authUser.created_at,
+            email: authUser.email,
+            name: authUser.user_metadata?.name || authUser.user_metadata?.full_name,
+            last_sign_in_at: authUser.last_sign_in_at,
+            email_confirmed_at: authUser.email_confirmed_at,
+          }
+        }
+      })
 
       setAllUsers(usersWithDetails)
     } catch (error) {

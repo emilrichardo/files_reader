@@ -36,6 +36,9 @@ export const signOut = async () => {
     console.error("Error signing out:", error)
     throw error
   }
+
+  // Forzar recarga de la página para limpiar el estado
+  window.location.href = "/"
 }
 
 // Función para obtener el usuario actual
