@@ -111,13 +111,20 @@ export const getDocuments = async (userId: string) => {
     const { data, error } = await supabase
       .from("documents")
       .select(`
-        *,
+        id,
+        name,
+        description,
+        user_id,
+        fields,
+        created_at,
+        updated_at,
         document_rows (
           id,
           document_id,
           data,
           file_metadata,
-          created_at
+          created_at,
+          updated_at
         )
       `)
       .eq("user_id", userId)
@@ -131,17 +138,24 @@ export const getDocuments = async (userId: string) => {
     // Transformar los datos para que coincidan con el tipo Document
     const documents =
       data?.map((doc) => ({
-        ...doc,
+        id: doc.id,
+        name: doc.name,
+        description: doc.description,
+        user_id: doc.user_id,
+        fields: doc.fields || [],
+        created_at: doc.created_at,
+        updated_at: doc.updated_at,
         rows: (doc.document_rows || []).map((row: any) => ({
           id: row.id,
           document_id: row.document_id,
           data: row.data || {},
           file_metadata: row.file_metadata,
           created_at: row.created_at,
+          updated_at: row.updated_at,
         })),
       })) || []
 
-    console.log("Documents retrieved successfully:", documents)
+    console.log("Documents retrieved successfully:", documents.length, "documents")
     console.log(
       "Total rows loaded:",
       documents.reduce((acc, doc) => acc + (doc.rows?.length || 0), 0),
@@ -156,23 +170,55 @@ export const getDocuments = async (userId: string) => {
 
 export const getDocument = async (id: string) => {
   try {
+    console.log("Getting single document:", id)
+
     const { data, error } = await supabase
       .from("documents")
       .select(`
-        *,
-        document_rows (*)
+        id,
+        name,
+        description,
+        user_id,
+        fields,
+        created_at,
+        updated_at,
+        document_rows (
+          id,
+          document_id,
+          data,
+          file_metadata,
+          created_at,
+          updated_at
+        )
       `)
       .eq("id", id)
       .single()
 
-    if (error) return { data: null, error }
+    if (error) {
+      console.error("Error getting document:", error)
+      return { data: null, error }
+    }
 
     // Transformar los datos
     const document = {
-      ...data,
-      rows: data.document_rows || [],
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      user_id: data.user_id,
+      fields: data.fields || [],
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+      rows: (data.document_rows || []).map((row: any) => ({
+        id: row.id,
+        document_id: row.document_id,
+        data: row.data || {},
+        file_metadata: row.file_metadata,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      })),
     }
 
+    console.log("Document retrieved successfully:", document.name, "with", document.rows.length, "rows")
     return { data: document, error: null }
   } catch (error) {
     console.error("Error getting document:", error)
@@ -182,16 +228,25 @@ export const getDocument = async (id: string) => {
 
 export const createDocument = async (document: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => {
   try {
-    console.log("Creating document:", document)
+    console.log("Creating document:", document.name)
 
-    const { data, error } = await supabase.from("documents").insert(document).select().single()
+    const { data, error } = await supabase
+      .from("documents")
+      .insert({
+        name: document.name,
+        description: document.description,
+        user_id: document.user_id,
+        fields: document.fields || [],
+      })
+      .select()
+      .single()
 
     if (error) {
       console.error("Error creating document:", error)
       return { data: null, error }
     }
 
-    console.log("Document created successfully:", data)
+    console.log("Document created successfully:", data.id)
     return { data, error: null }
   } catch (error) {
     console.error("Error creating document:", error)
@@ -201,16 +256,21 @@ export const createDocument = async (document: Omit<Document, "id" | "created_at
 
 export const updateDocument = async (id: string, updates: Partial<Document>) => {
   try {
-    const { data, error } = await supabase
-      .from("documents")
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select()
-      .single()
+    console.log("Updating document:", id, updates)
 
+    const updateData: any = {}
+    if (updates.name !== undefined) updateData.name = updates.name
+    if (updates.description !== undefined) updateData.description = updates.description
+    if (updates.fields !== undefined) updateData.fields = updates.fields
+
+    const { data, error } = await supabase.from("documents").update(updateData).eq("id", id).select().single()
+
+    if (error) {
+      console.error("Error updating document:", error)
+      return { data: null, error }
+    }
+
+    console.log("Document updated successfully:", data.id)
     return { data, error }
   } catch (error) {
     console.error("Error updating document:", error)
@@ -220,9 +280,17 @@ export const updateDocument = async (id: string, updates: Partial<Document>) => 
 
 export const deleteDocument = async (id: string) => {
   try {
+    console.log("Deleting document:", id)
+
     const { error } = await supabase.from("documents").delete().eq("id", id)
 
-    return { error }
+    if (error) {
+      console.error("Error deleting document:", error)
+      return { error }
+    }
+
+    console.log("Document deleted successfully:", id)
+    return { error: null }
   } catch (error) {
     console.error("Error deleting document:", error)
     return { error }
@@ -230,18 +298,27 @@ export const deleteDocument = async (id: string) => {
 }
 
 // Servicios para Document Rows
-export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_at">) => {
+export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_at" | "updated_at">) => {
   try {
-    console.log("Creating document row:", row)
+    console.log("Creating document row for document:", row.document_id)
+    console.log("Row data:", row.data)
 
-    const { data, error } = await supabase.from("document_rows").insert(row).select().single()
+    const { data, error } = await supabase
+      .from("document_rows")
+      .insert({
+        document_id: row.document_id,
+        data: row.data || {},
+        file_metadata: row.file_metadata || null,
+      })
+      .select()
+      .single()
 
     if (error) {
       console.error("Error creating document row:", error)
       return { data: null, error }
     }
 
-    console.log("Document row created successfully:", data)
+    console.log("Document row created successfully:", data.id)
     return { data, error: null }
   } catch (error) {
     console.error("Error creating document row:", error)
@@ -251,8 +328,20 @@ export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_a
 
 export const updateDocumentRow = async (id: string, updates: Partial<DocumentRow>) => {
   try {
-    const { data, error } = await supabase.from("document_rows").update(updates).eq("id", id).select().single()
+    console.log("Updating document row:", id, updates)
 
+    const updateData: any = {}
+    if (updates.data !== undefined) updateData.data = updates.data
+    if (updates.file_metadata !== undefined) updateData.file_metadata = updates.file_metadata
+
+    const { data, error } = await supabase.from("document_rows").update(updateData).eq("id", id).select().single()
+
+    if (error) {
+      console.error("Error updating document row:", error)
+      return { data: null, error }
+    }
+
+    console.log("Document row updated successfully:", data.id)
     return { data, error }
   } catch (error) {
     console.error("Error updating document row:", error)
@@ -262,9 +351,17 @@ export const updateDocumentRow = async (id: string, updates: Partial<DocumentRow
 
 export const deleteDocumentRow = async (id: string) => {
   try {
+    console.log("Deleting document row:", id)
+
     const { error } = await supabase.from("document_rows").delete().eq("id", id)
 
-    return { error }
+    if (error) {
+      console.error("Error deleting document row:", error)
+      return { error }
+    }
+
+    console.log("Document row deleted successfully:", id)
+    return { error: null }
   } catch (error) {
     console.error("Error deleting document row:", error)
     return { error }

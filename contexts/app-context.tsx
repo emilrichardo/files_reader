@@ -61,12 +61,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const refreshDocuments = async () => {
     if (user) {
       try {
+        console.log("Refreshing documents for user:", user.id)
         const { data, error } = await getDocuments(user.id)
         if (error) {
           console.error("Error loading documents:", error)
           setDocuments(mockDocuments)
         } else if (data) {
-          console.log("Documents refreshed:", data)
+          console.log("Documents refreshed successfully:", data.length, "documents")
           setDocuments(data)
         }
       } catch (error) {
@@ -74,6 +75,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setDocuments(mockDocuments)
       }
     } else {
+      console.log("No user, using mock documents")
       setDocuments(mockDocuments)
     }
   }
@@ -97,6 +99,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Separar las filas de los datos del documento
         const { rows = [], ...documentData } = docData
 
+        console.log("Creating document with data:", documentData)
+
         // Guardar documento en la base de datos
         const { data, error } = await createDocument({
           ...documentData,
@@ -112,18 +116,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           throw new Error("No data returned from createDocument")
         }
 
+        console.log("Document created with ID:", data.id)
+
         // Crear el documento con el ID devuelto por la base de datos
         const newDoc: Document = {
           ...data,
-          fields: documentData.fields,
+          fields: documentData.fields || [],
           rows: [],
-          created_at: data.created_at || now,
-          updated_at: data.updated_at || now,
         }
 
         // Si hay filas, agregarlas una por una
         if (rows.length > 0) {
-          console.log("Adding rows to document:", rows.length)
+          console.log("Adding", rows.length, "rows to document")
           for (const row of rows) {
             console.log("Adding row:", row)
             const { data: rowData, error: rowError } = await createDocumentRow({
@@ -135,13 +139,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               console.error("Error creating row:", rowError)
             } else if (rowData) {
               newDoc.rows.push(rowData)
-              console.log("Row added successfully:", rowData)
+              console.log("Row added successfully:", rowData.id)
             }
           }
         }
 
-        setDocuments((prev) => [newDoc, ...prev])
-        console.log("Document created successfully:", newDoc)
+        // Refrescar documentos para obtener la versión más actualizada
+        await refreshDocuments()
         return newDoc.id
       } else {
         // Modo offline/demo
@@ -150,6 +154,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           created_at: now,
           updated_at: now,
           rows: docData.rows || [],
+          user_id: "demo-user",
           ...docData,
         }
         setDocuments((prev) => [newDoc, ...prev])
@@ -163,6 +168,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         created_at: now,
         updated_at: now,
         rows: docData.rows || [],
+        user_id: "demo-user",
         ...docData,
       }
       setDocuments((prev) => [newDoc, ...prev])
@@ -177,12 +183,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateDocument = async (id: string, updates: Partial<Document>) => {
     try {
       if (user) {
+        console.log("Updating document in database:", id, updates)
         // Actualizar en la base de datos
         const { error } = await updateDocumentInDB(id, updates)
         if (error) {
           console.error("Error updating document in database:", error)
           throw error
         }
+        console.log("Document updated in database successfully")
       }
 
       // Actualizar en el estado local
@@ -197,7 +205,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             : doc,
         ),
       )
-      console.log("Document updated successfully")
+      console.log("Document updated in local state successfully")
     } catch (error) {
       console.error("Error in updateDocument:", error)
       // Actualizar solo en el estado local como fallback
@@ -244,18 +252,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      let finalRow = { ...row }
+      console.log("Adding row to document:", documentId)
+      console.log("Row data:", row.data)
 
-      // Asegurar que el ID sea único si no viene de la base de datos
-      if (!finalRow.id) {
-        finalRow.id = `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-      }
+      let finalRow = { ...row }
 
       if (user) {
         // Guardar en la base de datos
         const { data, error } = await createDocumentRow({
-          ...finalRow,
           document_id: documentId,
+          data: finalRow.data || {},
+          file_metadata: finalRow.file_metadata,
         })
 
         if (error) {
@@ -263,16 +270,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           throw error
         }
 
-        // Usar el ID devuelto por la base de datos
-        if (data && data.id) {
-          finalRow = { ...finalRow, id: data.id }
+        if (data) {
           console.log("Row created in database with ID:", data.id)
+          finalRow = { ...finalRow, id: data.id }
         }
 
-        // Refrescar documentos inmediatamente después de guardar
+        // Refrescar documentos para obtener la versión más actualizada
         await refreshDocuments()
       } else {
-        // Actualizar en el estado local para modo offline
+        // Modo offline - actualizar estado local
+        if (!finalRow.id) {
+          finalRow.id = `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+        }
+
         setDocuments((prev) =>
           prev.map((doc) => {
             if (doc.id === documentId) {
@@ -281,8 +291,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 rows: [...(doc.rows || []), finalRow],
                 updated_at: new Date().toISOString(),
               }
-              console.log("Row added to document:", finalRow)
-              console.log("Updated document:", updatedDoc)
+              console.log("Row added to document in offline mode:", finalRow)
               return updatedDoc
             }
             return doc
@@ -316,8 +325,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!document) return
 
       if (user) {
-        // Actualizar en la base de datos si es necesario
-        // Implementar función en lib/database.ts si se requiere
+        // Actualizar en la base de datos
+        const { error } = await updateDocumentInDB(rowId, { data })
+        if (error) {
+          console.error("Error updating document row in database:", error)
+          throw error
+        }
       }
 
       // Actualizar en el estado local
