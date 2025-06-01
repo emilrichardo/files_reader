@@ -1,249 +1,260 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Plus, LogIn, FileText, Calendar, TrendingUp, Users, Settings, Layout } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useAuth } from "@/contexts/auth-context"
-import { useApp } from "@/contexts/app-context"
+import { Badge } from "@/components/ui/badge"
+import {
+  FileText,
+  LayoutTemplateIcon as Template,
+  Settings,
+  Users,
+  BarChart3,
+  Shield,
+  Plus,
+  LogIn,
+  Crown,
+} from "lucide-react"
+import Link from "next/link"
 
 export default function HomePage() {
-  const router = useRouter()
-  const { user, signInWithGoogle, loading, isSuperAdmin } = useAuth()
-  const { documents } = useApp()
-  const [isSigningIn, setIsSigningIn] = useState(false)
-
-  const handleSignIn = async () => {
-    try {
-      setIsSigningIn(true)
-      await signInWithGoogle()
-    } catch (error) {
-      console.error("Error:", error)
-    } finally {
-      setIsSigningIn(false)
-    }
-  }
+  const { user, userRole, isAdmin, isSuperAdmin, loading, signInWithGoogle } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
       </div>
     )
   }
 
-  // Calcular el número real de entradas (filas) en todos los documentos
-  const totalEntries = documents.reduce((total, doc) => total + (doc.rows ? doc.rows.length : 0), 0)
-
-  // Widgets principales disponibles para todos
-  const mainWidgets = [
-    {
-      title: "Crear Documento",
-      description: "Define campos y estructura para extraer datos",
-      icon: Plus,
-      action: () => router.push("/documents/create"),
-      buttonText: "Crear Documento",
-      color: "bg-blue-500",
-    },
-    {
-      title: "Ver Documentos",
-      description: "Explora y gestiona tus documentos existentes",
-      icon: FileText,
-      action: () => router.push("/documents"),
-      buttonText: "Ver Documentos",
-      color: "bg-green-500",
-      requiresAuth: true,
-    },
-    {
-      title: "Plantillas",
-      description: "Usa plantillas predefinidas para acelerar tu trabajo",
-      icon: Layout,
-      action: () => router.push("/templates"),
-      buttonText: "Ver Plantillas",
-      color: "bg-purple-500",
-      requiresAuth: true,
-    },
-  ]
-
-  // Widgets adicionales para SuperAdmin
-  const adminWidgets = [
-    {
-      title: "Gestión de Usuarios",
-      description: "Administra usuarios y asigna roles",
-      icon: Users,
-      action: () => router.push("/users"),
-      buttonText: "Gestionar Usuarios",
-      color: "bg-red-500",
-    },
-    {
-      title: "Configuración Avanzada",
-      description: "Configuración del sistema y personalización",
-      icon: Settings,
-      action: () => router.push("/settings"),
-      buttonText: "Configurar",
-      color: "bg-gray-500",
-    },
-  ]
-
-  // Combinar widgets según permisos
-  const availableWidgets = [
-    ...mainWidgets.filter((widget) => !widget.requiresAuth || user),
-    ...(isSuperAdmin ? adminWidgets : []),
-  ]
-
   return (
-    <div className="p-4 lg:p-8 pt-16 lg:pt-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl lg:text-3xl font-bold mb-2">
-            {user ? `Hola, ${user.name || user.email}` : "Bienvenido a Invitu"}
-            {isSuperAdmin && (
-              <span className="ml-3 text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full font-medium">
-                SuperAdmin
-              </span>
-            )}
-          </h1>
-          <p className="text-gray-600">Extrae datos de documentos con IA</p>
-        </div>
-
-        {/* Quick Actions - Widgets principales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {availableWidgets.map((widget, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4">
-                  <div className={`p-3 rounded-lg ${widget.color} text-white`}>
-                    <widget.icon className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold mb-2">{widget.title}</h3>
-                    <p className="text-sm text-gray-600 mb-4">{widget.description}</p>
-                    <Button onClick={widget.action} className="w-full">
-                      {widget.buttonText}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Auth Card para usuarios no registrados */}
-        {!user && (
-          <Card className="mb-8">
-            <CardContent className="p-6">
-              <div className="flex flex-col sm:flex-row gap-4 items-center">
-                <div className="flex-1 text-center sm:text-left">
-                  <h3 className="font-semibold mb-2">Accede a todas las funciones</h3>
-                  <p className="text-sm text-gray-600">Inicia sesión para gestionar documentos, plantillas y más</p>
-                </div>
-                <Button onClick={handleSignIn} disabled={isSigningIn} className="w-full sm:w-auto">
-                  <LogIn className="w-4 h-4 mr-2" />
-                  {isSigningIn ? "Conectando..." : "Iniciar Sesión"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Stats Cards - Solo para usuarios autenticados */}
-        {user && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Documentos</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{documents.length}</div>
-                <p className="text-xs text-muted-foreground">documentos creados</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Entradas</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalEntries}</div>
-                <p className="text-xs text-muted-foreground">datos extraídos</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Actividad</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">100%</div>
-                <p className="text-xs text-muted-foreground">de precisión</p>
-              </CardContent>
-            </Card>
+    <div className="container mx-auto px-4 py-8">
+      {/* Header con estado de autenticación */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">
+              Bienvenido a Invitu
+              {isSuperAdmin && (
+                <Badge className="ml-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                  <Crown className="w-3 h-3 mr-1" />
+                  SuperAdmin
+                </Badge>
+              )}
+            </h1>
+            <p className="text-xl text-muted-foreground">
+              {user ? (
+                <>
+                  Hola, <span className="font-semibold">{user.email}</span>
+                  <Badge variant="outline" className="ml-2">
+                    {userRole}
+                  </Badge>
+                </>
+              ) : (
+                "Tu plataforma de gestión de documentos"
+              )}
+            </p>
           </div>
-        )}
 
-        {/* Main Content */}
-        {user ? (
-          <Card>
+          {!user && (
+            <Button onClick={signInWithGoogle} size="lg" className="gap-2">
+              <LogIn className="w-4 h-4" />
+              Iniciar Sesión con Google
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Widgets principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {/* Widget: Crear Documento */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plus className="w-5 h-5 text-green-600" />
+              Crear Documento
+            </CardTitle>
+            <CardDescription>Crea un nuevo documento personalizado</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/documents/create">
+              <Button className="w-full">Nuevo Documento</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Widget: Mis Documentos */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Mis Documentos
+            </CardTitle>
+            <CardDescription>Gestiona tus documentos existentes</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/documents">
+              <Button variant="outline" className="w-full">
+                Ver Documentos
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Widget: Plantillas */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Template className="w-5 h-5 text-purple-600" />
+              Plantillas
+            </CardTitle>
+            <CardDescription>Usa plantillas predefinidas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/templates">
+              <Button variant="outline" className="w-full">
+                Ver Plantillas
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Widget: Configuración */}
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-gray-600" />
+              Configuración
+            </CardTitle>
+            <CardDescription>Personaliza tu experiencia</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/settings">
+              <Button variant="outline" className="w-full">
+                Configurar
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Widget: Estadísticas (solo para usuarios autenticados) */}
+        {user && (
+          <Card className="hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle>Resumen de Actividad</CardTitle>
-              <CardDescription>Tu actividad reciente en la plataforma</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-orange-600" />
+                Estadísticas
+              </CardTitle>
+              <CardDescription>Analiza tu actividad</CardDescription>
             </CardHeader>
             <CardContent>
-              {documents.length > 0 ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
-                    Tienes {documents.length} documentos creados con {totalEntries} entradas de datos.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Button onClick={() => router.push("/documents")} variant="outline" className="w-full sm:w-auto">
-                      Ver Todos los Documentos
-                    </Button>
-                    <Button onClick={() => router.push("/documents/create")} className="w-full sm:w-auto">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Crear Nuevo
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay documentos</h3>
-                  <p className="text-gray-600 mb-4">¡Crea tu primer documento para comenzar!</p>
-                  <Button onClick={() => router.push("/documents/create")}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crear Primer Documento
-                  </Button>
-                </div>
-              )}
+              <Button variant="outline" className="w-full" disabled>
+                Próximamente
+              </Button>
             </CardContent>
           </Card>
-        ) : (
-          <Card>
+        )}
+
+        {/* Widget: Gestión de Usuarios (solo SuperAdmin) */}
+        {isSuperAdmin && (
+          <Card className="hover:shadow-lg transition-shadow border-purple-200">
             <CardHeader>
-              <CardTitle>Comienza ahora</CardTitle>
-              <CardDescription>Crea documentos y extrae datos automáticamente</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-600" />
+                Gestión de Usuarios
+                <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs">SA</Badge>
+              </CardTitle>
+              <CardDescription>Administra usuarios y roles</CardDescription>
             </CardHeader>
-            <CardContent className="text-center py-8">
-              <div className="space-y-4">
-                <p className="text-gray-600">
-                  Invitu te permite extraer datos de documentos de forma automática usando inteligencia artificial.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                  <Button onClick={() => router.push("/documents/create")} size="lg" className="w-full sm:w-auto">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Crear mi primer documento
-                  </Button>
-                </div>
-              </div>
+            <CardContent>
+              <Link href="/users">
+                <Button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                  Gestionar Usuarios
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Widget: Configuración Avanzada (solo SuperAdmin) */}
+        {isSuperAdmin && (
+          <Card className="hover:shadow-lg transition-shadow border-purple-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-purple-600" />
+                Config. Avanzada
+                <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs">SA</Badge>
+              </CardTitle>
+              <CardDescription>Configuración del sistema</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="w-full" disabled>
+                Próximamente
+              </Button>
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* Información adicional para usuarios no autenticados */}
+      {!user && (
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+          <CardHeader>
+            <CardTitle className="text-center">¿Por qué usar Invitu?</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div>
+                <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                <h3 className="font-semibold mb-1">Gestión Fácil</h3>
+                <p className="text-sm text-muted-foreground">Organiza tus documentos de manera intuitiva</p>
+              </div>
+              <div>
+                <Template className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                <h3 className="font-semibold mb-1">Plantillas</h3>
+                <p className="text-sm text-muted-foreground">Usa plantillas predefinidas para ahorrar tiempo</p>
+              </div>
+              <div>
+                <Shield className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <h3 className="font-semibold mb-1">Seguro</h3>
+                <p className="text-sm text-muted-foreground">Tus datos están protegidos y seguros</p>
+              </div>
+            </div>
+            <Button onClick={signInWithGoogle} size="lg" className="gap-2">
+              <LogIn className="w-4 h-4" />
+              Comenzar Ahora
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Debug info (solo en desarrollo) */}
+      {process.env.NODE_ENV === "development" && (
+        <Card className="mt-8 bg-gray-50">
+          <CardHeader>
+            <CardTitle className="text-sm">Debug Info</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs">
+              {JSON.stringify(
+                {
+                  user: user?.email || "No user",
+                  userRole,
+                  isAdmin,
+                  isSuperAdmin,
+                  loading,
+                },
+                null,
+                2,
+              )}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
