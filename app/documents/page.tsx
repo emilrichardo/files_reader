@@ -10,15 +10,36 @@ import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useApp } from "@/contexts/app-context"
+import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import AuthGuard from "@/components/auth-guard"
 import type { Document } from "@/lib/types"
 
 export default function DocumentsPage() {
   const { documents, deleteDocument } = useApp()
+  const { user, loading } = useAuth()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"name" | "updated_at" | "created_at">("updated_at")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+
+  // No mostrar contenido hasta que termine la carga de autenticación
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
+
+  // Si no hay usuario, mostrar AuthGuard
+  if (!user) {
+    return (
+      <AuthGuard>
+        <div />
+      </AuthGuard>
+    )
+  }
 
   const filteredAndSortedDocuments = useMemo(() => {
     const filtered = documents.filter(

@@ -31,20 +31,61 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
 
-  // Verificar permisos
-  useEffect(() => {
-    if (!loading && !isSuperAdmin) {
-      router.push("/")
-      return
-    }
-  }, [loading, isSuperAdmin, router])
-
   // Cargar usuarios
   useEffect(() => {
-    if (isSuperAdmin) {
-      loadUsers()
+    const load = async () => {
+      if (isSuperAdmin) {
+        try {
+          setIsLoading(true)
+
+          // Obtener todos los usuarios de auth.users
+          const { data: authUsers, error: authError } = await supabase.from("auth.users").select("*")
+
+          if (authError) {
+            console.error("Error loading auth users:", authError)
+            toast({
+              title: "Error",
+              description: "No se pudieron cargar los usuarios",
+              variant: "destructive",
+            })
+            return
+          }
+
+          // Obtener roles de user_roles
+          const { data: userRoles, error: rolesError } = await supabase.from("user_roles").select("*")
+
+          if (rolesError) {
+            console.error("Error loading user roles:", rolesError)
+          }
+
+          // Combinar datos
+          const usersWithRoles: UserWithRole[] = (authUsers || []).map((authUser) => {
+            const roleData = userRoles?.find((role) => role.user_id === authUser.id)
+            return {
+              id: authUser.id,
+              email: authUser.email,
+              name: authUser.raw_user_meta_data?.name || authUser.raw_user_meta_data?.full_name,
+              created_at: authUser.created_at,
+              role: roleData?.role || "user",
+              assigned_at: roleData?.assigned_at,
+            }
+          })
+
+          setUsers(usersWithRoles)
+        } catch (error) {
+          console.error("Error loading users:", error)
+          toast({
+            title: "Error",
+            description: "Error al cargar usuarios",
+            variant: "destructive",
+          })
+        } finally {
+          setIsLoading(false)
+        }
+      }
     }
-  }, [isSuperAdmin])
+    load()
+  }, [isSuperAdmin, toast])
 
   // Filtrar usuarios
   useEffect(() => {
@@ -65,56 +106,6 @@ export default function UsersPage() {
 
     setFilteredUsers(filtered)
   }, [users, searchTerm, roleFilter])
-
-  const loadUsers = async () => {
-    try {
-      setIsLoading(true)
-
-      // Obtener todos los usuarios de auth.users
-      const { data: authUsers, error: authError } = await supabase.from("auth.users").select("*")
-
-      if (authError) {
-        console.error("Error loading auth users:", authError)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los usuarios",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Obtener roles de user_roles
-      const { data: userRoles, error: rolesError } = await supabase.from("user_roles").select("*")
-
-      if (rolesError) {
-        console.error("Error loading user roles:", rolesError)
-      }
-
-      // Combinar datos
-      const usersWithRoles: UserWithRole[] = (authUsers || []).map((authUser) => {
-        const roleData = userRoles?.find((role) => role.user_id === authUser.id)
-        return {
-          id: authUser.id,
-          email: authUser.email,
-          name: authUser.raw_user_meta_data?.name || authUser.raw_user_meta_data?.full_name,
-          created_at: authUser.created_at,
-          role: roleData?.role || "user",
-          assigned_at: roleData?.assigned_at,
-        }
-      })
-
-      setUsers(usersWithRoles)
-    } catch (error) {
-      console.error("Error loading users:", error)
-      toast({
-        title: "Error",
-        description: "Error al cargar usuarios",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     try {
@@ -181,10 +172,30 @@ export default function UsersPage() {
     user: users.filter((u) => u.role === "user").length,
   }
 
-  if (loading || !isSuperAdmin) {
+  // No mostrar contenido hasta que termine la carga de autenticación
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
+
+  // Verificar permisos - solo SuperAdmins pueden acceder
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-4">Acceso Denegado</h2>
+          <p className="text-gray-600 mb-6">Solo los SuperAdministradores pueden acceder a la gestión de usuarios.</p>
+          <button
+            onClick={() => router.push("/")}
+            className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg"
+          >
+            Volver al Inicio
+          </button>
+        </div>
       </div>
     )
   }

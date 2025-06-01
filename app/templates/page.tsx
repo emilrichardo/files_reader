@@ -22,11 +22,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { useApp } from "@/contexts/app-context"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import AuthGuard from "@/components/auth-guard"
 import type { Template } from "@/lib/types"
 
 export default function TemplatesPage() {
   const { templates, addTemplate, deleteTemplate, addDocument } = useApp()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"name" | "created_at">("created_at")
@@ -69,6 +70,24 @@ export default function TemplatesPage() {
       }
     })
   }, [templates, searchTerm, sortBy, sortOrder])
+
+  // No mostrar contenido hasta que termine la carga de autenticación
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
+
+  // Si no hay usuario, mostrar AuthGuard
+  if (!user) {
+    return (
+      <AuthGuard>
+        <div />
+      </AuthGuard>
+    )
+  }
 
   const handleDeleteTemplate = (id: string, name: string) => {
     if (confirm(`¿Estás seguro de que quieres eliminar la plantilla "${name}"?`)) {
