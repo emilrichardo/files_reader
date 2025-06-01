@@ -191,13 +191,15 @@ export default function SettingsPage() {
   const saveSettings = async () => {
     setIsSaving(true)
     try {
+      // Guardar configuraciones de API
       await updateSettings({
         api_endpoint: apiEndpoint,
         api_keys: apiKeys,
       })
 
+      // Guardar nombre del proyecto si cambió
       if (tempProjectName !== projectName) {
-        updateProjectName(tempProjectName)
+        await updateSettings({ project_name: tempProjectName })
       }
 
       toast({
@@ -205,13 +207,67 @@ export default function SettingsPage() {
         description: "Todas las configuraciones han sido guardadas exitosamente.",
       })
     } catch (error) {
+      console.error("Error saving settings:", error)
       toast({
         title: "Error",
-        description: "Error al guardar las configuraciones.",
+        description: "Error al guardar las configuraciones. Inténtalo de nuevo.",
         variant: "destructive",
       })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleColorChange = async (colorName: string) => {
+    try {
+      await updateSettings({
+        color_scheme: colorName,
+        custom_color: "",
+      })
+      toast({
+        title: "Color actualizado",
+        description: "El esquema de colores ha sido actualizado.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar el color.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleFontChange = async (fontFamily: string) => {
+    try {
+      await updateSettings({ font_family: fontFamily })
+      toast({
+        title: "Fuente actualizada",
+        description: "La tipografía ha sido actualizada.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar la fuente.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleThemeToggle = async () => {
+    try {
+      await updateSettings({
+        theme: settings.theme === "light" ? "dark" : "light",
+      })
+      toast({
+        title: "Tema actualizado",
+        description: `Tema cambiado a ${settings.theme === "light" ? "oscuro" : "claro"}.`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al cambiar el tema.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -453,7 +509,7 @@ export default function SettingsPage() {
                   <Label>Modo Oscuro</Label>
                   <p className="text-sm text-gray-500">Activa el tema oscuro de la aplicación</p>
                 </div>
-                <Switch checked={isDark} onCheckedChange={toggleTheme} />
+                <Switch checked={isDark} onCheckedChange={handleThemeToggle} />
               </div>
 
               <Separator />
@@ -470,7 +526,7 @@ export default function SettingsPage() {
                         primaryColor === color ? "border-gray-900 scale-105" : "border-gray-200 hover:scale-105"
                       }`}
                       style={{ backgroundColor: color }}
-                      onClick={() => updateSettings({ color_scheme: name, custom_color: "" })}
+                      onClick={() => handleColorChange(name)}
                       title={name.charAt(0).toUpperCase() + name.slice(1)}
                     />
                   ))}
@@ -483,7 +539,7 @@ export default function SettingsPage() {
               <div>
                 <Label>Tipografía</Label>
                 <p className="text-sm text-gray-500 mb-3">Selecciona la fuente principal de la aplicación</p>
-                <Select value={settings.font_family} onValueChange={(value) => updateSettings({ font_family: value })}>
+                <Select value={settings.font_family} onValueChange={handleFontChange}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

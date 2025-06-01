@@ -43,14 +43,15 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
 
     if (error) {
       console.error("Supabase error updating user settings:", error)
+      throw error
     } else {
       console.log("User settings updated successfully:", data)
     }
 
-    return { data, error }
+    return { data, error: null }
   } catch (error) {
     console.error("Error updating user settings:", error)
-    return { data: null, error }
+    throw error
   }
 }
 

@@ -212,26 +212,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("Updating settings:", updates)
-    const updatedSettings = { ...settings, ...updates, updated_at: new Date().toISOString() }
 
-    // Actualizar estado local inmediatamente
-    setSettings(updatedSettings)
-
-    // Solo guardar en la base de datos si hay usuario autenticado
-    if (settings.user_id && settings.user_id !== "demo-user") {
-      try {
+    try {
+      // Solo guardar en la base de datos si hay usuario autenticado
+      if (settings.user_id && settings.user_id !== "demo-user") {
         console.log("Saving settings to database for user:", settings.user_id)
         const { error } = await updateUserSettings(settings.user_id, updates)
         if (error) {
           console.error("Error updating settings in database:", error)
+          throw error
         } else {
           console.log("Settings saved to database successfully")
         }
-      } catch (error) {
-        console.error("Error updating settings:", error)
       }
-    } else {
-      console.log("No authenticated user, settings not persisted")
+
+      // Actualizar estado local después de guardar exitosamente
+      const updatedSettings = {
+        ...settings,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      }
+      setSettings(updatedSettings)
+    } catch (error) {
+      console.error("Error updating settings:", error)
+      // En caso de error, no actualizar el estado local
+      throw error
     }
   }
 
