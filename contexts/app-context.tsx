@@ -2,14 +2,18 @@
 
 import type React from "react"
 
-import { createContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 import {
   createDocument,
   getDocuments,
   deleteDocument as deleteDocumentFromDB,
   updateDocument as updateDocumentInDB,
   createDocumentRow,
+  deleteDocumentRow as deleteDocumentRowFromDB,
+  createTemplate,
   getTemplates,
+  updateTemplate as updateTemplateInDB,
+  deleteTemplate as deleteTemplateFromDB,
 } from "@/lib/database"
 import { mockDocuments, mockTemplates } from "@/lib/mock-data"
 import type { Document, Template, DocumentRow } from "@/lib/types"
@@ -339,4 +343,282 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               const updatedDoc = {
                 ...doc,
                 rows: [...(doc.rows || []), finalRow],
-                updated_at: new Date().toISOString(),\
+                updated_at: new Date().toISOString(),
+              }
+              console.log("Row added to document in offline mode:", finalRow)
+              return updatedDoc
+            }
+            return doc
+          }),
+        )
+      }
+
+      console.log("Row added successfully to document:", documentId)
+    } catch (error) {
+      console.error("Error in addRowToDocument:", error)
+      // Actualizar solo en el estado local como fallback
+      const localRow = { ...row, id: row.id || `local-${Date.now()}` }
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id === documentId) {
+            return {
+              ...doc,
+              rows: [...(doc.rows || []), localRow],
+              updated_at: new Date().toISOString(),
+            }
+          }
+          return doc
+        }),
+      )
+    }
+  }
+
+  const updateDocumentRow = async (documentId: string, rowId: string, data: Record<string, any>) => {
+    try {
+      const document = getDocument(documentId)
+      if (!document) return
+
+      if (user) {
+        // Actualizar en la base de datos
+        const { error } = await updateDocumentInDB(rowId, { data })
+        if (error) {
+          console.error("Error updating document row in database:", error)
+          throw error
+        }
+      }
+
+      // Actualizar en el estado local
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id === documentId) {
+            return {
+              ...doc,
+              rows: doc.rows.map((row) => (row.id === rowId ? { ...row, data } : row)),
+              updated_at: new Date().toISOString(),
+            }
+          }
+          return doc
+        }),
+      )
+      console.log("Row updated successfully")
+    } catch (error) {
+      console.error("Error in updateDocumentRow:", error)
+      // Actualizar solo en el estado local como fallback
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id === documentId) {
+            return {
+              ...doc,
+              rows: doc.rows.map((row) => (row.id === rowId ? { ...row, data } : row)),
+              updated_at: new Date().toISOString(),
+            }
+          }
+          return doc
+        }),
+      )
+    }
+  }
+
+  const deleteDocumentRow = async (documentId: string, rowId: string) => {
+    try {
+      const document = getDocument(documentId)
+      if (!document) return
+
+      if (user) {
+        // Eliminar de la base de datos
+        const { error } = await deleteDocumentRowFromDB(rowId)
+        if (error) {
+          console.error("Error deleting document row from database:", error)
+          throw error
+        }
+      }
+
+      // Eliminar del estado local
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id === documentId) {
+            return {
+              ...doc,
+              rows: doc.rows.filter((row) => row.id !== rowId),
+              updated_at: new Date().toISOString(),
+            }
+          }
+          return doc
+        }),
+      )
+      console.log("Row deleted successfully")
+    } catch (error) {
+      console.error("Error in deleteDocumentRow:", error)
+      // Eliminar solo del estado local como fallback
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id === documentId) {
+            return {
+              ...doc,
+              rows: doc.rows.filter((row) => row.id !== rowId),
+              updated_at: new Date().toISOString(),
+            }
+          }
+          return doc
+        }),
+      )
+    }
+  }
+
+  const addTemplate = async (templateData: Omit<Template, "id" | "created_at">): Promise<string> => {
+    try {
+      if (user) {
+        console.log("Creating template in database:", templateData)
+
+        // Procesar campos para asegurar estructura correcta
+        const processedFields = templateData.fields.map((field, index) => ({
+          ...field,
+          id: field.id || `field-${Date.now()}-${index}`,
+          order: index,
+          formats: field.formats || [],
+          variants: field.variants || [],
+        }))
+
+        const { data, error } = await createTemplate({
+          ...templateData,
+          fields: processedFields,
+        })
+
+        if (error) {
+          console.error("Error creating template in database:", error)
+          throw error
+        }
+
+        if (!data) {
+          throw new Error("No data returned from createTemplate")
+        }
+
+        console.log("Template created successfully:", data.id)
+
+        // Refrescar plantillas
+        await refreshTemplates()
+        return data.id
+      } else {
+        // Modo offline
+        const now = new Date().toISOString()
+        const newTemplate: Template = {
+          id: Date.now().toString(),
+          created_at: now,
+          ...templateData,
+        }
+        setTemplates((prev) => [newTemplate, ...prev])
+        return newTemplate.id
+      }
+    } catch (error) {
+      console.error("Error in addTemplate:", error)
+      // Fallback a modo offline
+      const now = new Date().toISOString()
+      const newTemplate: Template = {
+        id: Date.now().toString(),
+        created_at: now,
+        ...templateData,
+      }
+      setTemplates((prev) => [newTemplate, ...prev])
+      return newTemplate.id
+    }
+  }
+
+  const updateTemplate = async (id: string, updates: Partial<Template>) => {
+    try {
+      if (user) {
+        console.log("Updating template in database:", id, updates)
+
+        // Procesar campos si están incluidos en las actualizaciones
+        const processedUpdates = { ...updates }
+        if (updates.fields) {
+          processedUpdates.fields = updates.fields.map((field, index) => ({
+            ...field,
+            order: index,
+            formats: field.formats || [],
+            variants: field.variants || [],
+          }))
+        }
+
+        // Actualizar en la base de datos
+        const { error } = await updateTemplateInDB(id, processedUpdates)
+        if (error) {
+          console.error("Error updating template in database:", error)
+          throw error
+        }
+        console.log("Template updated in database successfully")
+      }
+
+      // Actualizar en el estado local
+      setTemplates((prev) =>
+        prev.map((template) =>
+          template.id === id
+            ? {
+                ...template,
+                ...updates,
+                updated_at: new Date().toISOString(),
+              }
+            : template,
+        ),
+      )
+      console.log("Template updated in local state successfully")
+    } catch (error) {
+      console.error("Error in updateTemplate:", error)
+      // Actualizar solo en el estado local como fallback
+      setTemplates((prev) =>
+        prev.map((template) =>
+          template.id === id
+            ? {
+                ...template,
+                ...updates,
+                updated_at: new Date().toISOString(),
+              }
+            : template,
+        ),
+      )
+    }
+  }
+
+  const deleteTemplate = async (id: string) => {
+    try {
+      if (user) {
+        const { error } = await deleteTemplateFromDB(id)
+        if (error) {
+          console.error("Error deleting template from database:", error)
+          throw error
+        }
+      }
+
+      setTemplates((prev) => prev.filter((template) => template.id !== id))
+      console.log("Template deleted successfully")
+    } catch (error) {
+      console.error("Error in deleteTemplate:", error)
+      setTemplates((prev) => prev.filter((template) => template.id !== id))
+    }
+  }
+
+  return (
+    <AppContext.Provider
+      value={{
+        documents,
+        templates,
+        addDocument,
+        getDocument,
+        updateDocument,
+        deleteDocument,
+        addRowToDocument,
+        updateDocumentRow,
+        deleteDocumentRow,
+        addTemplate,
+        updateTemplate,
+        deleteTemplate,
+        loading,
+        refreshDocuments,
+        refreshTemplates,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  )
+}
+
+export const useApp = () => useContext(AppContext)
