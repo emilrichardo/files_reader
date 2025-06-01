@@ -1,292 +1,262 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Users, Shield, Crown, Search, RefreshCw, Mail, Calendar, Clock } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/contexts/auth-context"
-import { getAllUsersWithRoles, updateUserRole, logUserManagement } from "@/lib/database"
 import { supabase } from "@/lib/supabase"
+import { updateUserRole } from "@/lib/database"
+import { useToast } from "@/hooks/use-toast"
+import { Search, Users, Shield, Crown, Star, User } from "lucide-react"
 
-interface UserWithDetails {
-  user_id: string
-  role: "admin" | "user" | "premium" | "moderator" | "superadmin"
-  assigned_at: string
-  created_at: string
-  updated_at: string
-  email?: string
+interface UserWithRole {
+  id: string
+  email: string
   name?: string
-  last_sign_in_at?: string
-  email_confirmed_at?: string
+  created_at: string
+  role: "admin" | "user" | "premium" | "moderator" | "superadmin"
+  assigned_at?: string
 }
 
 export default function UsersPage() {
-  const { user, isSuperAdmin } = useAuth()
+  const router = useRouter()
+  const { user, isSuperAdmin, loading } = useAuth()
   const { toast } = useToast()
-  const [allUsers, setAllUsers] = useState<UserWithDetails[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<UserWithDetails[]>([])
-  const [loading, setLoading] = useState(true)
+  const [users, setUsers] = useState<UserWithRole[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<UserWithRole[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<string>("all")
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Verificar acceso de SuperAdmin
+  // Verificar permisos
   useEffect(() => {
-    if (!isSuperAdmin) {
-      toast({
-        title: "Acceso denegado",
-        description: "Solo los SuperAdmins pueden acceder a esta página.",
-        variant: "destructive",
-      })
-      window.location.href = "/"
+    if (!loading && !isSuperAdmin) {
+      router.push("/")
       return
     }
-    loadAllUsers()
+  }, [loading, isSuperAdmin, router])
+
+  // Cargar usuarios
+  useEffect(() => {
+    if (isSuperAdmin) {
+      loadUsers()
+    }
   }, [isSuperAdmin])
 
-  // Filtrar usuarios cuando cambia el término de búsqueda o filtro de rol
+  // Filtrar usuarios
   useEffect(() => {
-    let filtered = allUsers
+    let filtered = users
 
-    // Filtrar por término de búsqueda
     if (searchTerm) {
       filtered = filtered.filter(
-        (userData) =>
-          userData.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          userData.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          userData.user_id.toLowerCase().includes(searchTerm.toLowerCase()),
+        (user) =>
+          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.id.includes(searchTerm),
       )
     }
 
-    // Filtrar por rol
     if (roleFilter !== "all") {
-      filtered = filtered.filter((userData) => userData.role === roleFilter)
+      filtered = filtered.filter((user) => user.role === roleFilter)
     }
 
     setFilteredUsers(filtered)
-  }, [allUsers, searchTerm, roleFilter])
+  }, [users, searchTerm, roleFilter])
 
-  // Agregar función para obtener usuarios de auth.users que no están en user_roles:
-
-  const loadAllUsers = async () => {
-    setLoading(true)
+  const loadUsers = async () => {
     try {
+      setIsLoading(true)
+
       // Obtener todos los usuarios de auth.users
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
+      const { data: authUsers, error: authError } = await supabase.from("auth.users").select("*")
+
       if (authError) {
-        throw authError
+        console.error("Error loading auth users:", authError)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los usuarios",
+          variant: "destructive",
+        })
+        return
       }
 
-      // Obtener roles de usuarios
-      const { data: rolesData, error: rolesError } = await getAllUsersWithRoles()
+      // Obtener roles de user_roles
+      const { data: userRoles, error: rolesError } = await supabase.from("user_roles").select("*")
+
       if (rolesError) {
-        throw rolesError
+        console.error("Error loading user roles:", rolesError)
       }
 
-      // Crear mapa de usuarios con roles
-      const rolesMap = new Map(rolesData?.map((role) => [role.user_id, role]) || [])
-
-      // Combinar datos y agregar usuarios sin rol
-      const usersWithDetails: UserWithDetails[] = authUsers.users.map((authUser) => {
-        const roleData = rolesMap.get(authUser.id)
-
-        if (roleData) {
-          // Usuario con rol existente
-          return {
-            ...roleData,
-            email: authUser.email,
-            name: authUser.user_metadata?.name || authUser.user_metadata?.full_name,
-            last_sign_in_at: authUser.last_sign_in_at,
-            email_confirmed_at: authUser.email_confirmed_at,
-          }
-        } else {
-          // Usuario sin rol - crear entrada por defecto
-          return {
-            user_id: authUser.id,
-            role: "user" as const,
-            assigned_at: authUser.created_at,
-            created_at: authUser.created_at,
-            updated_at: authUser.updated_at || authUser.created_at,
-            email: authUser.email,
-            name: authUser.user_metadata?.name || authUser.user_metadata?.full_name,
-            last_sign_in_at: authUser.last_sign_in_at,
-            email_confirmed_at: authUser.email_confirmed_at,
-          }
+      // Combinar datos
+      const usersWithRoles: UserWithRole[] = (authUsers || []).map((authUser) => {
+        const roleData = userRoles?.find((role) => role.user_id === authUser.id)
+        return {
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.raw_user_meta_data?.name || authUser.raw_user_meta_data?.full_name,
+          created_at: authUser.created_at,
+          role: roleData?.role || "user",
+          assigned_at: roleData?.assigned_at,
         }
       })
 
-      setAllUsers(usersWithDetails)
+      setUsers(usersWithRoles)
     } catch (error) {
       console.error("Error loading users:", error)
       toast({
         title: "Error",
-        description: "Error al cargar la lista de usuarios.",
+        description: "Error al cargar usuarios",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  const handleRoleChange = async (
-    userId: string,
-    newRole: "admin" | "user" | "premium" | "moderator" | "superadmin",
-  ) => {
+  const handleRoleChange = async (userId: string, newRole: string) => {
     try {
-      const oldRole = allUsers.find((u) => u.user_id === userId)?.role
+      const { error } = await updateUserRole(userId, newRole as any, user?.id)
 
-      const { error } = await updateUserRole(userId, newRole, user?.id)
       if (error) {
         throw error
       }
 
-      // Log the action
-      await logUserManagement(userId, "role_change", {
-        old_role: oldRole,
-        new_role: newRole,
-      })
+      // Actualizar estado local
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: newRole as any, assigned_at: new Date().toISOString() } : u)),
+      )
 
       toast({
-        title: "Rol actualizado",
-        description: `El rol del usuario ha sido actualizado a ${newRole}.`,
+        title: "Éxito",
+        description: `Rol actualizado a ${newRole}`,
       })
-
-      // Refresh users list
-      loadAllUsers()
     } catch (error) {
       console.error("Error updating role:", error)
       toast({
         title: "Error",
-        description: "Error al actualizar el rol del usuario.",
+        description: "No se pudo actualizar el rol",
         variant: "destructive",
       })
-    }
-  }
-
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case "superadmin":
-        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-300"
-      case "admin":
-        return "bg-red-100 text-red-800 border-red-200"
-      case "premium":
-        return "bg-purple-100 text-purple-800 border-purple-200"
-      case "moderator":
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
   const getRoleIcon = (role: string) => {
     switch (role) {
       case "superadmin":
-        return <Crown className="h-3 w-3 mr-1" />
+        return <Crown className="w-4 h-4" />
       case "admin":
-        return <Shield className="h-3 w-3 mr-1" />
+        return <Shield className="w-4 h-4" />
+      case "moderator":
+        return <Star className="w-4 h-4" />
+      case "premium":
+        return <Users className="w-4 h-4" />
       default:
-        return null
+        return <User className="w-4 h-4" />
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "superadmin":
+        return "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+      case "admin":
+        return "bg-red-500 text-white"
+      case "moderator":
+        return "bg-blue-500 text-white"
+      case "premium":
+        return "bg-yellow-500 text-white"
+      default:
+        return "bg-gray-500 text-white"
+    }
   }
 
-  const getRoleStats = () => {
-    const stats = allUsers.reduce(
-      (acc, user) => {
-        acc[user.role] = (acc[user.role] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
+  const roleStats = {
+    superadmin: users.filter((u) => u.role === "superadmin").length,
+    admin: users.filter((u) => u.role === "admin").length,
+    moderator: users.filter((u) => u.role === "moderator").length,
+    premium: users.filter((u) => u.role === "premium").length,
+    user: users.filter((u) => u.role === "user").length,
+  }
+
+  if (loading || !isSuperAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
     )
-
-    return {
-      total: allUsers.length,
-      superadmin: stats.superadmin || 0,
-      admin: stats.admin || 0,
-      moderator: stats.moderator || 0,
-      premium: stats.premium || 0,
-      user: stats.user || 0,
-    }
   }
-
-  if (!isSuperAdmin) {
-    return null
-  }
-
-  const stats = getRoleStats()
 
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                <Users className="h-8 w-8" />
-                Gestión de Usuarios
-                <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-                  <Crown className="h-3 w-3 mr-1" />
-                  SuperAdmin
-                </Badge>
-              </h1>
-              <p className="text-gray-600">Administra usuarios y asigna roles en el sistema</p>
-            </div>
-            <Button onClick={loadAllUsers} disabled={loading} variant="outline">
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Actualizar
-            </Button>
-          </div>
+          <h1 className="text-2xl lg:text-3xl font-bold mb-2">Gestión de Usuarios</h1>
+          <p className="text-gray-600">Administra usuarios y asigna roles en el sistema</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-              <div className="text-sm text-gray-500">Total</div>
+              <div className="flex items-center space-x-2">
+                <Crown className="w-5 h-5 text-purple-500" />
+                <div>
+                  <p className="text-2xl font-bold">{roleStats.superadmin}</p>
+                  <p className="text-xs text-gray-500">SuperAdmins</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-purple-600">{stats.superadmin}</div>
-              <div className="text-sm text-gray-500">SuperAdmins</div>
+              <div className="flex items-center space-x-2">
+                <Shield className="w-5 h-5 text-red-500" />
+                <div>
+                  <p className="text-2xl font-bold">{roleStats.admin}</p>
+                  <p className="text-xs text-gray-500">Admins</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-red-600">{stats.admin}</div>
-              <div className="text-sm text-gray-500">Admins</div>
+              <div className="flex items-center space-x-2">
+                <Star className="w-5 h-5 text-blue-500" />
+                <div>
+                  <p className="text-2xl font-bold">{roleStats.moderator}</p>
+                  <p className="text-xs text-gray-500">Moderadores</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-blue-600">{stats.moderator}</div>
-              <div className="text-sm text-gray-500">Moderators</div>
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-yellow-500" />
+                <div>
+                  <p className="text-2xl font-bold">{roleStats.premium}</p>
+                  <p className="text-xs text-gray-500">Premium</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-purple-600">{stats.premium}</div>
-              <div className="text-sm text-gray-500">Premium</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-gray-600">{stats.user}</div>
-              <div className="text-sm text-gray-500">Users</div>
+              <div className="flex items-center space-x-2">
+                <User className="w-5 h-5 text-gray-500" />
+                <div>
+                  <p className="text-2xl font-bold">{roleStats.user}</p>
+                  <p className="text-xs text-gray-500">Usuarios</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -294,10 +264,10 @@ export default function UsersPage() {
         {/* Filters */}
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
                     placeholder="Buscar por email, nombre o ID..."
                     value={searchTerm}
@@ -306,21 +276,19 @@ export default function UsersPage() {
                   />
                 </div>
               </div>
-              <div className="w-full md:w-48">
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filtrar por rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los roles</SelectItem>
-                    <SelectItem value="superadmin">SuperAdmin</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="moderator">Moderator</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
-                    <SelectItem value="user">User</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Filtrar por rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los roles</SelectItem>
+                  <SelectItem value="superadmin">SuperAdmin</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="moderator">Moderador</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                  <SelectItem value="user">Usuario</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -328,79 +296,59 @@ export default function UsersPage() {
         {/* Users List */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Usuarios ({filteredUsers.length})</CardTitle>
-            <CardDescription>Gestiona los roles y permisos de todos los usuarios del sistema</CardDescription>
+            <CardTitle>Usuarios ({filteredUsers.length})</CardTitle>
+            <CardDescription>Lista completa de usuarios registrados en el sistema</CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                <span className="ml-2">Cargando usuarios...</span>
               </div>
             ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron usuarios</h3>
-                <p className="text-gray-500">
-                  {searchTerm || roleFilter !== "all"
-                    ? "Intenta ajustar los filtros de búsqueda"
-                    : "No hay usuarios registrados en el sistema"}
-                </p>
+                <p className="text-gray-600">Intenta ajustar los filtros de búsqueda</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredUsers.map((userData) => (
+                {filteredUsers.map((userItem) => (
                   <div
-                    key={userData.user_id}
-                    className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    key={userItem.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
                   >
-                    <div className="flex items-center space-x-4 mb-4 md:mb-0">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
-                        {userData.email?.[0]?.toUpperCase() || userData.user_id.substring(0, 2).toUpperCase()}
+                    <div className="flex items-center space-x-4 mb-4 sm:mb-0">
+                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="font-medium text-gray-700">{userItem.email[0].toUpperCase()}</span>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-medium text-gray-900">
-                            {userData.name || userData.email || "Usuario sin nombre"}
-                          </h3>
-                          <Badge className={getRoleBadgeColor(userData.role)}>
-                            {getRoleIcon(userData.role)}
-                            {userData.role}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{userItem.name || userItem.email}</p>
+                          <Badge className={`${getRoleBadgeColor(userItem.role)} flex items-center gap-1`}>
+                            {getRoleIcon(userItem.role)}
+                            {userItem.role}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {userData.email || "Sin email"}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(userData.created_at)}
-                          </div>
-                          {userData.last_sign_in_at && (
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatDate(userData.last_sign_in_at)}
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">ID: {userData.user_id}</p>
+                        <p className="text-sm text-gray-500">{userItem.email}</p>
+                        <p className="text-xs text-gray-400">
+                          Registrado: {new Date(userItem.created_at).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3">
+
+                    <div className="flex items-center space-x-2">
                       <Select
-                        value={userData.role}
-                        onValueChange={(newRole: "admin" | "user" | "premium" | "moderator" | "superadmin") =>
-                          handleRoleChange(userData.user_id, newRole)
-                        }
+                        value={userItem.role}
+                        onValueChange={(value) => handleRoleChange(userItem.id, value)}
+                        disabled={userItem.id === user?.id} // No permitir cambiar el propio rol
                       >
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="user">Usuario</SelectItem>
                           <SelectItem value="premium">Premium</SelectItem>
-                          <SelectItem value="moderator">Moderator</SelectItem>
+                          <SelectItem value="moderator">Moderador</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="superadmin">SuperAdmin</SelectItem>
                         </SelectContent>

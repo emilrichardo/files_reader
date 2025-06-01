@@ -5,7 +5,6 @@ import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
-import { getCurrentUserRole } from "@/lib/database"
 
 interface AuthContextType {
   user: User | null
@@ -34,10 +33,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<"admin" | "user" | "premium" | "moderator" | "superadmin">("user")
   const [loading, setLoading] = useState(true)
 
+  const getCurrentUserRole = async (
+    userId: string,
+  ): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
+    try {
+      console.log("Getting role for user ID:", userId)
+
+      const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
+
+      if (error) {
+        console.error("Error getting user role:", error)
+        return "user"
+      }
+
+      if (!data) {
+        console.log("No role data found for user, returning default")
+        return "user"
+      }
+
+      console.log("Role found for user:", data.role)
+      return data.role as "admin" | "user" | "premium" | "moderator" | "superadmin"
+    } catch (error) {
+      console.error("Error getting user role:", error)
+      return "user"
+    }
+  }
+
   const refreshUserRole = async () => {
     if (user) {
       console.log("Refreshing role for user:", user.email)
-      const role = await getCurrentUserRole()
+      const role = await getCurrentUserRole(user.id)
       console.log("Role retrieved:", role)
       setUserRole(role)
     }
@@ -69,26 +94,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    let mounted = true
+
     // Obtener sesión inicial
     const initializeAuth = async () => {
       try {
+        console.log("Initializing auth...")
         const {
           data: { session },
         } = await supabase.auth.getSession()
+
         console.log("Initial session:", session?.user?.email || "No session")
 
-        if (session?.user) {
-          setUser(session.user)
-          // Obtener rol inmediatamente
-          const role = await getCurrentUserRole()
-          console.log("Initial role for", session.user.email, ":", role)
-          setUserRole(role)
+        if (mounted) {
+          if (session?.user) {
+            setUser(session.user)
+            // Obtener rol inmediatamente
+            const role = await getCurrentUserRole(session.user.id)
+            console.log("Initial role for", session.user.email, ":", role)
+            if (mounted) {
+              setUserRole(role)
+            }
+          }
+          setLoading(false)
         }
-
-        setLoading(false)
       } catch (error) {
         console.error("Error initializing auth:", error)
-        setLoading(false)
+        if (mounted) {
+          setLoading(false)
+        }
       }
     }
 
@@ -100,26 +134,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state change:", event, session?.user?.email || "No user")
 
-      setUser(session?.user ?? null)
+      if (mounted) {
+        setUser(session?.user ?? null)
 
-      if (session?.user) {
-        // Registrar usuario automáticamente si es nuevo
-        if (event === "SIGNED_IN") {
-          await ensureUserIsRegistered(session.user)
+        if (session?.user) {
+          // Registrar usuario automáticamente si es nuevo
+          if (event === "SIGNED_IN") {
+            await ensureUserIsRegistered(session.user)
+          }
+
+          // Obtener rol del usuario
+          const role = await getCurrentUserRole(session.user.id)
+          console.log("Role after auth change for", session.user.email, ":", role)
+          if (mounted) {
+            setUserRole(role)
+          }
+        } else {
+          setUserRole("user")
         }
 
-        // Obtener rol del usuario
-        const role = await getCurrentUserRole()
-        console.log("Role after auth change for", session.user.email, ":", role)
-        setUserRole(role)
-      } else {
-        setUserRole("user")
+        setLoading(false)
       }
-
-      setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signInWithGoogle = async () => {

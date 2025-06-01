@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, LogIn, FileText, Calendar, TrendingUp } from "lucide-react"
+import { Plus, LogIn, FileText, Calendar, TrendingUp, Users, Settings, Layout } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -10,7 +10,7 @@ import { useApp } from "@/contexts/app-context"
 
 export default function HomePage() {
   const router = useRouter()
-  const { user, signInWithGoogle, loading } = useAuth()
+  const { user, signInWithGoogle, loading, isSuperAdmin } = useAuth()
   const { documents } = useApp()
   const [isSigningIn, setIsSigningIn] = useState(false)
 
@@ -36,53 +36,119 @@ export default function HomePage() {
   // Calcular el número real de entradas (filas) en todos los documentos
   const totalEntries = documents.reduce((total, doc) => total + (doc.rows ? doc.rows.length : 0), 0)
 
+  // Widgets principales disponibles para todos
+  const mainWidgets = [
+    {
+      title: "Crear Documento",
+      description: "Define campos y estructura para extraer datos",
+      icon: Plus,
+      action: () => router.push("/documents/create"),
+      buttonText: "Crear Documento",
+      color: "bg-blue-500",
+    },
+    {
+      title: "Ver Documentos",
+      description: "Explora y gestiona tus documentos existentes",
+      icon: FileText,
+      action: () => router.push("/documents"),
+      buttonText: "Ver Documentos",
+      color: "bg-green-500",
+      requiresAuth: true,
+    },
+    {
+      title: "Plantillas",
+      description: "Usa plantillas predefinidas para acelerar tu trabajo",
+      icon: Layout,
+      action: () => router.push("/templates"),
+      buttonText: "Ver Plantillas",
+      color: "bg-purple-500",
+      requiresAuth: true,
+    },
+  ]
+
+  // Widgets adicionales para SuperAdmin
+  const adminWidgets = [
+    {
+      title: "Gestión de Usuarios",
+      description: "Administra usuarios y asigna roles",
+      icon: Users,
+      action: () => router.push("/users"),
+      buttonText: "Gestionar Usuarios",
+      color: "bg-red-500",
+    },
+    {
+      title: "Configuración Avanzada",
+      description: "Configuración del sistema y personalización",
+      icon: Settings,
+      action: () => router.push("/settings"),
+      buttonText: "Configurar",
+      color: "bg-gray-500",
+    },
+  ]
+
+  // Combinar widgets según permisos
+  const availableWidgets = [
+    ...mainWidgets.filter((widget) => !widget.requiresAuth || user),
+    ...(isSuperAdmin ? adminWidgets : []),
+  ]
+
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl font-bold mb-2">
             {user ? `Hola, ${user.name || user.email}` : "Bienvenido a Invitu"}
+            {isSuperAdmin && (
+              <span className="ml-3 text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full font-medium">
+                SuperAdmin
+              </span>
+            )}
           </h1>
           <p className="text-gray-600">Extrae datos de documentos con IA</p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid gap-4 mb-8">
-          {!user && (
-            <Card>
+        {/* Quick Actions - Widgets principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {availableWidgets.map((widget, index) => (
+            <Card key={index} className="hover:shadow-lg transition-shadow">
               <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row gap-4 items-center">
-                  <div className="flex-1 text-center sm:text-left">
-                    <h3 className="font-semibold mb-2">Comienza ahora</h3>
-                    <p className="text-sm text-gray-600">Inicia sesión para acceder a todas las funciones</p>
+                <div className="flex items-start space-x-4">
+                  <div className={`p-3 rounded-lg ${widget.color} text-white`}>
+                    <widget.icon className="w-6 h-6" />
                   </div>
-                  <Button onClick={handleSignIn} disabled={isSigningIn} className="w-full sm:w-auto">
-                    <LogIn className="w-4 h-4 mr-2" />
-                    {isSigningIn ? "Conectando..." : "Iniciar Sesión"}
-                  </Button>
+                  <div className="flex-1">
+                    <h3 className="font-semibold mb-2">{widget.title}</h3>
+                    <p className="text-sm text-gray-600 mb-4">{widget.description}</p>
+                    <Button onClick={widget.action} className="w-full">
+                      {widget.buttonText}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          )}
+          ))}
+        </div>
 
-          <Card>
+        {/* Auth Card para usuarios no registrados */}
+        {!user && (
+          <Card className="mb-8">
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row gap-4 items-center">
                 <div className="flex-1 text-center sm:text-left">
-                  <h3 className="font-semibold mb-2">Crear Nuevo Documento</h3>
-                  <p className="text-sm text-gray-600">Define campos y estructura para extraer datos</p>
+                  <h3 className="font-semibold mb-2">Accede a todas las funciones</h3>
+                  <p className="text-sm text-gray-600">Inicia sesión para gestionar documentos, plantillas y más</p>
                 </div>
-                <Button onClick={() => router.push("/documents/create")} className="w-full sm:w-auto">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Crear Documento
+                <Button onClick={handleSignIn} disabled={isSigningIn} className="w-full sm:w-auto">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  {isSigningIn ? "Conectando..." : "Iniciar Sesión"}
                 </Button>
               </div>
             </CardContent>
           </Card>
-        </div>
+        )}
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Solo para usuarios autenticados */}
         {user && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             <Card>
@@ -124,13 +190,15 @@ export default function HomePage() {
         {user ? (
           <Card>
             <CardHeader>
-              <CardTitle>Tus Documentos</CardTitle>
-              <CardDescription>Gestiona y organiza todos tus documentos</CardDescription>
+              <CardTitle>Resumen de Actividad</CardTitle>
+              <CardDescription>Tu actividad reciente en la plataforma</CardDescription>
             </CardHeader>
             <CardContent>
               {documents.length > 0 ? (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600">Tienes {documents.length} documentos creados.</p>
+                  <p className="text-sm text-gray-600">
+                    Tienes {documents.length} documentos creados con {totalEntries} entradas de datos.
+                  </p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <Button onClick={() => router.push("/documents")} variant="outline" className="w-full sm:w-auto">
                       Ver Todos los Documentos
