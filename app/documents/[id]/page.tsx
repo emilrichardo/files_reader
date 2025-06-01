@@ -3,38 +3,45 @@
 import { useEffect, useState, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Edit, Trash2, Download, FileText, Plus, Upload, Save } from "lucide-react"
+import { ArrowLeft, Trash2, Download, FileText, Plus, Upload, Save, Edit, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useApp } from "@/contexts/app-context"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
-import type { Document, DocumentRow, FileMetadata } from "@/lib/types"
+import type { Document, DocumentRow, DocumentField, FileMetadata } from "@/lib/types"
 
 export default function DocumentDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const {
-    getDocument,
-    deleteDocument,
-    addRowToDocument,
-    updateDocumentRow,
-    deleteDocumentRow,
-    templates,
-    addTemplate,
-  } = useApp()
+  const { getDocument, deleteDocument, addRowToDocument, updateDocument, deleteDocumentRow, templates, addTemplate } =
+    useApp()
   const { user } = useAuth()
   const { toast } = useToast()
   const { uploadFile, isUploading, uploadProgress } = useFileUpload()
 
   const [document, setDocument] = useState<Document | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Estados para edición del nombre
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [tempName, setTempName] = useState("")
+
+  // Estados para campos
+  const [fields, setFields] = useState<DocumentField[]>([])
+  const [isEditingFields, setIsEditingFields] = useState(false)
+
+  // Estados para filas
   const [rows, setRows] = useState<DocumentRow[]>([])
+  const [pendingRows, setPendingRows] = useState<DocumentRow[]>([])
+
+  // Estados para archivos
   const [currentFile, setCurrentFile] = useState<File | null>(null)
   const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null)
   const [extractedData, setExtractedData] = useState<Record<string, any>>({})
@@ -45,10 +52,180 @@ export default function DocumentDetailPage() {
     const doc = getDocument(docId)
     if (doc) {
       setDocument(doc)
+      setTempName(doc.name)
+      setFields(doc.fields || [])
       setRows(doc.rows || [])
     }
     setLoading(false)
   }, [params.id, getDocument])
+
+  // Guardar nombre del documento
+  const saveName = async () => {
+    if (!document || !tempName.trim()) return
+
+    try {
+      await updateDocument(document.id, { name: tempName.trim() })
+      setDocument({ ...document, name: tempName.trim() })
+      setIsEditingName(false)
+      toast({
+        title: "Nombre actualizado",
+        description: "El nombre del documento ha sido actualizado.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar el nombre.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Funciones para campos
+  const addField = () => {
+    const newField: DocumentField = {
+      id: Date.now().toString(),
+      field_name: "",
+      type: "text",
+      description: "",
+      formats: [],
+      required: false,
+      order: fields.length,
+    }
+    setFields([...fields, newField])
+  }
+
+  const updateField = (id: string, updates: Partial<DocumentField>) => {
+    setFields(fields.map((field) => (field.id === id ? { ...field, ...updates } : field)))
+  }
+
+  const removeField = (id: string) => {
+    setFields(fields.filter((field) => field.id !== id))
+  }
+
+  const saveFields = async () => {
+    if (!document) return
+
+    try {
+      await updateDocument(document.id, { fields })
+      setDocument({ ...document, fields })
+      setIsEditingFields(false)
+      toast({
+        title: "Campos actualizados",
+        description: "La estructura de campos ha sido actualizada.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar los campos.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Cargar plantilla
+  const loadTemplate = (templateId: string) => {
+    const template = templates.find((t) => t.id === templateId)
+    if (template) {
+      setFields(template.fields)
+      toast({
+        title: "Plantilla cargada",
+        description: `Se han cargado ${template.fields.length} campos de la plantilla.`,
+      })
+    }
+  }
+
+  // Guardar como plantilla
+  const saveAsTemplate = () => {
+    if (fields.length === 0) {
+      toast({
+        title: "Error",
+        description: "Debes definir al menos un campo para crear una plantilla.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const templateName = prompt("Nombre de la plantilla:")
+    if (templateName && templateName.trim()) {
+      addTemplate({
+        name: templateName.trim(),
+        description: document?.description || "Plantilla creada desde documento",
+        user_id: user?.id || "demo-user",
+        fields: fields,
+      })
+      toast({
+        title: "Plantilla guardada",
+        description: `La plantilla "${templateName}" ha sido creada exitosamente.`,
+      })
+    }
+  }
+
+  // Funciones para filas
+  const addRow = () => {
+    if (!document) return
+
+    const newRow: DocumentRow = {
+      id: `temp-${Date.now()}`,
+      document_id: document.id,
+      data: {},
+      created_at: new Date().toISOString(),
+    }
+    setPendingRows([...pendingRows, newRow])
+  }
+
+  const updateRowData = (rowId: string, fieldName: string, value: any) => {
+    // Actualizar en filas guardadas
+    setRows(rows.map((row) => (row.id === rowId ? { ...row, data: { ...row.data, [fieldName]: value } } : row)))
+
+    // Actualizar en filas pendientes
+    setPendingRows(
+      pendingRows.map((row) => (row.id === rowId ? { ...row, data: { ...row.data, [fieldName]: value } } : row)),
+    )
+  }
+
+  const saveRow = async (row: DocumentRow) => {
+    if (!document) return
+
+    try {
+      await addRowToDocument(document.id, row)
+
+      // Mover de pendientes a guardadas
+      setPendingRows(pendingRows.filter((r) => r.id !== row.id))
+      setRows([...rows, { ...row, id: `saved-${Date.now()}` }])
+
+      toast({
+        title: "Fila guardada",
+        description: "Los datos han sido guardados exitosamente.",
+      })
+    } catch (error) {
+      console.error("Error saving row:", error)
+      toast({
+        title: "Error",
+        description: "Error al guardar la fila.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const removeRow = async (rowId: string) => {
+    if (!document) return
+
+    if (confirm("¿Estás seguro de que quieres eliminar esta fila?")) {
+      // Si es una fila pendiente, solo remover del estado
+      if (rowId.startsWith("temp-")) {
+        setPendingRows(pendingRows.filter((row) => row.id !== rowId))
+      } else {
+        // Si es una fila guardada, eliminar de la base de datos
+        await deleteDocumentRow(document.id, rowId)
+        setRows(rows.filter((row) => row.id !== rowId))
+      }
+
+      toast({
+        title: "Fila eliminada",
+        description: "La fila ha sido eliminada exitosamente.",
+      })
+    }
+  }
 
   const handleDelete = () => {
     if (!document) return
@@ -70,89 +247,12 @@ export default function DocumentDetailPage() {
     })
   }
 
-  // Funciones para manejo de filas
-  const addRow = () => {
-    if (!document) return
-
-    const newRow: DocumentRow = {
-      id: Date.now().toString(),
-      document_id: document.id,
-      data: {},
-      created_at: new Date().toISOString(),
-    }
-    setRows([...rows, newRow])
-  }
-
-  const updateRowData = (rowId: string, fieldName: string, value: any) => {
-    setRows(rows.map((row) => (row.id === rowId ? { ...row, data: { ...row.data, [fieldName]: value } } : row)))
-  }
-
-  const removeRow = async (rowId: string) => {
-    if (!document) return
-
-    if (confirm("¿Estás seguro de que quieres eliminar esta fila?")) {
-      await deleteDocumentRow(document.id, rowId)
-      setRows(rows.filter((row) => row.id !== rowId))
-      toast({
-        title: "Fila eliminada",
-        description: "La fila ha sido eliminada exitosamente.",
-      })
-    }
-  }
-
-  const saveRow = async (row: DocumentRow) => {
-    if (!document) return
-
-    try {
-      if (row.id.startsWith("local-") || !rows.find((r) => r.id === row.id)) {
-        // Nueva fila
-        await addRowToDocument(document.id, row)
-      } else {
-        // Actualizar fila existente
-        await updateDocumentRow(document.id, row.id, row.data)
-      }
-
-      toast({
-        title: "Datos guardados",
-        description: "Los datos han sido guardados exitosamente.",
-      })
-    } catch (error) {
-      console.error("Error saving row:", error)
-      toast({
-        title: "Error",
-        description: "Error al guardar los datos.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Guardar como plantilla
-  const saveAsTemplate = () => {
-    if (!document) return
-
-    const templateName = prompt("Nombre de la plantilla:")
-    if (templateName && templateName.trim()) {
-      addTemplate({
-        name: templateName.trim(),
-        description: document.description || "Plantilla creada desde documento",
-        user_id: user?.id || "demo-user",
-        fields: document.fields,
-      })
-      toast({
-        title: "Plantilla guardada",
-        description: `La plantilla "${templateName}" ha sido creada exitosamente.`,
-      })
-    }
-  }
-
   // Simulación de extracción de datos
   const simulateDataExtraction = useCallback(
     (filename: string, fileType: string): Record<string, any> => {
-      if (!document) return {}
-
       const extractedData: Record<string, any> = {}
 
-      document.fields.forEach((field) => {
+      fields.forEach((field) => {
         const fieldName = field.field_name.toLowerCase()
 
         if (fieldName.includes("title") || fieldName.includes("titulo")) {
@@ -178,13 +278,22 @@ export default function DocumentDetailPage() {
 
       return extractedData
     },
-    [document],
+    [fields],
   )
 
   // Manejo de archivos
   const handleFileUpload = async (files: FileList) => {
     const file = files[0]
     if (!file || !document) return
+
+    if (fields.length === 0) {
+      toast({
+        title: "Error",
+        description: "Debes definir al menos un campo antes de subir archivos.",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       setCurrentFile(file)
@@ -212,27 +321,37 @@ export default function DocumentDetailPage() {
     }
   }
 
-  const handleConfirmExtractedData = (data: Record<string, any>) => {
+  const handleConfirmExtractedData = async (data: Record<string, any>) => {
     if (!fileMetadata || !document) return
 
     const newRow: DocumentRow = {
-      id: Date.now().toString(),
+      id: `file-${Date.now()}`,
       document_id: document.id,
       data,
       file_metadata: fileMetadata,
       created_at: new Date().toISOString(),
     }
 
-    setRows([...rows, newRow])
-    setShowPreviewModal(false)
-    setCurrentFile(null)
-    setFileMetadata(null)
-    setExtractedData({})
+    try {
+      await addRowToDocument(document.id, newRow)
+      setRows([...rows, { ...newRow, id: `saved-${Date.now()}` }])
 
-    toast({
-      title: "Datos agregados",
-      description: "Los datos extraídos han sido agregados al documento.",
-    })
+      setShowPreviewModal(false)
+      setCurrentFile(null)
+      setFileMetadata(null)
+      setExtractedData({})
+
+      toast({
+        title: "Datos agregados",
+        description: "Los datos extraídos han sido agregados al documento.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al agregar los datos extraídos.",
+        variant: "destructive",
+      })
+    }
   }
 
   if (loading) {
@@ -271,10 +390,12 @@ export default function DocumentDetailPage() {
     )
   }
 
+  const allRows = [...rows, ...pendingRows]
+
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header con nombre editable */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <Link href="/documents">
@@ -282,22 +403,47 @@ export default function DocumentDetailPage() {
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{document.name}</h1>
-              {document.description && <p className="text-gray-600 mt-1">{document.description}</p>}
+            <div className="flex items-center space-x-2">
+              {isEditingName ? (
+                <div className="flex items-center space-x-2">
+                  <Input
+                    value={tempName}
+                    onChange={(e) => setTempName(e.target.value)}
+                    className="text-2xl font-bold h-auto py-1 px-2"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveName()
+                      if (e.key === "Escape") {
+                        setTempName(document.name)
+                        setIsEditingName(false)
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <Button size="icon" variant="outline" onClick={saveName}>
+                    <Check className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => {
+                      setTempName(document.name)
+                      setIsEditingName(false)
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-3xl font-bold text-gray-900">{document.name}</h1>
+                  <Button size="icon" variant="ghost" onClick={() => setIsEditingName(true)}>
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex space-x-2">
-            <Button onClick={saveAsTemplate} variant="outline">
-              <Save className="w-4 h-4 mr-2" />
-              Guardar como Plantilla
-            </Button>
-            <Link href={`/documents/${document.id}/edit`}>
-              <Button variant="outline">
-                <Edit className="w-4 h-4 mr-2" />
-                Editar
-              </Button>
-            </Link>
             <Button variant="outline" onClick={() => exportDocument("csv")}>
               <Download className="w-4 h-4 mr-2" />
               Exportar
@@ -309,190 +455,306 @@ export default function DocumentDetailPage() {
           </div>
         </div>
 
-        {/* Plantillas disponibles */}
-        {templates.length > 0 && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Usar Plantilla</CardTitle>
-              <CardDescription>Carga campos desde una plantilla existente</CardDescription>
+        <div className="grid gap-8">
+          {/* Estructura de campos */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Estructura de Campos</CardTitle>
+                <CardDescription>Define los campos que contendrá tu documento</CardDescription>
+              </div>
+              <div className="flex space-x-2">
+                {templates.length > 0 && (
+                  <Select onValueChange={loadTemplate}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Cargar plantilla" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name} ({template.fields.length} campos)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button onClick={saveAsTemplate} variant="outline">
+                  <Save className="w-4 h-4 mr-2" />
+                  Guardar Plantilla
+                </Button>
+                {isEditingFields ? (
+                  <div className="flex space-x-2">
+                    <Button onClick={saveFields} className="bg-green-600 hover:bg-green-700 text-white">
+                      <Check className="w-4 h-4 mr-2" />
+                      Guardar Campos
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setFields(document.fields || [])
+                        setIsEditingFields(false)
+                      }}
+                      variant="outline"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Button onClick={() => setIsEditingFields(true)} variant="outline">
+                    <Edit className="w-4 h-4 mr-2" />
+                    Editar Campos
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {templates.map((template) => (
-                  <Button
-                    key={template.id}
-                    variant="outline"
-                    className="h-auto p-4 flex flex-col items-start"
-                    onClick={() => {
-                      // Aquí podrías implementar la lógica para aplicar la plantilla
-                      toast({
-                        title: "Plantilla aplicada",
-                        description: `Se han aplicado los campos de la plantilla "${template.name}".`,
-                      })
-                    }}
-                  >
-                    <div className="font-medium">{template.name}</div>
-                    <div className="text-sm text-gray-500">{template.fields.length} campos</div>
+              {isEditingFields ? (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-gray-200">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Nombre</th>
+                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Tipo</th>
+                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                            Descripción
+                          </th>
+                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">Requerido</th>
+                          <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">
+                            Acciones
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fields.map((field) => (
+                          <tr key={field.id}>
+                            <td className="border border-gray-200 p-2">
+                              <Input
+                                value={field.field_name}
+                                onChange={(e) => updateField(field.id, { field_name: e.target.value })}
+                                placeholder="nombre_campo"
+                              />
+                            </td>
+                            <td className="border border-gray-200 p-2">
+                              <Select
+                                value={field.type}
+                                onValueChange={(value: any) => updateField(field.id, { type: value })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="text">Texto</SelectItem>
+                                  <SelectItem value="number">Número</SelectItem>
+                                  <SelectItem value="date">Fecha</SelectItem>
+                                  <SelectItem value="boolean">Booleano</SelectItem>
+                                  <SelectItem value="email">Email</SelectItem>
+                                  <SelectItem value="url">URL</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="border border-gray-200 p-2">
+                              <Input
+                                value={field.description || ""}
+                                onChange={(e) => updateField(field.id, { description: e.target.value })}
+                                placeholder="Descripción..."
+                              />
+                            </td>
+                            <td className="border border-gray-200 p-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                                className="rounded"
+                              />
+                            </td>
+                            <td className="border border-gray-200 p-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => removeField(field.id)}
+                                disabled={fields.length === 1}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Button onClick={addField} variant="outline">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Agregar Campo
                   </Button>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {fields.map((field) => (
+                    <div key={field.id} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">{field.field_name}</h4>
+                        <Badge variant="secondary">{field.type}</Badge>
+                      </div>
+                      {field.description && <p className="text-sm text-gray-600 mb-2">{field.description}</p>}
+                      {field.required && (
+                        <Badge variant="destructive" className="text-xs mt-2">
+                          Obligatorio
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
-        )}
 
-        {/* Estructura de campos */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Estructura de Campos</CardTitle>
-            <CardDescription>Campos definidos para este documento</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {document.fields.map((field) => (
-                <div key={field.id} className="p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium">{field.field_name}</h4>
-                    <Badge variant="secondary">{field.type}</Badge>
-                  </div>
-                  {field.description && <p className="text-sm text-gray-600 mb-2">{field.description}</p>}
-                  {field.formats && field.formats.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {field.formats.map((format, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {format}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {field.required && (
-                    <Badge variant="destructive" className="text-xs mt-2">
-                      Obligatorio
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Tabla de datos */}
-        <Card className="mb-8">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Datos del Documento</CardTitle>
-              <CardDescription>Información extraída y entradas manuales</CardDescription>
-            </div>
-            <Button onClick={addRow} className="bg-black hover:bg-gray-800 text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Agregar Fila
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {document.fields.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      {document.fields.map((field) => (
-                        <th key={field.id} className="border border-gray-200 p-3 text-left font-medium text-gray-900">
-                          {field.field_name}
-                          {field.required && <span className="text-red-500 ml-1">*</span>}
-                        </th>
-                      ))}
-                      <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">Archivo</th>
-                      <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        {document.fields.map((field) => (
-                          <td key={field.id} className="border border-gray-200 p-2">
-                            <Input
-                              value={row.data[field.field_name] || ""}
-                              onChange={(e) => updateRowData(row.id, field.field_name, e.target.value)}
-                              placeholder={`Ingresa ${field.field_name}...`}
-                              type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-                              onBlur={() => saveRow(row)}
-                            />
-                          </td>
+          {/* Tabla de datos */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Datos del Documento</CardTitle>
+                <CardDescription>
+                  {rows.length} entradas guardadas
+                  {pendingRows.length > 0 && `, ${pendingRows.length} pendientes de guardar`}
+                </CardDescription>
+              </div>
+              <div className="flex space-x-2">
+                <Button onClick={addRow} className="bg-black hover:bg-gray-800 text-white">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Agregar Fila
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {fields.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-gray-200">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        {fields.map((field) => (
+                          <th key={field.id} className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                            {field.field_name}
+                            {field.required && <span className="text-red-500 ml-1">*</span>}
+                          </th>
                         ))}
-                        <td className="border border-gray-200 p-2">
-                          {row.file_metadata && (
-                            <div className="flex items-center space-x-1">
-                              <FileText className="w-4 h-4 text-gray-500" />
-                              <span className="text-xs text-gray-600 truncate max-w-20">
-                                {row.file_metadata.filename}
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="border border-gray-200 p-2">
-                          <Button variant="outline" size="icon" onClick={() => removeRow(row.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </td>
+                        <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">Estado</th>
+                        <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-32">
+                          Acciones
+                        </th>
                       </tr>
-                    ))}
-                    {rows.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={document.fields.length + 2}
-                          className="border border-gray-200 p-8 text-center text-gray-500"
-                        >
-                          No hay entradas de datos aún. Agrega una fila para comenzar.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </thead>
+                    <tbody>
+                      {allRows.map((row) => {
+                        const isPending = row.id.startsWith("temp-") || row.id.startsWith("file-")
+                        return (
+                          <tr key={row.id} className={isPending ? "bg-yellow-50" : "hover:bg-gray-50"}>
+                            {fields.map((field) => (
+                              <td key={field.id} className="border border-gray-200 p-2">
+                                <Input
+                                  value={row.data[field.field_name] || ""}
+                                  onChange={(e) => updateRowData(row.id, field.field_name, e.target.value)}
+                                  placeholder={`Ingresa ${field.field_name}...`}
+                                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                                />
+                              </td>
+                            ))}
+                            <td className="border border-gray-200 p-2">
+                              {isPending ? (
+                                <Badge variant="outline" className="text-yellow-600">
+                                  Pendiente
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-green-600">
+                                  Guardado
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="border border-gray-200 p-2">
+                              <div className="flex space-x-1">
+                                {isPending && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => saveRow(row)}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    <Save className="w-3 h-3" />
+                                  </Button>
+                                )}
+                                <Button variant="outline" size="sm" onClick={() => removeRow(row.id)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {allRows.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={fields.length + 2}
+                            className="border border-gray-200 p-8 text-center text-gray-500"
+                          >
+                            No hay entradas de datos aún. Agrega una fila para comenzar.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  Primero define la estructura de campos para poder agregar datos.
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Zona de carga de archivos */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Carga de Archivos</CardTitle>
-            <CardDescription>Arrastra archivos aquí o haz clic para seleccionar</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isUploading ? (
-              <FileUploadProgress filename={currentFile?.name || ""} progress={uploadProgress} />
-            ) : (
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
-                onDrop={(e) => {
-                  e.preventDefault()
-                  handleFileUpload(e.dataTransfer.files)
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onClick={() => document.getElementById("file-upload")?.click()}
-              >
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
-                <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
-                <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
-                <input
-                  id="file-upload"
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-                  className="hidden"
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          {/* Zona de carga de archivos */}
+          {fields.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Carga de Archivos</CardTitle>
+                <CardDescription>Arrastra archivos aquí para extraer datos automáticamente</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isUploading ? (
+                  <FileUploadProgress filename={currentFile?.name || ""} progress={uploadProgress} />
+                ) : (
+                  <div
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      handleFileUpload(e.dataTransfer.files)
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onClick={() => document.getElementById("file-upload")?.click()}
+                  >
+                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
+                    <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
+                    <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Modal de preview */}
         <FilePreviewModal
           isOpen={showPreviewModal}
           onClose={() => setShowPreviewModal(false)}
           onConfirm={handleConfirmExtractedData}
-          fields={document.fields}
+          fields={fields}
           fileMetadata={fileMetadata}
           extractedData={extractedData}
         />
