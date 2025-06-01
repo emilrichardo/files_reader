@@ -24,6 +24,7 @@ interface ThemeContextType {
   getContrastColor: (hex: string, lightColor?: string, darkColor?: string) => string
   isLoaded: boolean
   loadUserSettings: (userId: string) => Promise<void>
+  isLoadingSettings: boolean
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
@@ -123,6 +124,7 @@ function getLuminance(hex: string): number {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
 
   // Initialize
   useEffect(() => {
@@ -131,13 +133,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Function to load user settings
   const loadUserSettings = async (userId: string) => {
+    // Evitar cargas duplicadas
+    if (isLoadingSettings || settings.user_id === userId) {
+      console.log("Settings already loading or loaded for this user, skipping...")
+      return
+    }
+
+    setIsLoadingSettings(true)
+
     try {
       console.log("Loading user settings for:", userId)
       const { data, error } = await getUserSettings(userId)
 
       if (error) {
         console.error("Error loading user settings:", error)
-        // Para usuarios autenticados, usar configuraciones por defecto
         setSettings({ ...defaultSettings, user_id: userId })
       } else if (data) {
         console.log("User settings loaded from database:", data)
@@ -148,7 +157,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
         setSettings(mergedSettings)
       } else {
-        // No hay configuraciones, crear las por defecto
         const newSettings = { ...defaultSettings, user_id: userId }
         try {
           await updateUserSettings(userId, newSettings)
@@ -161,6 +169,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error in loadUserSettings:", error)
       setSettings({ ...defaultSettings, user_id: userId })
+    } finally {
+      setIsLoadingSettings(false)
     }
   }
 
@@ -354,6 +364,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         getContrastColor,
         isLoaded,
         loadUserSettings,
+        isLoadingSettings,
       }}
     >
       {children}
