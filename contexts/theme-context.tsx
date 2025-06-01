@@ -133,7 +133,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setIsLoaded(true)
   }, [])
 
-  // Function to load user settings
+  // Modificar la función loadUserSettings para que cargue siempre la configuración del superadmin para usuarios normales
   const loadUserSettings = async (userId: string) => {
     // Evitar cargas duplicadas
     if (isLoadingSettings || settings.user_id === userId) {
@@ -146,26 +146,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("Loading user settings for:", userId)
 
-      // Verificar si el usuario es admin
+      // Verificar si el usuario es superadmin
       const userRole = await getCurrentUserRole()
-      const userIsAdmin = userRole === "admin" || userRole === "superadmin"
-      setIsAdmin(userIsAdmin)
+      const isSuperAdmin = userRole === "superadmin"
+      setIsAdmin(isSuperAdmin)
 
       let settingsData = null
 
-      if (userIsAdmin) {
-        // Si es admin, cargar sus propias configuraciones
+      if (isSuperAdmin) {
+        // Si es superadmin, cargar sus propias configuraciones
         const { data: userSettings } = await getUserSettings(userId)
         settingsData = userSettings
       } else {
-        // Si no es admin, cargar configuración global de admins
+        // Si no es superadmin, cargar configuración global de superadmin
         const { data: globalSettings } = await getGlobalSettings()
         if (globalSettings) {
           settingsData = globalSettings
         } else {
-          // Si no hay configuración global, cargar configuración personal
-          const { data: userSettings } = await getUserSettings(userId)
-          settingsData = userSettings
+          // Si no hay configuración global, cargar configuración por defecto
+          settingsData = defaultSettings
         }
       }
 
@@ -179,7 +178,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setSettings(mergedSettings)
       } else {
         const newSettings = { ...defaultSettings, user_id: userId }
-        if (userIsAdmin) {
+        if (isSuperAdmin) {
           try {
             await updateUserSettings(userId, newSettings)
             setSettings(newSettings)
@@ -199,75 +198,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Aplicar tema cuando cambie
-  useEffect(() => {
-    if (!isLoaded) return
-
-    const root = document.documentElement
-
-    // Aplicar tema oscuro/claro
-    if (settings.theme === "dark") {
-      root.classList.add("dark")
-    } else {
-      root.classList.remove("dark")
-    }
-
-    // Aplicar color primario
-    const primaryColor =
-      settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
-
-    // Actualizar variables CSS personalizadas
-    root.style.setProperty("--primary-color", primaryColor)
-    root.style.setProperty("--primary-rgb", hexToRgb(primaryColor))
-
-    // Aplicar color de texto óptimo
-    const optimalTextColor = getOptimalTextColor(primaryColor)
-    root.style.setProperty("--optimal-text-color", optimalTextColor)
-
-    // Aplicar el modo de estilo
-    root.setAttribute("data-style-mode", settings.style_mode)
-
-    // Aplicar fuente
-    document.body.style.fontFamily = `"${settings.font_family}", sans-serif`
-
-    // Actualizar el título de la página
-    document.title = `${settings.project_name} - Document Management System`
-
-    // Cargar la fuente de Google si no es Inter
-    if (settings.font_family !== "Inter" && !document.getElementById(`google-font-${settings.font_family}`)) {
-      const link = document.createElement("link")
-      link.id = `google-font-${settings.font_family}`
-      link.rel = "stylesheet"
-      link.href = `https://fonts.googleapis.com/css2?family=${settings.font_family.replace(/\s+/g, "+")}:wght@400;500;600;700&display=swap`
-      document.head.appendChild(link)
-    }
-
-    console.log("Settings applied:", settings)
-  }, [settings, isLoaded])
-
+  // Modificar la función updateSettings para que solo permita cambios a superadmin
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("Updating settings:", updates)
 
     try {
-      // Solo admins pueden cambiar configuraciones globales
+      // Solo superadmin puede cambiar configuraciones
       if (!isAdmin) {
-        // Filtrar configuraciones que solo admins pueden cambiar
-        const {
-          project_name,
-          color_scheme,
-          custom_color,
-          font_family,
-          style_mode,
-          company_logo,
-          company_logo_type,
-          ...allowedUpdates
-        } = updates
-
-        if (Object.keys(allowedUpdates).length === 0) {
-          throw new Error("No tienes permisos para cambiar estas configuraciones")
-        }
-
-        updates = allowedUpdates
+        throw new Error("Solo los administradores pueden cambiar la configuración")
       }
 
       // Solo guardar en la base de datos si hay usuario autenticado

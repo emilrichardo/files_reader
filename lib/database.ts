@@ -22,27 +22,26 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Función para obtener configuración global (solo para admins)
+// Modificar la función getGlobalSettings para que solo busque configuración de superadmin
 export const getGlobalSettings = async () => {
   try {
-    console.log("Getting global settings")
+    console.log("Getting global settings from superadmin")
 
-    // Buscar configuración de un superadmin o admin
+    // Buscar configuración de un superadmin
     const { data, error } = await supabase
       .from("user_settings")
       .select(`
         *,
         user_roles!inner(role)
       `)
-      .in("user_roles.role", ["superadmin", "admin"])
-      .order("user_roles.role", { ascending: true }) // superadmin primero
+      .eq("user_roles.role", "superadmin")
       .limit(1)
       .single()
 
     if (error && error.code !== "PGRST116") {
       console.error("Supabase error getting global settings:", error)
     } else if (!error) {
-      console.log("Global settings retrieved successfully:", data)
+      console.log("Global settings retrieved successfully from superadmin:", data)
     }
 
     return { data, error }

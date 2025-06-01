@@ -610,28 +610,46 @@ export default function CreateDocumentPage() {
               {isUploading ? (
                 <FileUploadProgress filename={currentFile?.name || ""} progress={uploadProgress} />
               ) : (
-                <div
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    handleFileUpload(e.dataTransfer.files)
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
-                  onClick={() => document.getElementById("file-upload")?.click()}
-                >
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
-                  <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
-                  <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-                    className="hidden"
-                  />
-                </div>
+                <>
+                  <div
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      handleFileUpload(e.dataTransfer.files)
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const input = document.getElementById("file-upload") as HTMLInputElement
+                      if (input) input.click()
+                    }}
+                  >
+                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
+                    <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
+                    <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {/* Botón para mobile */}
+                  <Button
+                    onClick={() => {
+                      const input = document.getElementById("file-upload") as HTMLInputElement
+                      if (input) input.click()
+                    }}
+                    className="w-full mt-4 md:hidden"
+                    variant="outline"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Seleccionar archivo
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>

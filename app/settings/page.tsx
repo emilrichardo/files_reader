@@ -52,25 +52,28 @@ export default function SettingsPage() {
   }, [settings])
 
   const handleSave = async () => {
+    if (!isAdmin) {
+      toast({
+        title: "Acceso denegado",
+        description: "Solo los superadministradores pueden modificar la configuración.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
     try {
-      const updates: any = {
+      await updateSettings({
+        project_name: projectName,
         api_endpoint: apiEndpoint,
         api_keys: apiKeys,
         theme,
-      }
-
-      // Solo admins pueden cambiar configuraciones globales
-      if (isAdmin) {
-        updates.project_name = projectName
-        updates.color_scheme = colorScheme
-        updates.custom_color = customColor
-        updates.font_family = fontFamily
-        updates.style_mode = styleMode
-        updates.company_logo = companyLogo
-      }
-
-      await updateSettings(updates)
+        color_scheme: colorScheme,
+        custom_color: customColor,
+        font_family: fontFamily,
+        style_mode: styleMode,
+        company_logo: companyLogo,
+      })
 
       toast({
         title: "Configuración guardada",
@@ -89,6 +92,8 @@ export default function SettingsPage() {
   }
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isAdmin) return
+
     const file = event.target.files?.[0]
     if (file) {
       setLogoFile(file)
@@ -101,6 +106,8 @@ export default function SettingsPage() {
   }
 
   const removeLogo = () => {
+    if (!isAdmin) return
+
     setCompanyLogo("")
     setLogoFile(null)
   }
@@ -121,6 +128,34 @@ export default function SettingsPage() {
     )
   }
 
+  // Si no es superadmin, mostrar mensaje de acceso restringido
+  if (!isAdmin) {
+    return (
+      <div className="p-4 lg:p-8 pt-16 lg:pt-8">
+        <div className="max-w-6xl mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Configuración
+              </CardTitle>
+              <CardDescription>Configuración del sistema</CardDescription>
+            </CardHeader>
+            <CardContent className="text-center py-8">
+              <Lock className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Acceso restringido</h3>
+              <p className="text-gray-600 mb-4">
+                Solo los superadministradores pueden modificar la configuración del sistema.
+              </p>
+              <p className="text-sm text-gray-500">Contacta con un administrador si necesitas realizar cambios.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Resto del código original para superadmin...
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
       <div className="max-w-6xl mx-auto">

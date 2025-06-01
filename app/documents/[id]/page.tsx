@@ -149,6 +149,7 @@ export default function DocumentDetailPage() {
       type: "text",
       description: "",
       formats: [],
+      variants: [],
       required: false,
       order: fields.length,
     }
@@ -605,6 +606,12 @@ export default function DocumentDetailPage() {
                                 Descripción
                               </th>
                               <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                                Variantes
+                              </th>
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
+                                Formatos
+                              </th>
+                              <th className="border border-gray-200 p-3 text-left font-medium text-gray-900">
                                 Requerido
                               </th>
                               <th className="border border-gray-200 p-3 text-left font-medium text-gray-900 w-20">
@@ -647,6 +654,34 @@ export default function DocumentDetailPage() {
                                     placeholder="Descripción..."
                                   />
                                 </td>
+                                <td className="border border-gray-200 p-2">
+                                  <Input
+                                    value={field.variants?.join(", ") || ""}
+                                    onChange={(e) =>
+                                      updateField(field.id, {
+                                        variants: e.target.value
+                                          .split(",")
+                                          .map((f) => f.trim())
+                                          .filter(Boolean),
+                                      })
+                                    }
+                                    placeholder="variante1, variante2"
+                                  />
+                                </td>
+                                <td className="border border-gray-200 p-2">
+                                  <Input
+                                    value={field.formats?.join(", ") || ""}
+                                    onChange={(e) =>
+                                      updateField(field.id, {
+                                        formats: e.target.value
+                                          .split(",")
+                                          .map((f) => f.trim())
+                                          .filter(Boolean),
+                                      })
+                                    }
+                                    placeholder="formato1, formato2"
+                                  />
+                                </td>
                                 <td className="border border-gray-200 p-2 text-center">
                                   <input
                                     type="checkbox"
@@ -684,6 +719,30 @@ export default function DocumentDetailPage() {
                             <Badge variant="secondary">{field.type}</Badge>
                           </div>
                           {field.description && <p className="text-sm text-gray-600 mb-2">{field.description}</p>}
+                          {field.variants && field.variants.length > 0 && (
+                            <div className="mt-2">
+                              <span className="text-xs font-medium text-gray-500">Variantes:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {field.variants.map((variant, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {variant}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {field.formats && field.formats.length > 0 && (
+                            <div className="mt-2">
+                              <span className="text-xs font-medium text-gray-500">Formatos:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {field.formats.map((format, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {format}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           {field.required && (
                             <Badge variant="destructive" className="text-xs mt-2">
                               Obligatorio
@@ -806,31 +865,46 @@ export default function DocumentDetailPage() {
                 {isUploading ? (
                   <FileUploadProgress filename={currentFile?.name || ""} progress={uploadProgress} />
                 ) : (
-                  <div
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      handleFileUpload(e.dataTransfer.files)
-                    }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onClick={() => {
-                      const input = document.getElementById("file-upload") as HTMLInputElement
-                      if (input) input.click()
-                    }}
-                  >
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
-                    <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
-                    <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                      onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-                      className="hidden"
-                    />
-                  </div>
+                  <>
+                    <div
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        handleFileUpload(e.dataTransfer.files)
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const input = document.getElementById("file-upload") as HTMLInputElement
+                        if (input) input.click()
+                      }}
+                    >
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
+                      <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
+                      <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
+                      <input
+                        id="file-upload"
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+                        className="hidden"
+                      />
+                    </div>
+
+                    {/* Botón para mobile */}
+                    <Button
+                      onClick={() => {
+                        const input = document.getElementById("file-upload") as HTMLInputElement
+                        if (input) input.click()
+                      }}
+                      className="w-full mt-4 md:hidden"
+                      style={getPrimaryButtonStyles()}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Seleccionar archivo
+                    </Button>
+                  </>
                 )}
               </CardContent>
             </Card>

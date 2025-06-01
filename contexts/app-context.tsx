@@ -2,17 +2,14 @@
 
 import type React from "react"
 
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useState, useEffect } from "react"
 import {
   createDocument,
   getDocuments,
   deleteDocument as deleteDocumentFromDB,
   updateDocument as updateDocumentInDB,
   createDocumentRow,
-  deleteDocumentRow as deleteDocumentRowFromDB,
-  createTemplate,
   getTemplates,
-  deleteTemplate as deleteTemplateFromDB,
 } from "@/lib/database"
 import { mockDocuments, mockTemplates } from "@/lib/mock-data"
 import type { Document, Template, DocumentRow } from "@/lib/types"
@@ -33,6 +30,7 @@ interface AppContextType {
   updateDocumentRow: (documentId: string, rowId: string, data: Record<string, any>) => Promise<void>
   deleteDocumentRow: (documentId: string, rowId: string) => Promise<void>
   addTemplate: (template: Omit<Template, "id" | "created_at">) => Promise<string>
+  updateTemplate: (id: string, updates: Partial<Template>) => Promise<void>
   deleteTemplate: (id: string) => Promise<void>
   loading: boolean
   refreshDocuments: () => Promise<void>
@@ -50,6 +48,7 @@ const AppContext = createContext<AppContextType>({
   updateDocumentRow: async () => {},
   deleteDocumentRow: async () => {},
   addTemplate: async () => "",
+  updateTemplate: async () => {},
   deleteTemplate: async () => {},
   loading: true,
   refreshDocuments: async () => {},
@@ -340,226 +339,4 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               const updatedDoc = {
                 ...doc,
                 rows: [...(doc.rows || []), finalRow],
-                updated_at: new Date().toISOString(),
-              }
-              console.log("Row added to document in offline mode:", finalRow)
-              return updatedDoc
-            }
-            return doc
-          }),
-        )
-      }
-
-      console.log("Row added successfully to document:", documentId)
-    } catch (error) {
-      console.error("Error in addRowToDocument:", error)
-      // Actualizar solo en el estado local como fallback
-      const localRow = { ...row, id: row.id || `local-${Date.now()}` }
-      setDocuments((prev) =>
-        prev.map((doc) => {
-          if (doc.id === documentId) {
-            return {
-              ...doc,
-              rows: [...(doc.rows || []), localRow],
-              updated_at: new Date().toISOString(),
-            }
-          }
-          return doc
-        }),
-      )
-    }
-  }
-
-  const updateDocumentRow = async (documentId: string, rowId: string, data: Record<string, any>) => {
-    try {
-      const document = getDocument(documentId)
-      if (!document) return
-
-      if (user) {
-        // Actualizar en la base de datos
-        const { error } = await updateDocumentInDB(rowId, { data })
-        if (error) {
-          console.error("Error updating document row in database:", error)
-          throw error
-        }
-      }
-
-      // Actualizar en el estado local
-      setDocuments((prev) =>
-        prev.map((doc) => {
-          if (doc.id === documentId) {
-            return {
-              ...doc,
-              rows: doc.rows.map((row) => (row.id === rowId ? { ...row, data } : row)),
-              updated_at: new Date().toISOString(),
-            }
-          }
-          return doc
-        }),
-      )
-      console.log("Row updated successfully")
-    } catch (error) {
-      console.error("Error in updateDocumentRow:", error)
-      // Actualizar solo en el estado local como fallback
-      setDocuments((prev) =>
-        prev.map((doc) => {
-          if (doc.id === documentId) {
-            return {
-              ...doc,
-              rows: doc.rows.map((row) => (row.id === rowId ? { ...row, data } : row)),
-              updated_at: new Date().toISOString(),
-            }
-          }
-          return doc
-        }),
-      )
-    }
-  }
-
-  const deleteDocumentRow = async (documentId: string, rowId: string) => {
-    try {
-      const document = getDocument(documentId)
-      if (!document) return
-
-      if (user) {
-        // Eliminar de la base de datos
-        const { error } = await deleteDocumentRowFromDB(rowId)
-        if (error) {
-          console.error("Error deleting document row from database:", error)
-          throw error
-        }
-      }
-
-      // Eliminar del estado local
-      setDocuments((prev) =>
-        prev.map((doc) => {
-          if (doc.id === documentId) {
-            return {
-              ...doc,
-              rows: doc.rows.filter((row) => row.id !== rowId),
-              updated_at: new Date().toISOString(),
-            }
-          }
-          return doc
-        }),
-      )
-      console.log("Row deleted successfully")
-    } catch (error) {
-      console.error("Error in deleteDocumentRow:", error)
-      // Eliminar solo del estado local como fallback
-      setDocuments((prev) =>
-        prev.map((doc) => {
-          if (doc.id === documentId) {
-            return {
-              ...doc,
-              rows: doc.rows.filter((row) => row.id !== rowId),
-              updated_at: new Date().toISOString(),
-            }
-          }
-          return doc
-        }),
-      )
-    }
-  }
-
-  const addTemplate = async (templateData: Omit<Template, "id" | "created_at">): Promise<string> => {
-    try {
-      if (user) {
-        console.log("Creating template in database:", templateData)
-
-        // Procesar campos para asegurar estructura correcta
-        const processedFields = templateData.fields.map((field, index) => ({
-          ...field,
-          id: field.id || `field-${Date.now()}-${index}`,
-          order: index,
-          formats: field.formats || [],
-          variants: field.variants || [],
-        }))
-
-        const { data, error } = await createTemplate({
-          ...templateData,
-          fields: processedFields,
-        })
-
-        if (error) {
-          console.error("Error creating template in database:", error)
-          throw error
-        }
-
-        if (!data) {
-          throw new Error("No data returned from createTemplate")
-        }
-
-        console.log("Template created successfully:", data.id)
-
-        // Refrescar plantillas
-        await refreshTemplates()
-        return data.id
-      } else {
-        // Modo offline
-        const now = new Date().toISOString()
-        const newTemplate: Template = {
-          id: Date.now().toString(),
-          created_at: now,
-          ...templateData,
-        }
-        setTemplates((prev) => [newTemplate, ...prev])
-        return newTemplate.id
-      }
-    } catch (error) {
-      console.error("Error in addTemplate:", error)
-      // Fallback a modo offline
-      const now = new Date().toISOString()
-      const newTemplate: Template = {
-        id: Date.now().toString(),
-        created_at: now,
-        ...templateData,
-      }
-      setTemplates((prev) => [newTemplate, ...prev])
-      return newTemplate.id
-    }
-  }
-
-  const deleteTemplate = async (id: string) => {
-    try {
-      if (user) {
-        const { error } = await deleteTemplateFromDB(id)
-        if (error) {
-          console.error("Error deleting template from database:", error)
-          throw error
-        }
-      }
-
-      setTemplates((prev) => prev.filter((template) => template.id !== id))
-      console.log("Template deleted successfully")
-    } catch (error) {
-      console.error("Error in deleteTemplate:", error)
-      setTemplates((prev) => prev.filter((template) => template.id !== id))
-    }
-  }
-
-  return (
-    <AppContext.Provider
-      value={{
-        documents,
-        templates,
-        addDocument,
-        getDocument,
-        updateDocument,
-        deleteDocument,
-        addRowToDocument,
-        updateDocumentRow,
-        deleteDocumentRow,
-        addTemplate,
-        deleteTemplate,
-        loading,
-        refreshDocuments,
-        refreshTemplates,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  )
-}
-
-export const useApp = () => useContext(AppContext)
+                updated_at: new Date().toISOString(),\
