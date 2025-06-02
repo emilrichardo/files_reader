@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -74,6 +74,9 @@ export default function DocumentDetailPage() {
   const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null)
   const [extractedData, setExtractedData] = useState<Record<string, any>>({})
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+
+  // Ref para el input de archivo
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const docId = params.id as string
@@ -356,11 +359,10 @@ export default function DocumentDetailPage() {
   // Función mejorada para manejar el click del input de archivo
   const triggerFileInput = () => {
     try {
-      const input = document.getElementById("file-upload") as HTMLInputElement
-      if (input) {
-        input.click()
+      if (fileInputRef.current) {
+        fileInputRef.current.click()
       } else {
-        console.error("File input element not found")
+        console.error("File input ref not available")
         toast({
           title: "Error",
           description: "No se pudo abrir el selector de archivos.",
@@ -956,7 +958,7 @@ export default function DocumentDetailPage() {
                       <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
                       <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
                       <input
-                        id="file-upload"
+                        ref={fileInputRef}
                         type="file"
                         multiple
                         accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
