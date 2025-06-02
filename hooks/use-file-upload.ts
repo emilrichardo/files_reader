@@ -25,6 +25,10 @@ export function useFileUpload(): UseFileUploadReturn {
     fieldsStructure: DocumentField[] = [],
   ): Promise<FileMetadata> => {
     console.log("🚀 Iniciando carga de archivo:", file.name)
+    console.log("📊 Entries:", entries.length)
+    console.log("🏗️ Fields Structure:", fieldsStructure.length)
+    console.log("⚙️ Settings:", settings)
+
     setIsUploading(true)
     setUploadProgress(0)
     setApiResponse(null)
@@ -33,18 +37,36 @@ export function useFileUpload(): UseFileUploadReturn {
       // Simular progreso de carga inicial
       setUploadProgress(20)
 
-      // Si hay un endpoint configurado, hacer POST PRIMERO
-      if (settings?.api_endpoint) {
+      // Verificar si hay endpoint configurado
+      if (!settings?.api_endpoint) {
+        console.log("⚠️ No hay endpoint configurado en settings")
+        setApiResponse({
+          warning: "No hay endpoint configurado",
+          message: "Ve a Configuración para establecer un endpoint de API",
+        })
+      } else {
         console.log("📡 Endpoint encontrado:", settings.api_endpoint)
         setIsWaitingApiResponse(true)
 
         try {
           // Convertir archivo a base64
-          const fileBase64 = await new Promise<string>((resolve) => {
+          console.log("🔄 Convirtiendo archivo a base64...")
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
             reader.onload = () => {
-              const result = reader.result as string
-              resolve(result.split(",")[1]) // Quitar el prefijo data:...;base64,
+              try {
+                const result = reader.result as string
+                const base64Data = result.split(",")[1] // Quitar el prefijo data:...;base64,
+                console.log("✅ Archivo convertido a base64, tamaño:", base64Data.length)
+                resolve(base64Data)
+              } catch (error) {
+                console.error("❌ Error al procesar base64:", error)
+                reject(error)
+              }
+            }
+            reader.onerror = () => {
+              console.error("❌ Error al leer archivo")
+              reject(new Error("Error al leer archivo"))
             }
             reader.readAsDataURL(file)
           })
@@ -78,7 +100,10 @@ export function useFileUpload(): UseFileUploadReturn {
             file: { name: file.name, type: file.type, size: file.size },
             entries: entries.length + " entradas",
             fieldsStructure: fieldsStructure.length + " campos",
+            bodySize: JSON.stringify(requestBody).length + " bytes",
           })
+
+          setUploadProgress(40)
 
           const response = await fetch(settings.api_endpoint, {
             method: "POST",
@@ -89,6 +114,9 @@ export function useFileUpload(): UseFileUploadReturn {
           })
 
           console.log("📡 Status de respuesta:", response.status)
+          console.log("📡 Headers de respuesta:", Object.fromEntries(response.headers.entries()))
+
+          setUploadProgress(80)
 
           if (response.ok) {
             const responseText = await response.text()
@@ -103,6 +131,7 @@ export function useFileUpload(): UseFileUploadReturn {
           } else {
             console.warn("⚠️ Error en respuesta:", response.status)
             const errorText = await response.text()
+            console.warn("⚠️ Error text:", errorText)
             setApiResponse({
               error: `HTTP ${response.status}`,
               message: errorText || "Error desconocido",
@@ -113,18 +142,16 @@ export function useFileUpload(): UseFileUploadReturn {
           setApiResponse({
             error: "Error de conexión",
             message: error instanceof Error ? error.message : "Error desconocido",
+            details: error,
           })
         } finally {
           setIsWaitingApiResponse(false)
         }
-      } else {
-        console.log("ℹ️ No hay endpoint configurado")
-        setApiResponse({ message: "No hay endpoint configurado" })
       }
 
       // Continuar con el procesamiento del archivo
-      setUploadProgress(60)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      setUploadProgress(90)
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
       setUploadProgress(100)
 

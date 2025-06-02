@@ -16,6 +16,7 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +29,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useDynamicStyles } from "@/hooks/use-dynamic-styles"
+import { useTheme } from "@/contexts/theme-context"
 import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
 import type { Document, DocumentRow, DocumentField, FileMetadata } from "@/lib/types"
@@ -49,6 +51,7 @@ export default function DocumentDetailPage() {
   const { toast } = useToast()
   const { uploadFile, isUploading, uploadProgress, apiResponse, isWaitingApiResponse } = useFileUpload()
   const { getPrimaryButtonStyles } = useDynamicStyles()
+  const { settings } = useTheme()
 
   const [document, setDocument] = useState<Document | null>(null)
   const [loading, setLoading] = useState(true)
@@ -364,8 +367,29 @@ export default function DocumentDetailPage() {
       return
     }
 
+    // Verificar si hay endpoint configurado
+    if (!settings?.api_endpoint) {
+      toast({
+        title: "Endpoint no configurado",
+        description: "Ve a Configuración para establecer un endpoint de API.",
+        variant: "destructive",
+        action: (
+          <Button variant="outline" size="sm" onClick={() => router.push("/settings")}>
+            <Settings className="w-4 h-4 mr-2" />
+            Ir a Configuración
+          </Button>
+        ),
+      })
+      return
+    }
+
     try {
       setCurrentFile(file)
+      console.log("🔄 Iniciando upload desde documento existente...")
+      console.log("📊 Rows:", rows.length)
+      console.log("📊 Pending rows:", pendingRows.length)
+      console.log("🏗️ Fields:", fields.length)
+
       const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
 
@@ -530,6 +554,34 @@ export default function DocumentDetailPage() {
             </Button>
           </div>
         </div>
+
+        {/* Alerta si no hay endpoint configurado */}
+        {!settings?.api_endpoint && (
+          <Card className="mb-8 border-orange-200 bg-orange-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Settings className="w-5 h-5 text-orange-600" />
+                  <div>
+                    <p className="font-medium text-orange-800">Endpoint de API no configurado</p>
+                    <p className="text-sm text-orange-600">
+                      Para procesar archivos automáticamente, configura un endpoint en Configuración.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push("/settings")}
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-8">
           {/* Estructura de campos - Colapsable */}
