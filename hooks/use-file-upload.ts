@@ -105,22 +105,28 @@ export function useFileUpload(): UseFileUploadReturn {
 
           setUploadProgress(40)
 
-          const response = await fetch(settings.api_endpoint, {
+          // Usar el proxy interno en lugar del endpoint directo
+          const proxyUrl = "/api/upload-proxy"
+
+          console.log("🔄 Usando proxy interno para evitar CORS")
+
+          const response = await fetch(proxyUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "x-target-endpoint": settings.api_endpoint, // Pasar el endpoint real como header
             },
             body: JSON.stringify(requestBody),
           })
 
-          console.log("📡 Status de respuesta:", response.status)
+          console.log("📡 Status de respuesta del proxy:", response.status)
           console.log("📡 Headers de respuesta:", Object.fromEntries(response.headers.entries()))
 
           setUploadProgress(80)
 
           if (response.ok) {
             const responseText = await response.text()
-            console.log("✅ Respuesta exitosa:", responseText)
+            console.log("✅ Respuesta exitosa del proxy:", responseText)
 
             try {
               const responseData = JSON.parse(responseText)
@@ -129,7 +135,7 @@ export function useFileUpload(): UseFileUploadReturn {
               setApiResponse({ message: responseText })
             }
           } else {
-            console.warn("⚠️ Error en respuesta:", response.status)
+            console.warn("⚠️ Error en respuesta del proxy:", response.status)
             const errorText = await response.text()
             console.warn("⚠️ Error text:", errorText)
             setApiResponse({
