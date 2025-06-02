@@ -15,69 +15,74 @@ interface UseFileUploadReturn {
 export function useFileUpload(): UseFileUploadReturn {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const { settings } = useTheme()
   const [apiResponse, setApiResponse] = useState<any>(null)
   const [isWaitingApiResponse, setIsWaitingApiResponse] = useState(false)
+  const { settings } = useTheme()
 
   const uploadFile = async (file: File): Promise<FileMetadata> => {
-    console.log("Iniciando carga de archivo:", file.name)
+    console.log("🚀 Iniciando carga de archivo:", file.name)
     setIsUploading(true)
     setUploadProgress(0)
     setApiResponse(null)
-    setIsWaitingApiResponse(false)
 
     try {
-      // Simular progreso de carga
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return 90
-          }
-          return prev + 10
-        })
-      }, 100)
+      // Simular progreso de carga inicial
+      setUploadProgress(20)
 
-      // Si hay un endpoint configurado, hacer POST
-      if (settings.api_endpoint) {
+      // Si hay un endpoint configurado, hacer POST PRIMERO
+      if (settings?.api_endpoint) {
+        console.log("📡 Endpoint encontrado:", settings.api_endpoint)
+        setIsWaitingApiResponse(true)
+
         try {
-          console.log("📡 Enviando POST a:", settings.api_endpoint)
-          setIsWaitingApiResponse(true)
+          console.log("📤 Enviando POST con body: test")
 
           const response = await fetch(settings.api_endpoint, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "text/plain",
             },
-            body: JSON.stringify({ message: "test" }),
+            body: "test",
           })
 
-          console.log("📡 Respuesta del endpoint:", response.status)
+          console.log("📡 Status de respuesta:", response.status)
 
           if (response.ok) {
-            const responseData = await response.json()
-            setApiResponse(responseData)
-            console.log("✅ POST enviado exitosamente, respuesta:", responseData)
+            const responseText = await response.text()
+            console.log("✅ Respuesta exitosa:", responseText)
+
+            try {
+              const responseData = JSON.parse(responseText)
+              setApiResponse(responseData)
+            } catch {
+              setApiResponse({ message: responseText })
+            }
           } else {
-            const errorData = await response.text()
-            setApiResponse({ error: `HTTP ${response.status}`, message: errorData })
-            console.warn("⚠️ POST falló con status:", response.status)
+            console.warn("⚠️ Error en respuesta:", response.status)
+            const errorText = await response.text()
+            setApiResponse({
+              error: `HTTP ${response.status}`,
+              message: errorText || "Error desconocido",
+            })
           }
-        } catch (endpointError) {
-          setApiResponse({ error: "Network Error", message: endpointError.message })
-          console.error("❌ Error enviando POST al endpoint:", endpointError)
+        } catch (error) {
+          console.error("❌ Error en POST:", error)
+          setApiResponse({
+            error: "Error de conexión",
+            message: error instanceof Error ? error.message : "Error desconocido",
+          })
         } finally {
           setIsWaitingApiResponse(false)
         }
       } else {
-        console.log("ℹ️ No hay endpoint configurado, saltando POST")
-        setApiResponse(null)
+        console.log("ℹ️ No hay endpoint configurado")
+        setApiResponse({ message: "No hay endpoint configurado" })
       }
 
-      // Simular tiempo de procesamiento
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      // Continuar con el procesamiento del archivo
+      setUploadProgress(60)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      clearInterval(progressInterval)
       setUploadProgress(100)
 
       // Crear URL temporal para el archivo
@@ -91,14 +96,14 @@ export function useFileUpload(): UseFileUploadReturn {
         file_url: fileUrl,
       }
 
-      console.log("Archivo procesado exitosamente:", fileMetadata)
+      console.log("✅ Archivo procesado exitosamente:", fileMetadata)
       return fileMetadata
     } catch (error) {
-      console.error("Error al procesar el archivo:", error)
+      console.error("💥 Error general:", error)
       throw error
     } finally {
       setIsUploading(false)
-      setUploadProgress(0)
+      setTimeout(() => setUploadProgress(0), 1000)
     }
   }
 
