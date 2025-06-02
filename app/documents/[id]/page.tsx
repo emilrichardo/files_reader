@@ -74,6 +74,7 @@ export default function DocumentDetailPage() {
   const [fileMetadata, setFileMetadata] = useState<FileMetadata | null>(null)
   const [extractedData, setExtractedData] = useState<Record<string, any>>({})
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [uploadWarning, setUploadWarning] = useState<string | null>(null)
 
   // Ref para el input de archivo
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -422,6 +423,7 @@ export default function DocumentDetailPage() {
 
     try {
       setCurrentFile(file)
+      setUploadWarning(null)
       console.log("🔄 Iniciando upload desde documento existente...")
       console.log("📊 Rows:", rows.length)
       console.log("📊 Pending rows:", pendingRows.length)
@@ -430,6 +432,11 @@ export default function DocumentDetailPage() {
 
       const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
+
+      // Verificar si hay advertencias en la respuesta
+      if (apiResponse?.warning) {
+        setUploadWarning(apiResponse.message || apiResponse.warning)
+      }
 
       // CAMBIO IMPORTANTE: Solo usar simulación si NO hay respuesta del API
       let extracted: Record<string, any> = {}
@@ -496,6 +503,7 @@ export default function DocumentDetailPage() {
       setCurrentFile(null)
       setFileMetadata(null)
       setExtractedData({})
+      setUploadWarning(null)
 
       toast({
         title: "Datos agregados",
@@ -963,7 +971,7 @@ export default function DocumentDetailPage() {
               <CardHeader>
                 <CardTitle>Carga de Archivos</CardTitle>
                 <CardDescription>
-                  Arrastra archivos aquí para extraer datos automáticamente (máximo 5MB)
+                  Arrastra archivos aquí para extraer datos automáticamente (máximo 2MB)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -983,7 +991,7 @@ export default function DocumentDetailPage() {
                       <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
                       <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
-                      <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX (máximo 5MB)</p>
+                      <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX (máximo 2MB)</p>
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -1003,6 +1011,13 @@ export default function DocumentDetailPage() {
                       <Upload className="w-4 h-4 mr-2" />
                       Seleccionar archivo
                     </Button>
+
+                    {/* Mostrar advertencia si existe */}
+                    {uploadWarning && (
+                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm text-yellow-800">{uploadWarning}</p>
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>

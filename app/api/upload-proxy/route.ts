@@ -1,17 +1,44 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+// Aumentar el límite de tamaño del body a 10MB
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Obtener el body de la petición
     const body = await request.json()
 
     console.log("📡 Proxy: Recibiendo petición para reenviar")
-    console.log("📋 Proxy: Body recibido:", {
-      file: body.file ? { name: body.file.name, type: body.file.type, size: body.file.size } : "No file",
+
+    // Verificar el modo de operación
+    const mode = body.metadata?.mode || "full_content"
+    console.log("🔄 Proxy: Modo de operación:", mode)
+
+    // Información básica sobre el contenido
+    const logInfo = {
+      file: body.file
+        ? { name: body.file.name, type: body.file.type, size: body.file.size }
+        : body.fileMetadata
+          ? {
+              name: body.fileMetadata.name,
+              type: body.fileMetadata.type,
+              size: body.fileMetadata.size,
+              mode: "metadata_only",
+            }
+          : "No file info",
       entries: body.entries ? body.entries.length + " entries" : "No entries",
       fieldsStructure: body.fieldsStructure ? body.fieldsStructure.length + " fields" : "No fields",
       metadata: body.metadata || "No metadata",
-    })
+      bodySize: JSON.stringify(body).length + " bytes",
+    }
+
+    console.log("📋 Proxy: Body recibido:", logInfo)
 
     // Obtener el endpoint desde los headers
     const targetEndpoint = request.headers.get("x-target-endpoint")
