@@ -21,7 +21,7 @@ export default function CreateDocumentPage() {
   const { toast } = useToast()
   const { addDocument, templates, addTemplate } = useApp()
   const { user, signInWithGoogle } = useAuth()
-  const { uploadFile, isUploading, uploadProgress } = useFileUpload()
+  const { uploadFile, isUploading, uploadProgress, apiResponse, isWaitingApiResponse } = useFileUpload()
 
   // Estados principales
   const [documentTitle, setDocumentTitle] = useState("Nuevo Documento")
@@ -678,6 +678,8 @@ export default function CreateDocumentPage() {
           fields={fields}
           fileMetadata={fileMetadata}
           extractedData={extractedData}
+          apiResponse={apiResponse}
+          isWaitingApiResponse={isWaitingApiResponse}
         />
 
         {/* Modal de login prompt */}

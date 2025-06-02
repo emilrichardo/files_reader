@@ -47,7 +47,7 @@ export default function DocumentDetailPage() {
   } = useApp()
   const { user } = useAuth()
   const { toast } = useToast()
-  const { uploadFile, isUploading, uploadProgress } = useFileUpload()
+  const { uploadFile, isUploading, uploadProgress, apiResponse, isWaitingApiResponse } = useFileUpload()
   const { getPrimaryButtonStyles } = useDynamicStyles()
 
   const [document, setDocument] = useState<Document | null>(null)
@@ -919,6 +919,8 @@ export default function DocumentDetailPage() {
           fields={fields}
           fileMetadata={fileMetadata}
           extractedData={extractedData}
+          apiResponse={apiResponse}
+          isWaitingApiResponse={isWaitingApiResponse}
         />
       </div>
     </div>

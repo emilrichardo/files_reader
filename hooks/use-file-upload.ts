@@ -8,17 +8,23 @@ interface UseFileUploadReturn {
   uploadFile: (file: File) => Promise<FileMetadata>
   isUploading: boolean
   uploadProgress: number
+  apiResponse: any
+  isWaitingApiResponse: boolean
 }
 
 export function useFileUpload(): UseFileUploadReturn {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const { settings } = useTheme()
+  const [apiResponse, setApiResponse] = useState<any>(null)
+  const [isWaitingApiResponse, setIsWaitingApiResponse] = useState(false)
 
   const uploadFile = async (file: File): Promise<FileMetadata> => {
     console.log("Iniciando carga de archivo:", file.name)
     setIsUploading(true)
     setUploadProgress(0)
+    setApiResponse(null)
+    setIsWaitingApiResponse(false)
 
     try {
       // Simular progreso de carga
@@ -36,6 +42,8 @@ export function useFileUpload(): UseFileUploadReturn {
       if (settings.api_endpoint) {
         try {
           console.log("📡 Enviando POST a:", settings.api_endpoint)
+          setIsWaitingApiResponse(true)
+
           const response = await fetch(settings.api_endpoint, {
             method: "POST",
             headers: {
@@ -45,17 +53,25 @@ export function useFileUpload(): UseFileUploadReturn {
           })
 
           console.log("📡 Respuesta del endpoint:", response.status)
+
           if (response.ok) {
-            console.log("✅ POST enviado exitosamente")
+            const responseData = await response.json()
+            setApiResponse(responseData)
+            console.log("✅ POST enviado exitosamente, respuesta:", responseData)
           } else {
+            const errorData = await response.text()
+            setApiResponse({ error: `HTTP ${response.status}`, message: errorData })
             console.warn("⚠️ POST falló con status:", response.status)
           }
         } catch (endpointError) {
+          setApiResponse({ error: "Network Error", message: endpointError.message })
           console.error("❌ Error enviando POST al endpoint:", endpointError)
-          // No fallar la carga del archivo si el endpoint falla
+        } finally {
+          setIsWaitingApiResponse(false)
         }
       } else {
         console.log("ℹ️ No hay endpoint configurado, saltando POST")
+        setApiResponse(null)
       }
 
       // Simular tiempo de procesamiento
@@ -90,5 +106,7 @@ export function useFileUpload(): UseFileUploadReturn {
     uploadFile,
     isUploading,
     uploadProgress,
+    apiResponse,
+    isWaitingApiResponse,
   }
 }

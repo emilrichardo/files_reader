@@ -1,151 +1,96 @@
 "use client"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import type { DocumentField, FileMetadata } from "@/lib/types"
-import { FileText, Edit, Check } from "lucide-react"
+
+import type React from "react"
+import { Dialog, Transition } from "@headlessui/react"
+import { Fragment } from "react"
+import { useFileUpload } from "@/hooks/use-file-upload"
 
 interface FilePreviewModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (data: Record<string, any>) => void
-  fields: DocumentField[]
-  fileMetadata?: FileMetadata
-  extractedData?: Record<string, any>
+  fileUrl: string | null
+  extractedData: any
 }
 
-export default function FilePreviewModal({
-  isOpen,
-  onClose,
-  onConfirm,
-  fields,
-  fileMetadata,
-  extractedData = {},
-}: FilePreviewModalProps) {
-  const [formData, setFormData] = useState<Record<string, any>>({})
-
-  // Solo actualizar formData cuando el modal se abre y hay nuevos datos extraídos
-  useEffect(() => {
-    if (isOpen && extractedData && Object.keys(extractedData).length > 0) {
-      setFormData(extractedData)
-    }
-  }, [isOpen, extractedData])
-
-  // Resetear formData cuando el modal se cierra
-  useEffect(() => {
-    if (!isOpen) {
-      setFormData({})
-    }
-  }, [isOpen])
-
-  const handleInputChange = (fieldName: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [fieldName]: value,
-    }))
-  }
-
-  const handleConfirm = () => {
-    onConfirm(formData)
-    onClose()
-  }
-
-  const handleClose = () => {
-    setFormData({})
-    onClose()
-  }
-
-  // Si no hay fileMetadata, no renderizar el contenido del modal
-  if (!fileMetadata) {
-    return null
-  }
-
+const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fileUrl, extractedData }) => {
+  const { apiResponse, isWaitingApiResponse } = useFileUpload()
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <FileText className="w-5 h-5 mr-2" />
-            Vista Previa de Datos Extraídos
-          </DialogTitle>
-          <DialogDescription>
-            Revisa y edita los datos extraídos del archivo: <strong>{fileMetadata?.filename}</strong>
-          </DialogDescription>
-        </DialogHeader>
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-10" onClose={onClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black bg-opacity-25" />
+        </Transition.Child>
 
-        <div className="space-y-4">
-          {/* Información del archivo */}
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-2">Información del Archivo</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-gray-500">Nombre:</span> {fileMetadata?.filename}
-              </div>
-              <div>
-                <span className="text-gray-500">Tamaño:</span>{" "}
-                {fileMetadata ? (fileMetadata.file_size / 1024).toFixed(1) + " KB" : ""}
-              </div>
-              <div>
-                <span className="text-gray-500">Tipo:</span> {fileMetadata?.file_type}
-              </div>
-              <div>
-                <span className="text-gray-500">Fecha:</span>{" "}
-                {fileMetadata ? new Date(fileMetadata.upload_date).toLocaleDateString("es-ES") : ""}
-              </div>
-            </div>
-          </div>
-
-          {/* Campos extraídos */}
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 flex items-center">
-              <Edit className="w-4 h-4 mr-2" />
-              Datos Extraídos
-              <span className="text-xs text-gray-500 ml-2">(Edita los valores antes de confirmar)</span>
-            </h4>
-            {fields.map((field) => (
-              <div key={field.id} className="group">
-                <Label htmlFor={field.field_name} className="flex items-center">
-                  {field.field_name}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                  {field.description && (
-                    <span className="ml-2 text-xs text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      ({field.description})
-                    </span>
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                  File Preview
+                </Dialog.Title>
+                <div className="mt-2">
+                  {fileUrl && <iframe src={fileUrl} title="File Preview" width="100%" height="400px" />}
+                  {extractedData && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-900">Extracted Data</h4>
+                      <pre className="bg-gray-50 rounded-lg border p-3 text-xs overflow-auto max-h-32">
+                        {JSON.stringify(extractedData, null, 2)}
+                      </pre>
+                    </div>
                   )}
-                </Label>
-                <Input
-                  id={field.field_name}
-                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-                  value={formData[field.field_name] || ""}
-                  onChange={(e) => handleInputChange(field.field_name, e.target.value)}
-                  placeholder={field.description || `Ingresa ${field.field_name}...`}
-                  className="mt-1"
-                  required={field.required}
-                />
-              </div>
-            ))}
+
+                  {/* Respuesta de la API */}
+                  {(apiResponse || isWaitingApiResponse) && (
+                    <div className="mt-6">
+                      <h4 className="text-sm font-medium text-gray-900 mb-2">Respuesta de la API</h4>
+                      {isWaitingApiResponse ? (
+                        <div className="flex items-center justify-center p-4 bg-gray-50 rounded-lg border">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                          <span className="ml-2 text-sm text-gray-600">Esperando respuesta...</span>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 rounded-lg border p-3">
+                          <pre className="text-xs text-gray-800 whitespace-pre-wrap overflow-auto max-h-32">
+                            {JSON.stringify(apiResponse, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    className="inline-flex justify-center rounded-md border border-transparent bg-blue-100 px-4 py-2 text-sm font-medium text-blue-900 hover:bg-blue-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    onClick={onClose}
+                  >
+                    Close
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Cancelar
-          </Button>
-          <Button onClick={handleConfirm} className="bg-black hover:bg-gray-800 text-white">
-            <Check className="w-4 h-4 mr-2" />
-            Confirmar y Agregar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </Dialog>
+    </Transition>
   )
 }
+
+export default FilePreviewModal
