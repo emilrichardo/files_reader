@@ -202,16 +202,6 @@ export default function SettingsPage() {
                       disabled={!isAdmin}
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="api-endpoint">API Endpoint</Label>
-                    <Input
-                      id="api-endpoint"
-                      value={apiEndpoint}
-                      onChange={(e) => setApiEndpoint(e.target.value)}
-                      placeholder="https://api.ejemplo.com"
-                      className="mt-1"
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -380,6 +370,35 @@ export default function SettingsPage() {
                     placeholder="eyJ..."
                     className="mt-1"
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* API Endpoint para carga de archivos */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="w-5 h-5" />
+                  API Endpoint para carga de archivos
+                </CardTitle>
+                <CardDescription>
+                  Endpoint donde se enviará un POST cuando se suban archivos a los documentos
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div>
+                  <Label htmlFor="api-endpoint">URL del Endpoint</Label>
+                  <Input
+                    id="api-endpoint"
+                    type="url"
+                    value={apiEndpoint}
+                    onChange={(e) => setApiEndpoint(e.target.value)}
+                    placeholder="https://api.ejemplo.com/upload"
+                    className="mt-1"
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    Se enviará un POST con el contenido del archivo cuando se cargue una nueva fila en un documento
+                  </p>
                 </div>
               </CardContent>
             </Card>

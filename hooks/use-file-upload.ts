@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type { FileMetadata } from "@/lib/types"
+import { useTheme } from "@/contexts/theme-context"
 
 interface UseFileUploadReturn {
   uploadFile: (file: File) => Promise<FileMetadata>
@@ -12,6 +13,7 @@ interface UseFileUploadReturn {
 export function useFileUpload(): UseFileUploadReturn {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const { settings } = useTheme()
 
   const uploadFile = async (file: File): Promise<FileMetadata> => {
     console.log("Iniciando carga de archivo:", file.name)
@@ -29,6 +31,32 @@ export function useFileUpload(): UseFileUploadReturn {
           return prev + 10
         })
       }, 100)
+
+      // Si hay un endpoint configurado, hacer POST
+      if (settings.api_endpoint) {
+        try {
+          console.log("📡 Enviando POST a:", settings.api_endpoint)
+          const response = await fetch(settings.api_endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ message: "test" }),
+          })
+
+          console.log("📡 Respuesta del endpoint:", response.status)
+          if (response.ok) {
+            console.log("✅ POST enviado exitosamente")
+          } else {
+            console.warn("⚠️ POST falló con status:", response.status)
+          }
+        } catch (endpointError) {
+          console.error("❌ Error enviando POST al endpoint:", endpointError)
+          // No fallar la carga del archivo si el endpoint falla
+        }
+      } else {
+        console.log("ℹ️ No hay endpoint configurado, saltando POST")
+      }
 
       // Simular tiempo de procesamiento
       await new Promise((resolve) => setTimeout(resolve, 1500))
