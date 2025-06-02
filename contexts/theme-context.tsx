@@ -142,19 +142,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         console.log("🎨 [THEME] User authenticated, loading settings for:", user.email)
         loadUserSettings(user.id)
       } else {
-        console.log("🎨 [THEME] No user, loading global settings")
+        console.log("🎨 [THEME] No user, loading global settings for public access")
         loadGlobalSettingsForPublic()
       }
     }
   }, [user, authLoading])
 
-  // Función para cargar configuración global para usuarios públicos (sin verificar roles)
+  // Función para cargar configuración global para usuarios públicos
   const loadGlobalSettingsForPublic = async () => {
     if (isLoadingSettings) return
 
     setIsLoadingSettings(true)
     try {
       console.log("🌍 [THEME] Loading global settings for public user")
+
+      // Primero intentar obtener configuración de superadmin
       const { data: globalSettings } = await getGlobalSettings()
 
       if (globalSettings) {
@@ -165,6 +167,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           user_id: "public",
         }
         setSettings(mergedSettings)
+        console.log("🔗 [THEME] API Endpoint for public:", mergedSettings.api_endpoint)
       } else {
         console.log("⚠️ [THEME] No global settings found, using defaults")
         setSettings({ ...defaultSettings, user_id: "public" })
@@ -220,6 +223,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           user_id: userId,
         }
         setSettings(mergedSettings)
+        console.log("🔗 [THEME] API Endpoint loaded:", mergedSettings.api_endpoint)
       } else {
         console.log("⚠️ [THEME] No settings found, using defaults")
         const newSettings = { ...defaultSettings, user_id: userId }

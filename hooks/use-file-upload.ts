@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import type { FileMetadata } from "@/lib/types"
+import type { FileMetadata, DocumentRow, DocumentField } from "@/lib/types"
 import { useTheme } from "@/contexts/theme-context"
 
 interface UseFileUploadReturn {
-  uploadFile: (file: File) => Promise<FileMetadata>
+  uploadFile: (file: File, entries?: DocumentRow[], fieldsStructure?: DocumentField[]) => Promise<FileMetadata>
   isUploading: boolean
   uploadProgress: number
   apiResponse: any
@@ -19,7 +19,11 @@ export function useFileUpload(): UseFileUploadReturn {
   const [isWaitingApiResponse, setIsWaitingApiResponse] = useState(false)
   const { settings } = useTheme()
 
-  const uploadFile = async (file: File): Promise<FileMetadata> => {
+  const uploadFile = async (
+    file: File,
+    entries: DocumentRow[] = [],
+    fieldsStructure: DocumentField[] = [],
+  ): Promise<FileMetadata> => {
     console.log("🚀 Iniciando carga de archivo:", file.name)
     setIsUploading(true)
     setUploadProgress(0)
@@ -35,14 +39,53 @@ export function useFileUpload(): UseFileUploadReturn {
         setIsWaitingApiResponse(true)
 
         try {
-          console.log("📤 Enviando POST con body: test")
+          // Convertir archivo a base64
+          const fileBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const result = reader.result as string
+              resolve(result.split(",")[1]) // Quitar el prefijo data:...;base64,
+            }
+            reader.readAsDataURL(file)
+          })
+
+          const requestBody = {
+            file: {
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: fileBase64,
+            },
+            entries: entries.map((entry) => ({
+              id: entry.id,
+              data: entry.data,
+              created_at: entry.created_at,
+              file_metadata: entry.file_metadata,
+            })),
+            fieldsStructure: fieldsStructure.map((field) => ({
+              id: field.id,
+              field_name: field.field_name,
+              type: field.type,
+              description: field.description,
+              formats: field.formats,
+              variants: field.variants,
+              required: field.required,
+              order: field.order,
+            })),
+          }
+
+          console.log("📤 Enviando POST con body:", {
+            file: { name: file.name, type: file.type, size: file.size },
+            entries: entries.length + " entradas",
+            fieldsStructure: fieldsStructure.length + " campos",
+          })
 
           const response = await fetch(settings.api_endpoint, {
             method: "POST",
             headers: {
-              "Content-Type": "text/plain",
+              "Content-Type": "application/json",
             },
-            body: "test",
+            body: JSON.stringify(requestBody),
           })
 
           console.log("📡 Status de respuesta:", response.status)

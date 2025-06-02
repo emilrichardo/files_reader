@@ -366,11 +366,11 @@ export default function DocumentDetailPage() {
 
     try {
       setCurrentFile(file)
-      const metadata = await uploadFile(file)
+      const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
 
-      // Simular extracción de datos
-      const extracted = simulateDataExtraction(file.name, file.type)
+      // Usar respuesta real del API si está disponible
+      const extracted = apiResponse || simulateDataExtraction(file.name, file.type)
       setExtractedData(extracted)
 
       // Mostrar modal de preview
