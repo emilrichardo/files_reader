@@ -353,6 +353,30 @@ export default function DocumentDetailPage() {
     [fields],
   )
 
+  // Función mejorada para manejar el click del input de archivo
+  const triggerFileInput = () => {
+    try {
+      const input = document.getElementById("file-upload") as HTMLInputElement
+      if (input) {
+        input.click()
+      } else {
+        console.error("File input element not found")
+        toast({
+          title: "Error",
+          description: "No se pudo abrir el selector de archivos.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error triggering file input:", error)
+      toast({
+        title: "Error",
+        description: "Error al abrir el selector de archivos.",
+        variant: "destructive",
+      })
+    }
+  }
+
   // Manejo de archivos
   const handleFileUpload = async (files: FileList) => {
     const file = files[0]
@@ -925,10 +949,7 @@ export default function DocumentDetailPage() {
                         handleFileUpload(e.dataTransfer.files)
                       }}
                       onDragOver={(e) => e.preventDefault()}
-                      onClick={() => {
-                        const input = document.getElementById("file-upload") as HTMLInputElement
-                        if (input) input.click()
-                      }}
+                      onClick={triggerFileInput}
                     >
                       <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
@@ -946,10 +967,7 @@ export default function DocumentDetailPage() {
 
                     {/* Botón para mobile */}
                     <Button
-                      onClick={() => {
-                        const input = document.getElementById("file-upload") as HTMLInputElement
-                        if (input) input.click()
-                      }}
+                      onClick={triggerFileInput}
                       className="w-full mt-4 md:hidden"
                       style={getPrimaryButtonStyles()}
                     >
