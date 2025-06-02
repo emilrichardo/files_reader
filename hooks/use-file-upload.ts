@@ -46,6 +46,34 @@ export function useFileUpload(): UseFileUploadReturn {
         })
       } else {
         console.log("📡 Endpoint encontrado:", settings.api_endpoint)
+
+        // Verificar tamaño del archivo antes de procesar
+        const maxSizeInMB = 5 // 5MB límite
+        const maxSizeInBytes = maxSizeInMB * 1024 * 1024
+
+        if (file.size > maxSizeInBytes) {
+          console.warn("⚠️ Archivo demasiado grande:", file.size, "bytes")
+          setApiResponse({
+            error: "Archivo demasiado grande",
+            message: `El archivo es demasiado grande (${(file.size / 1024 / 1024).toFixed(2)}MB). El límite es ${maxSizeInMB}MB.`,
+            fileSize: file.size,
+            maxSize: maxSizeInBytes,
+          })
+
+          // Crear metadata básica sin procesar
+          const fileUrl = URL.createObjectURL(file)
+          const fileMetadata: FileMetadata = {
+            filename: file.name,
+            file_size: file.size,
+            file_type: file.type,
+            upload_date: new Date().toISOString(),
+            file_url: fileUrl,
+          }
+
+          setUploadProgress(100)
+          return fileMetadata
+        }
+
         setIsWaitingApiResponse(true)
 
         try {
@@ -148,9 +176,21 @@ export function useFileUpload(): UseFileUploadReturn {
             console.warn("⚠️ Error en respuesta del proxy:", response.status)
             const errorText = await response.text()
             console.warn("⚠️ Error text:", errorText)
+
+            // Manejar errores específicos
+            let errorMessage = errorText || "Error desconocido"
+            if (response.status === 413) {
+              errorMessage = "El archivo es demasiado grande para el servidor. Intenta con un archivo más pequeño."
+            } else if (response.status === 404) {
+              errorMessage = "El endpoint no fue encontrado. Verifica la URL en configuración."
+            } else if (response.status === 500) {
+              errorMessage = "Error interno del servidor. Verifica que el webhook esté funcionando correctamente."
+            }
+
             setApiResponse({
               error: `HTTP ${response.status}`,
-              message: errorText || "Error desconocido",
+              message: errorMessage,
+              details: errorText,
             })
           }
         } catch (error) {

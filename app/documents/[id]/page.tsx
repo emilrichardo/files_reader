@@ -332,9 +332,10 @@ export default function DocumentDetailPage() {
     })
   }
 
-  // Simulación de extracción de datos
+  // Simulación de extracción de datos - SOLO se usa si NO hay respuesta del API
   const simulateDataExtraction = useCallback(
     (filename: string, fileType: string): Record<string, any> => {
+      console.log("⚠️ Usando simulación de datos porque no hay respuesta del API")
       const extractedData: Record<string, any> = {}
 
       fields.forEach((field) => {
@@ -430,8 +431,27 @@ export default function DocumentDetailPage() {
       const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
 
-      // Usar respuesta real del API si está disponible
-      const extracted = apiResponse || simulateDataExtraction(file.name, file.type)
+      // CAMBIO IMPORTANTE: Solo usar simulación si NO hay respuesta del API
+      let extracted: Record<string, any> = {}
+
+      if (apiResponse && !apiResponse.error) {
+        console.log("✅ Usando respuesta real del API:", apiResponse)
+        // Si el API devuelve datos estructurados, usarlos
+        if (apiResponse.extractedData) {
+          extracted = apiResponse.extractedData
+        } else if (apiResponse.data) {
+          extracted = apiResponse.data
+        } else {
+          // Si el API responde pero no tiene datos estructurados, crear un objeto básico
+          extracted = {
+            [fields[0]?.field_name || "contenido"]: apiResponse.message || JSON.stringify(apiResponse),
+          }
+        }
+      } else {
+        console.log("⚠️ No hay respuesta válida del API, usando simulación")
+        extracted = simulateDataExtraction(file.name, file.type)
+      }
+
       setExtractedData(extracted)
 
       // Mostrar modal de preview
@@ -942,7 +962,9 @@ export default function DocumentDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Carga de Archivos</CardTitle>
-                <CardDescription>Arrastra archivos aquí para extraer datos automáticamente</CardDescription>
+                <CardDescription>
+                  Arrastra archivos aquí para extraer datos automáticamente (máximo 5MB)
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {isUploading ? (
@@ -961,7 +983,7 @@ export default function DocumentDetailPage() {
                       <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-lg font-medium text-gray-900 mb-2">Arrastra archivos aquí</p>
                       <p className="text-gray-500 mb-4">o haz clic para seleccionar archivos</p>
-                      <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX</p>
+                      <p className="text-sm text-gray-400">Soporta: PDF, JPG, PNG, DOC, DOCX (máximo 5MB)</p>
                       <input
                         ref={fileInputRef}
                         type="file"
