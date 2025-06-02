@@ -105,6 +105,16 @@ export default function DocumentDetailPage() {
     setLoading(false)
   }, [params.id, getDocument, documents]) // Agregar 'documents' como dependencia
 
+  // Función mejorada para parsear arrays separados por comas
+  const parseCommaSeparatedArray = (value: string): string[] => {
+    if (!value || value.trim() === "") return []
+
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+
   // Guardar nombre del documento cuando se quita el mouse
   const saveNameOnBlur = async () => {
     if (!document || !tempName.trim() || tempName.trim() === document.name) return
@@ -415,6 +425,7 @@ export default function DocumentDetailPage() {
       console.log("📊 Rows:", rows.length)
       console.log("📊 Pending rows:", pendingRows.length)
       console.log("🏗️ Fields:", fields.length)
+      console.log("🎯 Endpoint configurado:", settings.api_endpoint)
 
       const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
@@ -735,29 +746,23 @@ export default function DocumentDetailPage() {
                                 <td className="border border-gray-200 p-2">
                                   <Input
                                     value={field.variants?.join(", ") || ""}
-                                    onChange={(e) =>
-                                      updateField(field.id, {
-                                        variants: e.target.value
-                                          .split(",")
-                                          .map((f) => f.trim())
-                                          .filter(Boolean),
-                                      })
-                                    }
-                                    placeholder="variante1, variante2"
+                                    onChange={(e) => {
+                                      const variants = parseCommaSeparatedArray(e.target.value)
+                                      console.log("🔄 Actualizando variantes:", variants)
+                                      updateField(field.id, { variants })
+                                    }}
+                                    placeholder="variante1, variante2, variante3"
                                   />
                                 </td>
                                 <td className="border border-gray-200 p-2">
                                   <Input
                                     value={field.formats?.join(", ") || ""}
-                                    onChange={(e) =>
-                                      updateField(field.id, {
-                                        formats: e.target.value
-                                          .split(",")
-                                          .map((f) => f.trim())
-                                          .filter(Boolean),
-                                      })
-                                    }
-                                    placeholder="formato1, formato2"
+                                    onChange={(e) => {
+                                      const formats = parseCommaSeparatedArray(e.target.value)
+                                      console.log("🔄 Actualizando formatos:", formats)
+                                      updateField(field.id, { formats })
+                                    }}
+                                    placeholder="formato1, formato2, formato3"
                                   />
                                 </td>
                                 <td className="border border-gray-200 p-2 text-center">

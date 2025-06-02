@@ -89,11 +89,17 @@ export function useFileUpload(): UseFileUploadReturn {
               field_name: field.field_name,
               type: field.type,
               description: field.description,
-              formats: field.formats,
-              variants: field.variants,
+              formats: field.formats || [],
+              variants: field.variants || [],
               required: field.required,
               order: field.order,
             })),
+            metadata: {
+              timestamp: new Date().toISOString(),
+              userAgent: navigator.userAgent,
+              documentCount: entries.length,
+              fieldCount: fieldsStructure.length,
+            },
           }
 
           console.log("📤 Enviando POST con body:", {
@@ -101,6 +107,7 @@ export function useFileUpload(): UseFileUploadReturn {
             entries: entries.length + " entradas",
             fieldsStructure: fieldsStructure.length + " campos",
             bodySize: JSON.stringify(requestBody).length + " bytes",
+            endpoint: settings.api_endpoint,
           })
 
           setUploadProgress(40)
@@ -109,6 +116,7 @@ export function useFileUpload(): UseFileUploadReturn {
           const proxyUrl = "/api/upload-proxy"
 
           console.log("🔄 Usando proxy interno para evitar CORS")
+          console.log("🎯 Target endpoint:", settings.api_endpoint)
 
           const response = await fetch(proxyUrl, {
             method: "POST",
@@ -130,8 +138,10 @@ export function useFileUpload(): UseFileUploadReturn {
 
             try {
               const responseData = JSON.parse(responseText)
+              console.log("📋 Datos parseados:", responseData)
               setApiResponse(responseData)
-            } catch {
+            } catch (parseError) {
+              console.log("⚠️ No se pudo parsear JSON, usando texto plano")
               setApiResponse({ message: responseText })
             }
           } else {

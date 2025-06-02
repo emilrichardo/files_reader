@@ -273,14 +273,16 @@ export default function EditTemplatePage() {
                       <Label>Variantes</Label>
                       <Input
                         value={field.variants?.join(", ") || ""}
-                        onChange={(e) =>
-                          updateField(field.id, {
-                            variants: e.target.value
-                              .split(",")
-                              .map((f) => f.trim())
-                              .filter(Boolean),
-                          })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value
+                          const variants = value
+                            ? value
+                                .split(",")
+                                .map((v) => v.trim())
+                                .filter((v) => v.length > 0)
+                            : []
+                          updateField(field.id, { variants })
+                        }}
                         placeholder="variante1, variante2"
                         className="mt-1"
                       />
@@ -289,14 +291,16 @@ export default function EditTemplatePage() {
                       <Label>Formatos</Label>
                       <Input
                         value={field.formats?.join(", ") || ""}
-                        onChange={(e) =>
-                          updateField(field.id, {
-                            formats: e.target.value
-                              .split(",")
-                              .map((f) => f.trim())
-                              .filter(Boolean),
-                          })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value
+                          const formats = value
+                            ? value
+                                .split(",")
+                                .map((f) => f.trim())
+                                .filter((f) => f.length > 0)
+                            : []
+                          updateField(field.id, { formats })
+                        }}
                         placeholder="formato1, formato2"
                         className="mt-1"
                       />
