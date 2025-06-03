@@ -461,37 +461,35 @@ export default function DocumentDetailPage() {
     try {
       console.log("🔍 Extrayendo datos de la respuesta del API:", response)
 
-      // Caso 1: Respuesta es un array con objetos que tienen propiedad output
-      if (Array.isArray(response) && response.length > 0) {
-        const firstItem = response[0]
-        if (firstItem && typeof firstItem === "object" && firstItem.output) {
-          console.log("📊 Datos extraídos del output del array:", firstItem.output)
-          return { ...firstItem.output }
-        }
+      // Si no hay respuesta, retornar objeto vacío
+      if (!response) {
+        console.log("⚠️ No hay respuesta del API")
+        return {}
       }
 
-      // Caso 2: Respuesta es un objeto con propiedad output
-      if (response && typeof response === "object" && response.output) {
-        console.log("📊 Datos extraídos del output directo:", response.output)
-        return { ...response.output }
-      }
+      // Caso 1: Respuesta es un objeto simple con datos directos
+      if (response && typeof response === "object" && !Array.isArray(response)) {
+        // Filtrar propiedades del sistema que no son datos
+        const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
+        const dataKeys = Object.keys(response).filter((key) => !systemProps.includes(key))
 
-      // Caso 3: Respuesta es un objeto con propiedades de datos
-      if (response && typeof response === "object") {
-        // Filtrar propiedades del sistema
-        const systemProps = ["success", "message", "status", "timestamp", "warning"]
-        const dataProps = Object.keys(response).filter((key) => !systemProps.includes(key))
-
-        if (dataProps.length > 0) {
+        // Si hay datos directos (como fecha, hora, titulo), usarlos
+        if (dataKeys.length > 0) {
           const extractedData: Record<string, any> = {}
-          dataProps.forEach((key) => {
+          dataKeys.forEach((key) => {
             extractedData[key] = response[key]
           })
-          console.log("📊 Datos extraídos directamente del API:", extractedData)
+          console.log("📊 Datos extraídos directamente:", extractedData)
           return extractedData
         }
 
-        // Caso 4: Respuesta tiene extractedData o data
+        // Caso 2: Respuesta tiene propiedad output
+        if (response.output) {
+          console.log("📊 Datos extraídos del output:", response.output)
+          return { ...response.output }
+        }
+
+        // Caso 3: Respuesta tiene extractedData o data
         if (response.extractedData) {
           console.log("📊 Usando extractedData del API:", response.extractedData)
           return { ...response.extractedData }
@@ -500,6 +498,15 @@ export default function DocumentDetailPage() {
         if (response.data) {
           console.log("📊 Usando data del API:", response.data)
           return { ...response.data }
+        }
+      }
+
+      // Caso 4: Respuesta es un array con objetos que tienen propiedad output
+      if (Array.isArray(response) && response.length > 0) {
+        const firstItem = response[0]
+        if (firstItem && typeof firstItem === "object" && firstItem.output) {
+          console.log("📊 Datos extraídos del output del array:", firstItem.output)
+          return { ...firstItem.output }
         }
       }
 
@@ -587,14 +594,17 @@ export default function DocumentDetailPage() {
           console.log("✅ Respuesta exitosa del API, procesando datos...")
           extracted = extractDataFromApiResponse(apiResponse)
 
-          // Si no se pudieron extraer datos, usar simulación
+          console.log("🔍 Datos extraídos:", extracted)
+          console.log("🔍 Cantidad de campos extraídos:", Object.keys(extracted).length)
+
+          // Si no se pudieron extraer datos del API, usar simulación como fallback
           if (Object.keys(extracted).length === 0) {
-            console.log("⚠️ No se pudieron extraer datos, usando simulación")
+            console.log("⚠️ No se pudieron extraer datos del API, usando simulación como fallback")
             extracted = simulateDataExtraction(file.name, file.type)
           }
         }
       } else {
-        // No hay respuesta del API, usar simulación solo como último recurso
+        // No hay respuesta del API, usar simulación
         console.log("⚠️ No hay respuesta del API, usando simulación")
         extracted = simulateDataExtraction(file.name, file.type)
       }
