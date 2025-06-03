@@ -32,7 +32,14 @@ export function useFileUpload() {
   }
 
   const uploadFile = useCallback(
-    async (file: File, existingRows: DocumentRow[], fields: DocumentField[]): Promise<FileMetadata> => {
+    async (
+      file: File,
+      existingRows: DocumentRow[],
+      fields: DocumentField[],
+    ): Promise<{
+      metadata: FileMetadata
+      apiData?: any
+    }> => {
       if (!settings?.api_endpoint) {
         throw new Error("API endpoint not configured")
       }
@@ -95,16 +102,17 @@ export function useFileUpload() {
             const data = await response.json()
             setApiResponse(data)
             setIsWaitingApiResponse(false)
-            return metadata
+            return { metadata, apiData: data }
           } catch (error) {
             console.error("Error calling API:", error)
-            setApiResponse({
+            const errorResponse = {
               error: "Error al procesar el archivo en el servidor",
               message: "El archivo es demasiado grande para ser procesado (máximo 2MB)",
               warning: "Se ha enviado solo los metadatos del archivo",
-            })
+            }
+            setApiResponse(errorResponse)
             setIsWaitingApiResponse(false)
-            return metadata
+            return { metadata, apiData: errorResponse }
           }
         }
 
@@ -148,6 +156,7 @@ export function useFileUpload() {
           console.log("✅ API Response:", data)
           setApiResponse(data)
           setUploadProgress(100)
+          setIsUploading(false)
 
           // Crear metadatos del archivo
           const metadata: FileMetadata = {
@@ -157,8 +166,7 @@ export function useFileUpload() {
             last_modified: new Date(file.lastModified).toISOString(),
           }
 
-          setIsUploading(false)
-          return metadata
+          return { metadata, apiData: data }
         } catch (error) {
           console.error("Error uploading file:", error)
           setUploadProgress(100)
@@ -180,7 +188,7 @@ export function useFileUpload() {
           console.log("❌ Setting error response:", errorResponse)
           setApiResponse(errorResponse)
 
-          return metadata
+          return { metadata, apiData: errorResponse }
         }
       } catch (error) {
         console.error("Error in uploadFile:", error)

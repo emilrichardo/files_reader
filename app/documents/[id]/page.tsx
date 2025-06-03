@@ -471,7 +471,7 @@ export default function DocumentDetailPage() {
     setModalKey((prev) => prev + 1) // Incrementar la clave para forzar re-renderizado
   }
 
-  // Manejo de archivos
+  // Manejo de archivos mejorado
   const handleFileUpload = async (files: FileList) => {
     const file = files[0]
     if (!file || !document) return
@@ -507,10 +507,6 @@ export default function DocumentDetailPage() {
 
       setCurrentFile(file)
       console.log("🔄 Iniciando upload desde documento existente...")
-      console.log("📊 Rows:", rows.length)
-      console.log("📊 Pending rows:", pendingRows.length)
-      console.log("🏗️ Fields:", fields.length)
-      console.log("🎯 Endpoint configurado:", settings.api_endpoint)
 
       // Mostrar toast de procesamiento
       toast({
@@ -518,64 +514,43 @@ export default function DocumentDetailPage() {
         description: "Espera mientras procesamos tu archivo...",
       })
 
-      const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
-      setFileMetadata(metadata)
+      const result = await uploadFile(file, [...rows, ...pendingRows], fields)
+      setFileMetadata(result.metadata)
 
-      console.log("🔍 Respuesta completa del API:", JSON.stringify(apiResponse, null, 2))
+      console.log("🔍 Resultado del upload:", result)
 
       // Verificar si hay error en la respuesta del API
-      if (apiResponse?.error) {
-        console.log("❌ Error en respuesta del API:", apiResponse.error)
+      if (result.apiData?.error) {
+        console.log("❌ Error en respuesta del API:", result.apiData.error)
         toast({
           title: "Error en el procesamiento",
-          description: apiResponse.message || apiResponse.error || "Error al procesar el archivo",
+          description: result.apiData.message || result.apiData.error || "Error al procesar el archivo",
           variant: "destructive",
-          action: (
-            <Button variant="outline" size="sm" onClick={() => handleRefresh()}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reintentar
-            </Button>
-          ),
         })
-
-        // No mostrar el modal si hay error
         resetUploadData()
         return
       }
 
-      // Solo proceder si hay respuesta exitosa del API
-      if (apiResponse && !apiResponse.error) {
-        console.log("✅ Usando directamente la respuesta del API como datos extraídos")
-        setExtractedData(apiResponse)
-
-        // Mostrar modal de preview
+      // Si hay respuesta exitosa del API, usarla directamente
+      if (result.apiData && !result.apiData.error) {
+        console.log("✅ Usando respuesta del API:", result.apiData)
+        setExtractedData(result.apiData)
         setShowPreviewModal(true)
-
         toast({
           title: "Archivo procesado",
-          description: `Se han extraído ${Object.keys(apiResponse).length} campos del archivo.`,
+          description: `Se han extraído ${Object.keys(result.apiData).length} campos del archivo.`,
         })
       } else {
-        console.log("⚠️ No hay respuesta válida del API")
-
         // Usar datos simulados como fallback
+        console.log("⚠️ No hay respuesta válida del API, usando simulación")
         const simulatedData = simulateDataExtraction(file.name, file.type)
         setExtractedData(simulatedData)
-
+        setShowPreviewModal(true)
         toast({
           title: "Procesamiento limitado",
           description: "Usando extracción local debido a problemas con el servidor.",
           variant: "warning",
-          action: (
-            <Button variant="outline" size="sm" onClick={() => handleRefresh()}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reintentar
-            </Button>
-          ),
         })
-
-        // Mostrar modal con datos simulados
-        setShowPreviewModal(true)
       }
     } catch (error) {
       console.error("Error processing file:", error)
@@ -1161,7 +1136,7 @@ export default function DocumentDetailPage() {
 
         {/* Modal de preview */}
         <FilePreviewModal
-          key={modalKey} // Usar clave para forzar re-renderizado
+          key={modalKey}
           isOpen={showPreviewModal}
           onClose={handleCloseModal}
           onConfirm={handleConfirmExtractedData}
