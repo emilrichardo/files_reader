@@ -448,7 +448,7 @@ export const deleteTemplate = async (id: string) => {
   }
 }
 
-// Servicios para Documents
+// Servicios para Documents - MEJORADOS
 export const getDocuments = async (userId: string) => {
   try {
     console.log("Getting documents for user:", userId)
@@ -574,7 +574,22 @@ export const getDocument = async (id: string) => {
 export const createDocument = async (document: Omit<Document, "id" | "created_at" | "updated_at" | "rows">) => {
   try {
     console.log("Creating document:", document.name)
+    console.log("Document data:", document)
 
+    // Verificar que el usuario esté autenticado
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.error("Authentication error:", authError)
+      throw new Error("Usuario no autenticado")
+    }
+
+    console.log("User authenticated:", user.email)
+
+    // Crear el documento principal
     const { data, error } = await supabase
       .from("documents")
       .insert({
@@ -588,13 +603,19 @@ export const createDocument = async (document: Omit<Document, "id" | "created_at
 
     if (error) {
       console.error("Error creating document:", error)
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
       return { data: null, error }
     }
 
     console.log("Document created successfully:", data.id)
     return { data, error: null }
   } catch (error) {
-    console.error("Error creating document:", error)
+    console.error("Exception creating document:", error)
     return { data: null, error }
   }
 }
@@ -642,11 +663,22 @@ export const deleteDocument = async (id: string) => {
   }
 }
 
-// Servicios para Document Rows
+// Servicios para Document Rows - MEJORADOS
 export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_at" | "updated_at">) => {
   try {
     console.log("Creating document row for document:", row.document_id)
     console.log("Row data:", row.data)
+
+    // Verificar que el usuario esté autenticado
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.error("Authentication error:", authError)
+      throw new Error("Usuario no autenticado")
+    }
 
     const { data, error } = await supabase
       .from("document_rows")
@@ -660,13 +692,19 @@ export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_a
 
     if (error) {
       console.error("Error creating document row:", error)
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
       return { data: null, error }
     }
 
     console.log("Document row created successfully:", data.id)
     return { data, error: null }
   } catch (error) {
-    console.error("Error creating document row:", error)
+    console.error("Exception creating document row:", error)
     return { data: null, error }
   }
 }

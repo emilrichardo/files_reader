@@ -45,14 +45,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return "superadmin"
       }
 
+      // Intentar obtener el rol con manejo de errores mejorado
       const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
 
       if (error) {
         console.error("❌ [AUTH] Error getting user role:", error)
-        // Si hay error y es emilrichardo, devolver superadmin por defecto
+
+        // Si es emilrichardo y hay error, devolver superadmin por defecto
         if (userData.user?.email === "emilrichardo@gmail.com") {
+          console.log("🔧 [AUTH] Fallback to superadmin for emilrichardo")
           return "superadmin"
         }
+
+        // Para otros usuarios, intentar crear el rol por defecto
+        console.log("🔄 [AUTH] Attempting to create default role for user")
+        try {
+          const { error: insertError } = await supabase.from("user_roles").insert({
+            user_id: userId,
+            role: "user",
+            assigned_at: new Date().toISOString(),
+          })
+
+          if (insertError) {
+            console.error("❌ [AUTH] Error creating default role:", insertError)
+          } else {
+            console.log("✅ [AUTH] Default role created successfully")
+          }
+        } catch (insertError) {
+          console.error("💥 [AUTH] Exception creating default role:", insertError)
+        }
+
         return "user"
       }
 
@@ -64,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("✅ [AUTH] Role found for user:", data.role)
       return data.role as "admin" | "user" | "premium" | "moderator" | "superadmin"
     } catch (error) {
-      console.error("💥 [AUTH] Error getting user role:", error)
+      console.error("💥 [AUTH] Exception getting user role:", error)
       return "user"
     }
   }
@@ -82,12 +104,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("👤 [AUTH] Checking if user is registered:", user.email)
 
-      // Para emilrichardo, no intentar crear/actualizar rol para evitar recursión
+      // Para emilrichardo, asegurar que tenga rol de superadmin
       if (user.email === "emilrichardo@gmail.com") {
-        console.log("🔧 [AUTH] Skipping role creation for emilrichardo to avoid recursion")
+        console.log("🔧 [AUTH] Ensuring superadmin role for emilrichardo")
+        try {
+          const { error } = await supabase.from("user_roles").upsert(
+            {
+              user_id: user.id,
+              role: "superadmin",
+              assigned_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "user_id",
+            },
+          )
+
+          if (error) {
+            console.error("❌ [AUTH] Error ensuring superadmin role:", error)
+          } else {
+            console.log("✅ [AUTH] Superadmin role ensured for emilrichardo")
+          }
+        } catch (error) {
+          console.error("💥 [AUTH] Exception ensuring superadmin role:", error)
+        }
         return
       }
 
+      // Para otros usuarios, verificar si existe el rol
       const { data: existingRole, error: checkError } = await supabase
         .from("user_roles")
         .select("*")
@@ -117,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("✅ [AUTH] User already registered with role:", existingRole.role)
       }
     } catch (error) {
-      console.error("💥 [AUTH] Error ensuring user registration:", error)
+      console.error("💥 [AUTH] Exception ensuring user registration:", error)
     }
   }
 
@@ -144,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted) {
           if (session?.user) {
             setUser(session.user)
-            console.log("👤 [AUTH] User set, getting role...")
+            console.log("👤 [AUTH] User set, ensuring registration and getting role...")
 
             await ensureUserIsRegistered(session.user)
 
@@ -160,7 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (error) {
-        console.error("💥 [AUTH] Error initializing auth:", error)
+        console.error("💥 [AUTH] Exception initializing auth:", error)
         if (mounted) {
           setLoading(false)
         }
@@ -219,7 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       console.log("✅ [AUTH] Google sign in initiated")
     } catch (error) {
-      console.error("💥 [AUTH] Error in signInWithGoogle:", error)
+      console.error("💥 [AUTH] Exception in signInWithGoogle:", error)
       throw error
     }
   }
@@ -237,7 +281,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("✅ [AUTH] Signed out successfully")
       window.location.href = "/"
     } catch (error) {
-      console.error("💥 [AUTH] Error in signOut:", error)
+      console.error("💥 [AUTH] Exception in signOut:", error)
       throw error
     }
   }

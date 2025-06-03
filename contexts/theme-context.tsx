@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useEffect, useState, useCallback } from "react"
 import { getUserSettings, updateUserSettings, getGlobalSettings, getSuperAdminSettings } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
 import { useAuth } from "./auth-context"
@@ -128,31 +128,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
-  const [lastLoadedUserId, setLastLoadedUserId] = useState<string | null>(null)
+  const [loadingKey, setLoadingKey] = useState<string | null>(null)
 
   // Initialize
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  // Cargar configuración cuando el usuario cambie
-  useEffect(() => {
-    if (!authLoading) {
-      if (user) {
-        console.log("🎨 [THEME] User authenticated, loading settings for:", user.email)
-        loadUserSettings(user.id)
-      } else {
-        console.log("🎨 [THEME] No user, loading global settings for public access")
-        loadGlobalSettingsForPublic()
-      }
-    }
-  }, [user, authLoading])
-
   // Función para cargar configuración global para usuarios públicos
-  const loadGlobalSettingsForPublic = async () => {
-    if (isLoadingSettings) return
+  const loadGlobalSettingsForPublic = useCallback(async () => {
+    const key = "public"
+    if (isLoadingSettings || loadingKey === key) {
+      console.log("🎨 [THEME] Already loading public settings, skipping...")
+      return
+    }
 
     setIsLoadingSettings(true)
+    setLoadingKey(key)
+
     try {
       console.log("🌍 [THEME] Loading global settings for public user")
 
@@ -177,73 +170,92 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setSettings({ ...defaultSettings, user_id: "public" })
     } finally {
       setIsLoadingSettings(false)
+      setLoadingKey(null)
     }
-  }
+  }, [isLoadingSettings, loadingKey])
 
-  const loadUserSettings = async (userId: string) => {
-    // Evitar cargas duplicadas
-    if (isLoadingSettings || lastLoadedUserId === userId) {
-      console.log("🎨 [THEME] Settings already loading or loaded for this user, skipping...")
-      return
-    }
+  const loadUserSettings = useCallback(
+    async (userId: string) => {
+      // Evitar cargas duplicadas usando una clave única
+      const key = `user-${userId}-${isSuperAdmin ? "super" : "regular"}`
+      if (isLoadingSettings || loadingKey === key) {
+        console.log("🎨 [THEME] Settings already loading for this configuration, skipping...")
+        return
+      }
 
-    setIsLoadingSettings(true)
-    setLastLoadedUserId(userId)
+      setIsLoadingSettings(true)
+      setLoadingKey(key)
 
-    try {
-      console.log("🎨 [THEME] Loading user settings for:", userId, "isSuperAdmin:", isSuperAdmin)
+      try {
+        console.log("🎨 [THEME] Loading user settings for:", userId, "isSuperAdmin:", isSuperAdmin)
 
-      let settingsData = null
+        let settingsData = null
 
-      if (isSuperAdmin) {
-        // Si es superadmin, cargar sus propias configuraciones
-        console.log("👑 [THEME] Loading superadmin's own settings")
-        const { data: userSettings } = await getUserSettings(userId)
-        settingsData = userSettings
-      } else {
-        // Si no es superadmin, cargar configuración de superadmin
-        console.log("🌍 [THEME] Loading superadmin settings for regular user")
-        try {
-          const { data: superAdminSettings } = await getSuperAdminSettings()
-          if (superAdminSettings) {
-            console.log("✅ [THEME] Superadmin settings found:", superAdminSettings)
-            settingsData = superAdminSettings
-          } else {
-            console.log("⚠️ [THEME] No superadmin settings found, trying global settings")
-            const { data: globalSettings } = await getGlobalSettings()
-            settingsData = globalSettings
+        if (isSuperAdmin) {
+          // Si es superadmin, cargar sus propias configuraciones
+          console.log("👑 [THEME] Loading superadmin's own settings")
+          const { data: userSettings } = await getUserSettings(userId)
+          settingsData = userSettings
+        } else {
+          // Si no es superadmin, cargar configuración de superadmin
+          console.log("🌍 [THEME] Loading superadmin settings for regular user")
+          try {
+            const { data: superAdminSettings } = await getSuperAdminSettings()
+            if (superAdminSettings) {
+              console.log("✅ [THEME] Superadmin settings found:", superAdminSettings)
+              settingsData = superAdminSettings
+            } else {
+              console.log("⚠️ [THEME] No superadmin settings found, trying global settings")
+              const { data: globalSettings } = await getGlobalSettings()
+              settingsData = globalSettings
+            }
+          } catch (error) {
+            console.error("❌ [THEME] Error loading superadmin settings:", error)
+            console.log("🔄 [THEME] Falling back to default settings with public endpoint")
           }
-        } catch (error) {
-          console.error("❌ [THEME] Error loading superadmin settings:", error)
-          console.log("🔄 [THEME] Falling back to default settings with public endpoint")
         }
-      }
 
-      if (settingsData) {
-        console.log("✅ [THEME] Settings loaded successfully:", settingsData)
-        const mergedSettings = {
-          ...defaultSettings,
-          ...settingsData,
-          api_keys: settingsData.api_keys || {},
-          user_id: userId,
+        if (settingsData) {
+          console.log("✅ [THEME] Settings loaded successfully:", settingsData)
+          const mergedSettings = {
+            ...defaultSettings,
+            ...settingsData,
+            api_keys: settingsData.api_keys || {},
+            user_id: userId,
+          }
+          setSettings(mergedSettings)
+          console.log("🔗 [THEME] API Endpoint loaded:", mergedSettings.api_endpoint)
+        } else {
+          console.log("⚠️ [THEME] No settings found, using defaults with public endpoint")
+          const newSettings = { ...defaultSettings, user_id: userId }
+          setSettings(newSettings)
+          console.log("🔗 [THEME] Using default API endpoint:", newSettings.api_endpoint)
         }
-        setSettings(mergedSettings)
-        console.log("🔗 [THEME] API Endpoint loaded:", mergedSettings.api_endpoint)
-      } else {
-        console.log("⚠️ [THEME] No settings found, using defaults with public endpoint")
-        const newSettings = { ...defaultSettings, user_id: userId }
-        setSettings(newSettings)
-        console.log("🔗 [THEME] Using default API endpoint:", newSettings.api_endpoint)
+      } catch (error) {
+        console.error("❌ [THEME] Error in loadUserSettings:", error)
+        const fallbackSettings = { ...defaultSettings, user_id: userId }
+        setSettings(fallbackSettings)
+        console.log("🔗 [THEME] Using fallback API endpoint:", fallbackSettings.api_endpoint)
+      } finally {
+        setIsLoadingSettings(false)
+        setLoadingKey(null)
       }
-    } catch (error) {
-      console.error("❌ [THEME] Error in loadUserSettings:", error)
-      const fallbackSettings = { ...defaultSettings, user_id: userId }
-      setSettings(fallbackSettings)
-      console.log("🔗 [THEME] Using fallback API endpoint:", fallbackSettings.api_endpoint)
-    } finally {
-      setIsLoadingSettings(false)
+    },
+    [isSuperAdmin, isLoadingSettings, loadingKey],
+  )
+
+  // Cargar configuración cuando el usuario cambie
+  useEffect(() => {
+    if (!authLoading) {
+      if (user) {
+        console.log("🎨 [THEME] User authenticated, loading settings for:", user.email)
+        loadUserSettings(user.id)
+      } else {
+        console.log("🎨 [THEME] No user, loading global settings for public access")
+        loadGlobalSettingsForPublic()
+      }
     }
-  }
+  }, [user, authLoading, loadUserSettings, loadGlobalSettingsForPublic])
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("🔧 [THEME] Attempting to update settings:", updates)
@@ -283,7 +295,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       console.log("✅ [THEME] Local settings updated:", updatedSettings)
 
       // Resetear el flag de carga para permitir recargas futuras si es necesario
-      setLastLoadedUserId(null)
+      setLoadingKey(null)
     } catch (error) {
       console.error("❌ [THEME] Error updating settings:", error)
       throw error
