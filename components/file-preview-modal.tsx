@@ -39,32 +39,15 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   // Normalizar los datos extraídos para manejar valores JSON anidados
   useEffect(() => {
-    if (extractedData) {
-      const normalizedData: Record<string, any> = {}
+    console.log("🔄 Modal recibió extractedData:", extractedData)
 
-      // Procesar cada campo para detectar y parsear JSON anidados
-      Object.entries(extractedData).forEach(([key, value]) => {
-        if (typeof value === "string") {
-          try {
-            // Intentar parsear como JSON
-            const parsedValue = JSON.parse(value)
-
-            // Si el resultado es un objeto con una sola propiedad que coincide con el nombre del campo
-            if (typeof parsedValue === "object" && parsedValue !== null && key in parsedValue) {
-              normalizedData[key] = parsedValue[key]
-            } else {
-              normalizedData[key] = value
-            }
-          } catch (e) {
-            // No es JSON, usar el valor tal cual
-            normalizedData[key] = value
-          }
-        } else {
-          normalizedData[key] = value
-        }
-      })
-
-      setEditableData(normalizedData)
+    if (extractedData && Object.keys(extractedData).length > 0) {
+      // Usar los datos tal como vienen, sin procesamiento adicional
+      setEditableData({ ...extractedData })
+      console.log("📝 Datos establecidos en el modal:", extractedData)
+    } else {
+      console.log("⚠️ No hay datos extraídos para mostrar")
+      setEditableData({})
     }
   }, [extractedData])
 
@@ -76,6 +59,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   }
 
   const handleConfirm = () => {
+    console.log("💾 Guardando datos:", editableData)
     if (onConfirm) {
       onConfirm(editableData)
     }

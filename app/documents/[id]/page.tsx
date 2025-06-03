@@ -566,22 +566,13 @@ export default function DocumentDetailPage() {
         setUploadWarning(apiResponse.message || apiResponse.warning)
       }
 
-      // CAMBIO IMPORTANTE: Procesar respuesta del API correctamente
+      // PROCESAMIENTO MEJORADO: Extraer datos del API
       let extracted: Record<string, any> = {}
 
-      console.log("🔍 Analizando respuesta del API:", {
-        apiResponse,
-        hasApiResponse: !!apiResponse,
-        apiResponseType: typeof apiResponse,
-        isArray: Array.isArray(apiResponse),
-        apiResponseKeys: apiResponse ? Object.keys(apiResponse) : [],
-        hasError: apiResponse?.error,
-      })
+      console.log("🔍 Respuesta completa del API:", JSON.stringify(apiResponse, null, 2))
 
-      // Verificar si hay una respuesta válida del API
       if (apiResponse) {
         if (apiResponse.error) {
-          // Si hay error en la respuesta del API, mostrar error y no continuar
           console.log("❌ Error en respuesta del API:", apiResponse.error)
           toast({
             title: "Error en el procesamiento",
@@ -590,25 +581,35 @@ export default function DocumentDetailPage() {
           })
           return
         } else {
-          // Respuesta exitosa del API
-          console.log("✅ Respuesta exitosa del API, procesando datos...")
-          extracted = extractDataFromApiResponse(apiResponse)
+          // Extraer datos directamente del objeto de respuesta
+          console.log("✅ Procesando respuesta exitosa del API...")
 
-          console.log("🔍 Datos extraídos:", extracted)
-          console.log("🔍 Cantidad de campos extraídos:", Object.keys(extracted).length)
+          // Filtrar propiedades del sistema
+          const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
+          const responseKeys = Object.keys(apiResponse)
+          console.log("🔍 Claves en la respuesta:", responseKeys)
 
-          // Si no se pudieron extraer datos del API, usar simulación como fallback
-          if (Object.keys(extracted).length === 0) {
-            console.log("⚠️ No se pudieron extraer datos del API, usando simulación como fallback")
+          // Buscar datos directos en la respuesta
+          const dataKeys = responseKeys.filter((key) => !systemProps.includes(key))
+          console.log("🔍 Claves de datos encontradas:", dataKeys)
+
+          if (dataKeys.length > 0) {
+            // Usar los datos directos
+            dataKeys.forEach((key) => {
+              extracted[key] = apiResponse[key]
+            })
+            console.log("📊 Datos extraídos directamente:", extracted)
+          } else {
+            console.log("⚠️ No se encontraron datos directos, usando simulación")
             extracted = simulateDataExtraction(file.name, file.type)
           }
         }
       } else {
-        // No hay respuesta del API, usar simulación
         console.log("⚠️ No hay respuesta del API, usando simulación")
         extracted = simulateDataExtraction(file.name, file.type)
       }
 
+      console.log("🎯 Datos finales para el modal:", extracted)
       setExtractedData(extracted)
 
       // Mostrar modal de preview
