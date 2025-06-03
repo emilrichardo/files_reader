@@ -514,37 +514,43 @@ export default function DocumentDetailPage() {
       const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
 
-      // Verificar si hay advertencias en la respuesta
-      if (apiResponse?.warning) {
-        setUploadWarning(apiResponse.message || apiResponse.warning)
-      }
-
       console.log("🔍 Respuesta completa del API:", JSON.stringify(apiResponse, null, 2))
 
-      // SOLUCIÓN DIRECTA: Usar directamente la respuesta del API como datos extraídos
-      if (apiResponse && !apiResponse.error) {
-        console.log("✅ Usando directamente la respuesta del API como datos extraídos")
-        setExtractedData(apiResponse)
-      } else if (apiResponse?.error) {
+      // Verificar si hay error en la respuesta del API
+      if (apiResponse?.error) {
         console.log("❌ Error en respuesta del API:", apiResponse.error)
         toast({
           title: "Error en el procesamiento",
-          description: apiResponse.error || apiResponse.message || "Error al procesar el archivo",
+          description: apiResponse.message || apiResponse.error || "Error al procesar el archivo",
           variant: "destructive",
         })
+
+        // No mostrar el modal si hay error
+        resetUploadData()
         return
-      } else {
-        console.log("⚠️ No hay respuesta del API, usando simulación")
-        setExtractedData(simulateDataExtraction(file.name, file.type))
       }
 
-      // Mostrar modal de preview
-      setShowPreviewModal(true)
+      // Solo proceder si hay respuesta exitosa del API
+      if (apiResponse && !apiResponse.error) {
+        console.log("✅ Usando directamente la respuesta del API como datos extraídos")
+        setExtractedData(apiResponse)
 
-      toast({
-        title: "Archivo procesado",
-        description: "Archivo procesado correctamente.",
-      })
+        // Mostrar modal de preview
+        setShowPreviewModal(true)
+
+        toast({
+          title: "Archivo procesado",
+          description: `Se han extraído ${Object.keys(apiResponse).length} campos del archivo.`,
+        })
+      } else {
+        console.log("⚠️ No hay respuesta válida del API")
+        toast({
+          title: "Sin respuesta",
+          description: "No se recibió una respuesta válida del servidor.",
+          variant: "destructive",
+        })
+        resetUploadData()
+      }
     } catch (error) {
       console.error("Error processing file:", error)
       toast({

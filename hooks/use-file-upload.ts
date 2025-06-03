@@ -163,10 +163,13 @@ export function useFileUpload() {
             last_modified: new Date(file.lastModified).toISOString(),
           }
 
-          setApiResponse({
-            error: "Error al procesar el archivo en el servidor",
+          const errorResponse = {
+            error: true,
             message: error instanceof Error ? error.message : "Error desconocido",
-          })
+            details: "Error al procesar el archivo en el servidor",
+          }
+          console.log("❌ Setting error response:", errorResponse)
+          setApiResponse(errorResponse)
 
           return metadata
         }
