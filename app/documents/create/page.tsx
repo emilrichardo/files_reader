@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Save, Plus, Trash2, Upload, FileText, Edit, Check, X, LogIn } from "lucide-react"
@@ -50,15 +52,35 @@ export default function CreateDocumentPage() {
   const [isSaved, setIsSaved] = useState(false)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
-  // Funciones para el título
+  // Funciones para el título mejoradas
   const handleTitleSave = () => {
-    setDocumentTitle(tempTitle)
+    if (tempTitle.trim()) {
+      setDocumentTitle(tempTitle.trim())
+    } else {
+      setTempTitle(documentTitle) // Restaurar si está vacío
+    }
     setIsEditingTitle(false)
   }
 
   const handleTitleCancel = () => {
     setTempTitle(documentTitle)
     setIsEditingTitle(false)
+  }
+
+  const handleTitleBlur = () => {
+    // Guardar automáticamente al perder el foco
+    handleTitleSave()
+  }
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleTitleSave()
+    }
+    if (e.key === "Escape") {
+      e.preventDefault()
+      handleTitleCancel()
+    }
   }
 
   // Funciones para campos
@@ -179,16 +201,6 @@ export default function CreateDocumentPage() {
       return
     }
 
-    // Validar que el documento tiene nombre
-    if (!documentTitle.trim() || documentTitle === "Nuevo Documento") {
-      toast({
-        title: "Error",
-        description: "Debes darle un nombre al documento antes de subir archivos.",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
       setCurrentFile(file)
       const metadata = await uploadFile(file, rows, fields)
@@ -248,8 +260,8 @@ export default function CreateDocumentPage() {
       return
     }
 
-    // Validaciones
-    if (!documentTitle.trim() || documentTitle === "Nuevo Documento") {
+    // Validaciones mejoradas - permitir guardar con nombre por defecto
+    if (!documentTitle.trim()) {
       toast({
         title: "Error",
         description: "Por favor, ingresa un nombre válido para el documento.",
@@ -336,20 +348,19 @@ export default function CreateDocumentPage() {
   return (
     <div className="p-4 lg:p-8 pt-16 lg:pt-8">
       <div className="max-w-7xl mx-auto">
-        {/* Header con título editable */}
+        {/* Header con título editable mejorado */}
         <div className="mb-8">
           <div className="flex items-center mb-2">
             {isEditingTitle ? (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 flex-1">
                 <Input
                   value={tempTitle}
                   onChange={(e) => setTempTitle(e.target.value)}
-                  className="text-2xl font-bold h-auto py-1 px-2"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleTitleSave()
-                    if (e.key === "Escape") handleTitleCancel()
-                  }}
+                  className="text-2xl font-bold h-auto py-1 px-2 flex-1"
+                  onKeyDown={handleTitleKeyDown}
+                  onBlur={handleTitleBlur}
                   autoFocus
+                  placeholder="Nombre del documento..."
                 />
                 <Button size="icon" variant="outline" onClick={handleTitleSave}>
                   <Check className="w-4 h-4" />
@@ -359,8 +370,8 @@ export default function CreateDocumentPage() {
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
-                <h1 className="text-3xl font-bold text-gray-900">{documentTitle}</h1>
+              <div className="flex items-center space-x-2 flex-1">
+                <h1 className="text-3xl font-bold text-gray-900 flex-1">{documentTitle}</h1>
                 <Button size="icon" variant="ghost" onClick={() => setIsEditingTitle(true)}>
                   <Edit className="w-4 h-4" />
                 </Button>
