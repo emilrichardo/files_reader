@@ -76,7 +76,8 @@ export async function POST(request: Request) {
     }
 
     // Obtener URL del webhook desde headers o usar el predeterminado
-    const targetUrl = request.headers.get("X-Target-URL") || "https://cibet.app.n8n.cloud/webhook-test/uploadfile"
+    // Modificado: Usar URL pública accesible para todos los usuarios
+    const targetUrl = request.headers.get("X-Target-URL") || "https://cibet.app.n8n.cloud/webhook/invitu-public-upload"
     console.log("🎯 Enviando a webhook externo:", targetUrl)
 
     try {
