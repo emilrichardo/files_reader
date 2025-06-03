@@ -71,8 +71,16 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   const handleConfirm = () => {
     console.log("💾 Guardando datos:", editableData)
+
+    // Limpiar datos vacíos antes de guardar
+    const cleanedData = Object.fromEntries(
+      Object.entries(editableData).filter(([key, value]) => value && value.toString().trim() !== ""),
+    )
+
+    console.log("💾 Datos limpiados:", cleanedData)
+
     if (onConfirm) {
-      onConfirm(editableData)
+      onConfirm(cleanedData)
     }
     onClose()
   }
@@ -113,13 +121,13 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           {fileMetadata && (
             <div className="mt-4 bg-gray-50 p-3 rounded-lg border text-sm">
               <p>
-                <strong>Nombre:</strong> {fileMetadata.name || fileMetadata.filename}
+                <strong>Nombre:</strong> {fileMetadata.filename || fileMetadata.name || "Archivo sin nombre"}
               </p>
               <p>
-                <strong>Tipo:</strong> {fileMetadata.type || fileMetadata.file_type}
+                <strong>Tipo:</strong> {fileMetadata.file_type || fileMetadata.type || "Tipo desconocido"}
               </p>
               <p>
-                <strong>Tamaño:</strong> {((fileMetadata.size || fileMetadata.file_size || 0) / 1024).toFixed(2)} KB
+                <strong>Tamaño:</strong> {((fileMetadata.file_size || fileMetadata.size || 0) / 1024).toFixed(2)} KB
               </p>
             </div>
           )}
@@ -129,8 +137,12 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-900 mb-2">Datos extraídos</h4>
               <div className="space-y-3">
+                {/* Primero mostrar campos que coinciden con la estructura */}
                 {fields.map((field) => {
                   const fieldValue = editableData[field.field_name] !== undefined ? editableData[field.field_name] : ""
+
+                  // Solo mostrar si hay un valor o si está en modo edición
+                  if (!fieldValue && !isEditing) return null
 
                   return (
                     <div key={field.id} className="flex flex-col">
@@ -156,32 +168,31 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                   )
                 })}
 
-                {/* Campos extraídos que no están en la estructura */}
-                {Object.entries(editableData).map(([key, value]) => {
-                  // Solo mostrar campos que no están en la estructura definida
-                  if (!fields.some((f) => f.field_name === key)) {
-                    return (
-                      <div key={key} className="flex flex-col">
-                        <label className="text-xs font-medium text-gray-700 mb-1">
-                          {key} <span className="text-blue-500 text-xs">(campo adicional)</span>
-                        </label>
+                {/* Luego mostrar campos adicionales que no están en la estructura */}
+                {Object.entries(editableData)
+                  .filter(([key, value]) => {
+                    // Solo mostrar campos que no están en la estructura definida y que tienen valor
+                    return !fields.some((f) => f.field_name === key) && value && value.toString().trim() !== ""
+                  })
+                  .map(([key, value]) => (
+                    <div key={key} className="flex flex-col">
+                      <label className="text-xs font-medium text-gray-700 mb-1">
+                        {key} <span className="text-blue-500 text-xs">(campo adicional)</span>
+                      </label>
 
-                        {isEditing ? (
-                          <Input
-                            value={value || ""}
-                            onChange={(e) => handleInputChange(key, e.target.value)}
-                            className="text-sm"
-                          />
-                        ) : (
-                          <div className="bg-gray-50 rounded-md border p-2 text-sm">
-                            {value || <span className="text-gray-400">No disponible</span>}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }
-                  return null
-                })}
+                      {isEditing ? (
+                        <Input
+                          value={value || ""}
+                          onChange={(e) => handleInputChange(key, e.target.value)}
+                          className="text-sm"
+                        />
+                      ) : (
+                        <div className="bg-gray-50 rounded-md border p-2 text-sm">
+                          {value || <span className="text-gray-400">No disponible</span>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
           )}
