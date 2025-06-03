@@ -581,26 +581,50 @@ export default function DocumentDetailPage() {
           })
           return
         } else {
-          // Extraer datos directamente del objeto de respuesta
+          // Extraer datos de la estructura específica del webhook
           console.log("✅ Procesando respuesta exitosa del API...")
 
-          // Filtrar propiedades del sistema
-          const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
-          const responseKeys = Object.keys(apiResponse)
-          console.log("🔍 Claves en la respuesta:", responseKeys)
+          // Caso 1: Respuesta es un array con objetos que tienen propiedad output
+          if (Array.isArray(apiResponse) && apiResponse.length > 0) {
+            const firstItem = apiResponse[0]
+            if (firstItem && typeof firstItem === "object" && firstItem.output) {
+              extracted = { ...firstItem.output }
+              console.log("📊 Datos extraídos del output del array:", extracted)
+            } else {
+              console.log("⚠️ Array no tiene la estructura esperada:", firstItem)
+              extracted = simulateDataExtraction(file.name, file.type)
+            }
+          }
+          // Caso 2: Respuesta es un objeto con propiedad output
+          else if (apiResponse.output) {
+            extracted = { ...apiResponse.output }
+            console.log("📊 Datos extraídos del output directo:", extracted)
+          }
+          // Caso 3: Respuesta es un objeto simple con datos directos
+          else if (typeof apiResponse === "object") {
+            // Filtrar propiedades del sistema
+            const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
+            const responseKeys = Object.keys(apiResponse)
+            console.log("🔍 Claves en la respuesta:", responseKeys)
 
-          // Buscar datos directos en la respuesta
-          const dataKeys = responseKeys.filter((key) => !systemProps.includes(key))
-          console.log("🔍 Claves de datos encontradas:", dataKeys)
+            // Buscar datos directos en la respuesta
+            const dataKeys = responseKeys.filter((key) => !systemProps.includes(key))
+            console.log("🔍 Claves de datos encontradas:", dataKeys)
 
-          if (dataKeys.length > 0) {
-            // Usar los datos directos
-            dataKeys.forEach((key) => {
-              extracted[key] = apiResponse[key]
-            })
-            console.log("📊 Datos extraídos directamente:", extracted)
-          } else {
-            console.log("⚠️ No se encontraron datos directos, usando simulación")
+            if (dataKeys.length > 0) {
+              // Usar los datos directos
+              dataKeys.forEach((key) => {
+                extracted[key] = apiResponse[key]
+              })
+              console.log("📊 Datos extraídos directamente:", extracted)
+            } else {
+              console.log("⚠️ No se encontraron datos directos, usando simulación")
+              extracted = simulateDataExtraction(file.name, file.type)
+            }
+          }
+          // Caso 4: No se pudo extraer nada
+          else {
+            console.log("⚠️ Estructura de respuesta no reconocida, usando simulación")
             extracted = simulateDataExtraction(file.name, file.type)
           }
         }
