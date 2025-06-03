@@ -51,7 +51,8 @@ export default function DocumentDetailPage() {
   } = useApp()
   const { user } = useAuth()
   const { toast } = useToast()
-  const { uploadFile, isUploading, uploadProgress, apiResponse, isWaitingApiResponse } = useFileUpload()
+  const { uploadFile, isUploading, uploadProgress, apiResponse, isWaitingApiResponse, resetApiResponse } =
+    useFileUpload()
   const { getPrimaryButtonStyles } = useDynamicStyles()
   const { settings } = useTheme()
 
@@ -79,6 +80,7 @@ export default function DocumentDetailPage() {
   const [extractedData, setExtractedData] = useState<Record<string, any>>({})
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [uploadWarning, setUploadWarning] = useState<string | null>(null)
+  const [modalKey, setModalKey] = useState(0) // Clave para forzar re-renderizado del modal
 
   // Ref para el input de archivo
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -467,46 +469,58 @@ export default function DocumentDetailPage() {
         return {}
       }
 
-      // Caso 1: Respuesta es un objeto simple con datos directos
+      let extractedData: Record<string, any> = {}
+
+      // Caso 1: Respuesta es un array con objetos que tienen propiedad output
+      if (Array.isArray(response) && response.length > 0) {
+        const firstItem = response[0]
+        if (firstItem && typeof firstItem === "object" && firstItem.output) {
+          extractedData = { ...firstItem.output }
+          console.log("📊 Datos extraídos del output del array:", extractedData)
+          return extractedData
+        }
+      }
+
+      // Caso 2: Respuesta es un objeto con propiedad output
+      if (response && typeof response === "object" && response.output) {
+        extractedData = { ...response.output }
+        console.log("📊 Datos extraídos del output directo:", extractedData)
+        return extractedData
+      }
+
+      // Caso 3: Respuesta es un objeto simple con datos directos
       if (response && typeof response === "object" && !Array.isArray(response)) {
         // Filtrar propiedades del sistema que no son datos
         const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
-        const dataKeys = Object.keys(response).filter((key) => !systemProps.includes(key))
+        const responseKeys = Object.keys(response)
+        console.log("🔍 Claves en la respuesta:", responseKeys)
 
-        // Si hay datos directos (como fecha, hora, titulo), usarlos
+        // Buscar datos directos en la respuesta
+        const dataKeys = responseKeys.filter((key) => !systemProps.includes(key))
+        console.log("🔍 Claves de datos encontradas:", dataKeys)
+
         if (dataKeys.length > 0) {
-          const extractedData: Record<string, any> = {}
+          // Usar los datos directos
           dataKeys.forEach((key) => {
             extractedData[key] = response[key]
           })
           console.log("📊 Datos extraídos directamente:", extractedData)
           return extractedData
         }
+      }
 
-        // Caso 2: Respuesta tiene propiedad output
-        if (response.output) {
-          console.log("📊 Datos extraídos del output:", response.output)
-          return { ...response.output }
-        }
-
-        // Caso 3: Respuesta tiene extractedData o data
+      // Caso 4: Respuesta tiene extractedData o data
+      if (response && typeof response === "object") {
         if (response.extractedData) {
-          console.log("📊 Usando extractedData del API:", response.extractedData)
-          return { ...response.extractedData }
+          extractedData = { ...response.extractedData }
+          console.log("📊 Usando extractedData del API:", extractedData)
+          return extractedData
         }
 
         if (response.data) {
-          console.log("📊 Usando data del API:", response.data)
-          return { ...response.data }
-        }
-      }
-
-      // Caso 4: Respuesta es un array con objetos que tienen propiedad output
-      if (Array.isArray(response) && response.length > 0) {
-        const firstItem = response[0]
-        if (firstItem && typeof firstItem === "object" && firstItem.output) {
-          console.log("📊 Datos extraídos del output del array:", firstItem.output)
-          return { ...firstItem.output }
+          extractedData = { ...response.data }
+          console.log("📊 Usando data del API:", extractedData)
+          return extractedData
         }
       }
 
@@ -517,6 +531,18 @@ export default function DocumentDetailPage() {
       console.error("❌ Error al extraer datos de la respuesta:", error)
       return {}
     }
+  }
+
+  // Función para limpiar los datos antes de una nueva carga
+  const resetUploadData = () => {
+    setExtractedData({})
+    setFileMetadata(null)
+    setCurrentFile(null)
+    setUploadWarning(null)
+    if (typeof resetApiResponse === "function") {
+      resetApiResponse()
+    }
+    setModalKey((prev) => prev + 1) // Incrementar la clave para forzar re-renderizado
   }
 
   // Manejo de archivos
@@ -550,8 +576,10 @@ export default function DocumentDetailPage() {
     }
 
     try {
+      // Limpiar datos anteriores
+      resetUploadData()
+
       setCurrentFile(file)
-      setUploadWarning(null)
       console.log("🔄 Iniciando upload desde documento existente...")
       console.log("📊 Rows:", rows.length)
       console.log("📊 Pending rows:", pendingRows.length)
@@ -571,63 +599,27 @@ export default function DocumentDetailPage() {
 
       console.log("🔍 Respuesta completa del API:", JSON.stringify(apiResponse, null, 2))
 
-      if (apiResponse) {
-        if (apiResponse.error) {
-          console.log("❌ Error en respuesta del API:", apiResponse.error)
-          toast({
-            title: "Error en el procesamiento",
-            description: apiResponse.error || apiResponse.message || "Error al procesar el archivo",
-            variant: "destructive",
-          })
-          return
+      if (apiResponse && !apiResponse.error) {
+        console.log("✅ Procesando respuesta exitosa del API...")
+
+        // Extraer datos de la respuesta del API
+        extracted = extractDataFromApiResponse(apiResponse)
+
+        // Si no se pudieron extraer datos de la respuesta, usar simulación
+        if (Object.keys(extracted).length === 0) {
+          console.log("⚠️ No se pudieron extraer datos de la respuesta, usando simulación")
+          extracted = simulateDataExtraction(file.name, file.type)
         } else {
-          // Extraer datos de la estructura específica del webhook
-          console.log("✅ Procesando respuesta exitosa del API...")
-
-          // Caso 1: Respuesta es un array con objetos que tienen propiedad output
-          if (Array.isArray(apiResponse) && apiResponse.length > 0) {
-            const firstItem = apiResponse[0]
-            if (firstItem && typeof firstItem === "object" && firstItem.output) {
-              extracted = { ...firstItem.output }
-              console.log("📊 Datos extraídos del output del array:", extracted)
-            } else {
-              console.log("⚠️ Array no tiene la estructura esperada:", firstItem)
-              extracted = simulateDataExtraction(file.name, file.type)
-            }
-          }
-          // Caso 2: Respuesta es un objeto con propiedad output
-          else if (apiResponse.output) {
-            extracted = { ...apiResponse.output }
-            console.log("📊 Datos extraídos del output directo:", extracted)
-          }
-          // Caso 3: Respuesta es un objeto simple con datos directos
-          else if (typeof apiResponse === "object") {
-            // Filtrar propiedades del sistema
-            const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
-            const responseKeys = Object.keys(apiResponse)
-            console.log("🔍 Claves en la respuesta:", responseKeys)
-
-            // Buscar datos directos en la respuesta
-            const dataKeys = responseKeys.filter((key) => !systemProps.includes(key))
-            console.log("🔍 Claves de datos encontradas:", dataKeys)
-
-            if (dataKeys.length > 0) {
-              // Usar los datos directos
-              dataKeys.forEach((key) => {
-                extracted[key] = apiResponse[key]
-              })
-              console.log("📊 Datos extraídos directamente:", extracted)
-            } else {
-              console.log("⚠️ No se encontraron datos directos, usando simulación")
-              extracted = simulateDataExtraction(file.name, file.type)
-            }
-          }
-          // Caso 4: No se pudo extraer nada
-          else {
-            console.log("⚠️ Estructura de respuesta no reconocida, usando simulación")
-            extracted = simulateDataExtraction(file.name, file.type)
-          }
+          console.log("✅ Datos extraídos exitosamente del API:", extracted)
         }
+      } else if (apiResponse?.error) {
+        console.log("❌ Error en respuesta del API:", apiResponse.error)
+        toast({
+          title: "Error en el procesamiento",
+          description: apiResponse.error || apiResponse.message || "Error al procesar el archivo",
+          variant: "destructive",
+        })
+        return
       } else {
         console.log("⚠️ No hay respuesta del API, usando simulación")
         extracted = simulateDataExtraction(file.name, file.type)
@@ -675,10 +667,7 @@ export default function DocumentDetailPage() {
       }
 
       setShowPreviewModal(false)
-      setCurrentFile(null)
-      setFileMetadata(null)
-      setExtractedData({})
-      setUploadWarning(null)
+      resetUploadData()
 
       toast({
         title: "Datos agregados",
@@ -691,6 +680,11 @@ export default function DocumentDetailPage() {
         variant: "destructive",
       })
     }
+  }
+
+  const handleCloseModal = () => {
+    setShowPreviewModal(false)
+    resetUploadData()
   }
 
   if (loading) {
@@ -1212,8 +1206,9 @@ export default function DocumentDetailPage() {
 
         {/* Modal de preview */}
         <FilePreviewModal
+          key={modalKey} // Usar clave para forzar re-renderizado
           isOpen={showPreviewModal}
-          onClose={() => setShowPreviewModal(false)}
+          onClose={handleCloseModal}
           onConfirm={handleConfirmExtractedData}
           fields={fields}
           fileMetadata={fileMetadata}

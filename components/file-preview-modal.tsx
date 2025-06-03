@@ -37,19 +37,21 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [editableData, setEditableData] = useState<Record<string, any>>({})
   const [isEditing, setIsEditing] = useState(false)
 
-  // Normalizar los datos extraídos para manejar valores JSON anidados
+  // Actualizar datos editables cuando cambian los datos extraídos
   useEffect(() => {
     console.log("🔄 Modal recibió extractedData:", extractedData)
 
+    // Limpiar datos anteriores
+    setEditableData({})
+
+    // Establecer nuevos datos
     if (extractedData && Object.keys(extractedData).length > 0) {
-      // Usar los datos tal como vienen, sin procesamiento adicional
       setEditableData({ ...extractedData })
       console.log("📝 Datos establecidos en el modal:", extractedData)
     } else {
       console.log("⚠️ No hay datos extraídos para mostrar")
-      setEditableData({})
     }
-  }, [extractedData])
+  }, [extractedData, isOpen]) // Importante: añadir isOpen como dependencia
 
   const handleInputChange = (fieldName: string, value: any) => {
     setEditableData({
