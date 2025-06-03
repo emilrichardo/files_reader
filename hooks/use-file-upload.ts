@@ -17,6 +17,20 @@ export function useFileUpload() {
     setIsWaitingApiResponse(false)
   }, [])
 
+  // Función para convertir archivo a base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => {
+        // Extraer solo la parte base64 (eliminar el prefijo data:image/jpeg;base64,)
+        const base64String = (reader.result as string).split(",")[1]
+        resolve(base64String)
+      }
+      reader.onerror = (error) => reject(error)
+    })
+  }
+
   const uploadFile = useCallback(
     async (file: File, existingRows: DocumentRow[], fields: DocumentField[]): Promise<FileMetadata> => {
       if (!settings?.api_endpoint) {
@@ -95,30 +109,23 @@ export function useFileUpload() {
         }
 
         // Para archivos de tamaño normal, proceder con la carga completa
-        const formData = new FormData()
-        formData.append("file", file)
-        formData.append("fields", JSON.stringify(fields))
-        formData.append("existing_rows", JSON.stringify(existingRows))
-
-        // Usar el endpoint de proxy para evitar CORS
-        const uploadUrl = "/api/upload-proxy"
-
-        // Simular progreso de carga
-        const simulateProgress = () => {
-          let progress = 0
-          const interval = setInterval(() => {
-            progress += 5
-            setUploadProgress(Math.min(progress, 95)) // Máximo 95% hasta que se complete
-            if (progress >= 95) {
-              clearInterval(interval)
-            }
-          }, 100)
-          return interval
-        }
-
-        const progressInterval = simulateProgress()
+        setUploadProgress(10)
+        console.log("🔄 Preparando archivo para subir...")
 
         try {
+          // Usar FormData para enviar el archivo
+          const formData = new FormData()
+          formData.append("file", file)
+          formData.append("fields", JSON.stringify(fields))
+          formData.append("existing_rows", JSON.stringify(existingRows))
+
+          // Usar el endpoint de proxy para evitar CORS
+          const uploadUrl = "/api/upload-proxy"
+
+          // Simular progreso de carga
+          setUploadProgress(30)
+          console.log("📤 Enviando archivo al proxy...")
+
           // Enviar al endpoint de proxy
           const response = await fetch(uploadUrl, {
             method: "POST",
@@ -128,16 +135,19 @@ export function useFileUpload() {
             },
           })
 
-          clearInterval(progressInterval)
-          setUploadProgress(100)
+          setUploadProgress(90)
+          console.log(`📡 Respuesta del proxy: ${response.status}`)
 
           if (!response.ok) {
+            const errorText = await response.text()
+            console.error("❌ Error del proxy:", errorText)
             throw new Error(`API responded with status ${response.status}`)
           }
 
           const data = await response.json()
           console.log("✅ API Response:", data)
           setApiResponse(data)
+          setUploadProgress(100)
 
           // Crear metadatos del archivo
           const metadata: FileMetadata = {
@@ -151,7 +161,6 @@ export function useFileUpload() {
           return metadata
         } catch (error) {
           console.error("Error uploading file:", error)
-          clearInterval(progressInterval)
           setUploadProgress(100)
           setIsUploading(false)
 
