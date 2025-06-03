@@ -3,343 +3,262 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import ChipsInput from "@/components/chips-input"
-import type { DocumentField } from "@/lib/types"
+import { Trash2, Plus } from "lucide-react"
+import { useApp } from "@/contexts/app-context"
+import { ChipsInput } from "@/components/chips-input"
+import type { Template, Field } from "@/lib/types"
 
-interface EditTemplatePageProps {
-  params: {
-    id: string
-  }
-}
-
-export default function EditTemplatePage({ params }: EditTemplatePageProps) {
+export default function EditTemplatePage() {
   const router = useRouter()
-  const { toast } = useToast()
+  const params = useParams()
+  const { templates, updateTemplate } = useApp()
 
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    category: "",
-    variants: [] as string[],
-    formatos: [] as string[],
-  })
-
-  const [fields, setFields] = useState<DocumentField[]>([
-    {
-      id: "1",
-      field_name: "",
-      type: "text",
-      required: false,
-      description: "",
-    },
-  ])
-
+  const [template, setTemplate] = useState<Template | null>(null)
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [fields, setFields] = useState<Field[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simular carga de datos de la plantilla
-    const loadTemplate = async () => {
-      try {
-        // Aquí iría la lógica para cargar la plantilla desde la API
-        // Por ahora usamos datos simulados
-        const mockTemplate = {
-          name: "Facturas de Compra",
-          description: "Plantilla para extraer datos de facturas de compra",
-          category: "facturas",
-          variants: ["factura", "invoice", "bill"],
-          formatos: ["PDF", "JPG", "PNG"],
-        }
+    const templateId = params.id as string
+    const foundTemplate = templates.find((t) => t.id === templateId)
 
-        const mockFields = [
-          {
-            id: "1",
-            field_name: "fecha",
-            type: "date",
-            required: true,
-            description: "Fecha de emisión de la factura",
-          },
-          {
-            id: "2",
-            field_name: "total",
-            type: "number",
-            required: true,
-            description: "Monto total de la factura",
-          },
-          {
-            id: "3",
-            field_name: "proveedor",
-            type: "text",
-            required: false,
-            description: "Nombre del proveedor",
-          },
-        ]
-
-        setFormData(mockTemplate)
-        setFields(mockFields)
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Error al cargar la plantilla",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
+    if (foundTemplate) {
+      setTemplate(foundTemplate)
+      setName(foundTemplate.name)
+      setDescription(foundTemplate.description || "")
+      setFields(foundTemplate.fields || [])
+    } else {
+      setError("Plantilla no encontrada")
     }
-
-    loadTemplate()
-  }, [params.id, toast])
-
-  const handleInputChange = (field: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }
-
-  const handleFieldChange = (index: number, field: keyof DocumentField, value: any) => {
-    const updatedFields = [...fields]
-    updatedFields[index] = { ...updatedFields[index], [field]: value }
-    setFields(updatedFields)
-  }
+    setLoading(false)
+  }, [params.id, templates])
 
   const addField = () => {
-    const newField: DocumentField = {
-      id: Date.now().toString(),
-      field_name: "",
+    const newField: Field = {
+      id: `field-${Date.now()}`,
+      name: "",
       type: "text",
       required: false,
-      description: "",
+      order: fields.length,
+      variants: [],
+      formats: [],
     }
     setFields([...fields, newField])
   }
 
+  const updateField = (index: number, updates: Partial<Field>) => {
+    const updatedFields = fields.map((field, i) => (i === index ? { ...field, ...updates } : field))
+    setFields(updatedFields)
+  }
+
   const removeField = (index: number) => {
-    if (fields.length > 1) {
-      setFields(fields.filter((_, i) => i !== index))
-    }
+    setFields(fields.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!template) return
 
-    // Validaciones básicas
-    if (!formData.name.trim()) {
-      toast({
-        title: "Error",
-        description: "El nombre de la plantilla es requerido",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const validFields = fields.filter((field) => field.field_name.trim())
-    if (validFields.length === 0) {
-      toast({
-        title: "Error",
-        description: "Debe agregar al menos un campo válido",
-        variant: "destructive",
-      })
-      return
-    }
+    setSaving(true)
+    setError(null)
 
     try {
-      // Aquí iría la lógica para actualizar la plantilla
-      console.log("Actualizando plantilla:", { ...formData, fields: validFields })
-
-      toast({
-        title: "Éxito",
-        description: "Plantilla actualizada correctamente",
+      await updateTemplate(template.id, {
+        name,
+        description,
+        fields: fields.map((field, index) => ({
+          ...field,
+          order: index,
+        })),
       })
 
       router.push("/templates")
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al actualizar la plantilla",
-        variant: "destructive",
-      })
+      console.error("Error al actualizar la plantilla:", error)
+      setError("Error al guardar la plantilla. Por favor, inténtalo de nuevo.")
+    } finally {
+      setSaving(false)
     }
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center">
+          <div className="text-lg">Cargando plantilla...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !template) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <Button onClick={() => router.push("/templates")}>Volver a plantillas</Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Volver
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Editar Plantilla</h1>
-          <p className="text-gray-600">Modifica los campos y configuración de la plantilla</p>
-        </div>
+    <div className="container mx-auto py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Editar Plantilla</h1>
+        <p className="text-gray-600">Modifica los campos y configuración de tu plantilla</p>
       </div>
 
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+          <div className="text-red-600">{error}</div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información básica */}
         <Card>
           <CardHeader>
-            <CardTitle>Información Básica</CardTitle>
-            <CardDescription>Configura los datos generales de la plantilla</CardDescription>
+            <CardTitle>Información General</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Nombre de la plantilla *</label>
+              <Label htmlFor="name">Nombre de la plantilla</Label>
               <Input
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                placeholder="Ej: Facturas de compra"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej: Factura de venta"
                 required
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium mb-2">Descripción</label>
+              <Label htmlFor="description">Descripción</Label>
               <Textarea
-                value={formData.description}
-                onChange={(e) => handleInputChange("description", e.target.value)}
-                placeholder="Describe el propósito de esta plantilla..."
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe para qué se usa esta plantilla"
                 rows={3}
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Categoría</label>
-              <Select value={formData.category} onValueChange={(value) => handleInputChange("category", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="facturas">Facturas</SelectItem>
-                  <SelectItem value="contratos">Contratos</SelectItem>
-                  <SelectItem value="recibos">Recibos</SelectItem>
-                  <SelectItem value="identificacion">Identificación</SelectItem>
-                  <SelectItem value="otros">Otros</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Variantes</label>
-              <ChipsInput
-                value={formData.variants}
-                onChange={(variants) => handleInputChange("variants", variants)}
-                placeholder="Agregar variante (ej: factura, invoice, bill)..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Formatos</label>
-              <ChipsInput
-                value={formData.formatos}
-                onChange={(formatos) => handleInputChange("formatos", formatos)}
-                placeholder="Agregar formato (ej: PDF, JPG, PNG)..."
-              />
-            </div>
           </CardContent>
         </Card>
 
-        {/* Campos de extracción */}
         <Card>
           <CardHeader>
-            <CardTitle>Campos de Extracción</CardTitle>
-            <CardDescription>Define qué información se extraerá de los documentos</CardDescription>
+            <CardTitle className="flex items-center justify-between">
+              Campos de la plantilla
+              <Button type="button" onClick={addField} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Agregar campo
+              </Button>
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {fields.map((field, index) => (
-              <div key={field.id} className="border rounded-lg p-4 space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="font-medium">Campo {index + 1}</h4>
-                  {fields.length > 1 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removeField(index)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Nombre del campo *</label>
-                    <Input
-                      value={field.field_name}
-                      onChange={(e) => handleFieldChange(index, "field_name", e.target.value)}
-                      placeholder="Ej: fecha, total, numero_factura"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Tipo de dato</label>
-                    <Select value={field.type} onValueChange={(value) => handleFieldChange(index, "type", value)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text">Texto</SelectItem>
-                        <SelectItem value="number">Número</SelectItem>
-                        <SelectItem value="date">Fecha</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Descripción</label>
-                  <Input
-                    value={field.description || ""}
-                    onChange={(e) => handleFieldChange(index, "description", e.target.value)}
-                    placeholder="Describe qué información debe contener este campo"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id={`required-${field.id}`}
-                    checked={field.required}
-                    onChange={(e) => handleFieldChange(index, "required", e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor={`required-${field.id}`} className="text-sm">
-                    Campo requerido
-                  </label>
-                </div>
+          <CardContent>
+            {fields.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No hay campos definidos. Agrega el primer campo para comenzar.
               </div>
-            ))}
+            ) : (
+              <div className="space-y-4">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">Campo {index + 1}</h4>
+                      <Button type="button" variant="outline" size="sm" onClick={() => removeField(index)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
 
-            <Button type="button" variant="outline" onClick={addField} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar Campo
-            </Button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Nombre del campo</Label>
+                        <Input
+                          value={field.name}
+                          onChange={(e) => updateField(index, { name: e.target.value })}
+                          placeholder="Ej: Nombre del cliente"
+                        />
+                      </div>
+                      <div>
+                        <Label>Tipo de campo</Label>
+                        <Select
+                          value={field.type}
+                          onValueChange={(value) => updateField(index, { type: value as Field["type"] })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">Texto</SelectItem>
+                            <SelectItem value="number">Número</SelectItem>
+                            <SelectItem value="date">Fecha</SelectItem>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="phone">Teléfono</SelectItem>
+                            <SelectItem value="select">Lista desplegable</SelectItem>
+                            <SelectItem value="file">Archivo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Variantes</Label>
+                        <ChipsInput
+                          value={field.variants || []}
+                          onChange={(variants) => updateField(index, { variants })}
+                          placeholder="Agregar variante..."
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Presiona Enter, coma (,) o haz clic fuera para agregar
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Formatos de respuesta</Label>
+                        <ChipsInput
+                          value={field.formats || []}
+                          onChange={(formats) => updateField(index, { formats })}
+                          placeholder="Agregar formato..."
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Presiona Enter, coma (,) o haz clic fuera para agregar
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`required-${field.id}`}
+                        checked={field.required}
+                        onChange={(e) => updateField(index, { required: e.target.checked })}
+                        className="rounded border-gray-300"
+                      />
+                      <Label htmlFor={`required-${field.id}`}>Campo obligatorio</Label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Botones de acción */}
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={() => router.push("/templates")} disabled={saving}>
             Cancelar
           </Button>
-          <Button type="submit">
-            <Save className="h-4 w-4 mr-2" />
-            Guardar Cambios
+          <Button type="submit" disabled={saving}>
+            {saving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </div>
       </form>

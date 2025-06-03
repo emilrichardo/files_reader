@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, type KeyboardEvent } from "react"
+import type React from "react"
+
+import { useState, type KeyboardEvent, useEffect } from "react"
 import { X } from "lucide-react"
 
 interface ChipsInputProps {
@@ -10,13 +12,20 @@ interface ChipsInputProps {
   className?: string
 }
 
-export default function ChipsInput({
+export const ChipsInput: React.FC<ChipsInputProps> = ({
   value = [],
   onChange,
   placeholder = "Agregar...",
   className = "",
-}: ChipsInputProps) {
+}: ChipsInputProps) => {
   const [inputValue, setInputValue] = useState("")
+
+  // Asegurarse de que value siempre sea un array
+  useEffect(() => {
+    if (!Array.isArray(value)) {
+      onChange([])
+    }
+  }, [value, onChange])
 
   const addChip = () => {
     const trimmedValue = inputValue.trim()
@@ -45,22 +54,23 @@ export default function ChipsInput({
   return (
     <div className={`w-full ${className}`}>
       <div className="flex flex-wrap gap-2 mb-2">
-        {value.map((chip, index) => (
-          <div
-            key={index}
-            className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-sm px-2 py-1 rounded-md"
-          >
-            <span>{chip}</span>
-            <button
-              type="button"
-              onClick={() => removeChip(chip)}
-              className="hover:bg-gray-200 rounded-full p-0.5 transition-colors"
-              aria-label={`Eliminar ${chip}`}
+        {Array.isArray(value) &&
+          value.map((chip, index) => (
+            <div
+              key={index}
+              className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-sm px-2 py-1 rounded-md"
             >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
+              <span>{chip}</span>
+              <button
+                type="button"
+                onClick={() => removeChip(chip)}
+                className="hover:bg-gray-200 rounded-full p-0.5 transition-colors"
+                aria-label={`Eliminar ${chip}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
       </div>
       <input
         type="text"
@@ -79,3 +89,7 @@ export default function ChipsInput({
     </div>
   )
 }
+
+export default ChipsInput
+
+// Named export para compatibilidad
