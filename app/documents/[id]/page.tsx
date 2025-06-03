@@ -445,6 +445,7 @@ export default function DocumentDetailPage() {
         apiResponse,
         hasApiResponse: !!apiResponse,
         apiResponseType: typeof apiResponse,
+        isArray: Array.isArray(apiResponse),
         apiResponseKeys: apiResponse ? Object.keys(apiResponse) : [],
         hasError: apiResponse?.error,
       })
@@ -464,31 +465,48 @@ export default function DocumentDetailPage() {
           // Respuesta exitosa del API
           console.log("✅ Respuesta exitosa del API, procesando datos...")
 
-          // Usar directamente la respuesta del API si es un objeto válido
-          if (typeof apiResponse === "object" && apiResponse !== null) {
-            // Filtrar propiedades del sistema y usar solo los datos relevantes
-            const systemProps = ["success", "message", "status", "timestamp", "warning"]
-            const dataProps = Object.keys(apiResponse).filter((key) => !systemProps.includes(key))
-
-            if (dataProps.length > 0) {
-              // Usar las propiedades de datos directamente
-              dataProps.forEach((key) => {
-                extracted[key] = apiResponse[key]
-              })
-              console.log("📊 Datos extraídos del API:", extracted)
-            } else if (apiResponse.extractedData) {
-              extracted = apiResponse.extractedData
-              console.log("📊 Usando extractedData del API:", extracted)
-            } else if (apiResponse.data) {
-              extracted = apiResponse.data
-              console.log("📊 Usando data del API:", extracted)
+          // Manejar la estructura específica del webhook: [{"output": {...}}]
+          if (Array.isArray(apiResponse) && apiResponse.length > 0) {
+            const firstItem = apiResponse[0]
+            if (firstItem && typeof firstItem === "object" && firstItem.output) {
+              // Usar los datos del output
+              extracted = { ...firstItem.output }
+              console.log("📊 Datos extraídos del output del API:", extracted)
             } else {
-              // Si no hay datos estructurados, crear un mensaje básico
-              extracted = {
-                [fields[0]?.field_name || "contenido"]: apiResponse.message || "Datos procesados por API",
-              }
-              console.log("📊 Creando datos básicos del API:", extracted)
+              console.log("⚠️ Estructura de array no reconocida:", firstItem)
+              extracted = simulateDataExtraction(file.name, file.type)
             }
+          } else if (typeof apiResponse === "object" && apiResponse !== null) {
+            // Manejar respuesta como objeto directo (fallback)
+            if (apiResponse.output) {
+              extracted = { ...apiResponse.output }
+              console.log("📊 Datos extraídos del output directo:", extracted)
+            } else {
+              // Filtrar propiedades del sistema y usar solo los datos relevantes
+              const systemProps = ["success", "message", "status", "timestamp", "warning"]
+              const dataProps = Object.keys(apiResponse).filter((key) => !systemProps.includes(key))
+
+              if (dataProps.length > 0) {
+                // Usar las propiedades de datos directamente
+                dataProps.forEach((key) => {
+                  extracted[key] = apiResponse[key]
+                })
+                console.log("📊 Datos extraídos directamente del API:", extracted)
+              } else if (apiResponse.extractedData) {
+                extracted = apiResponse.extractedData
+                console.log("📊 Usando extractedData del API:", extracted)
+              } else if (apiResponse.data) {
+                extracted = apiResponse.data
+                console.log("📊 Usando data del API:", extracted)
+              } else {
+                // Si no hay datos estructurados, usar simulación
+                console.log("⚠️ No se encontraron datos estructurados en la respuesta")
+                extracted = simulateDataExtraction(file.name, file.type)
+              }
+            }
+          } else {
+            console.log("⚠️ Respuesta del API no es un objeto válido")
+            extracted = simulateDataExtraction(file.name, file.type)
           }
         }
       } else {
