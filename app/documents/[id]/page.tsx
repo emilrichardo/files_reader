@@ -438,24 +438,62 @@ export default function DocumentDetailPage() {
         setUploadWarning(apiResponse.message || apiResponse.warning)
       }
 
-      // CAMBIO IMPORTANTE: Solo usar simulación si NO hay respuesta del API
+      // CAMBIO IMPORTANTE: Procesar respuesta del API correctamente
       let extracted: Record<string, any> = {}
 
-      if (apiResponse && !apiResponse.error) {
-        console.log("✅ Usando respuesta real del API:", apiResponse)
-        // Si el API devuelve datos estructurados, usarlos
-        if (apiResponse.extractedData) {
-          extracted = apiResponse.extractedData
-        } else if (apiResponse.data) {
-          extracted = apiResponse.data
+      console.log("🔍 Analizando respuesta del API:", {
+        apiResponse,
+        hasApiResponse: !!apiResponse,
+        apiResponseType: typeof apiResponse,
+        apiResponseKeys: apiResponse ? Object.keys(apiResponse) : [],
+        hasError: apiResponse?.error,
+      })
+
+      // Verificar si hay una respuesta válida del API
+      if (apiResponse) {
+        if (apiResponse.error) {
+          // Si hay error en la respuesta del API, mostrar error y no continuar
+          console.log("❌ Error en respuesta del API:", apiResponse.error)
+          toast({
+            title: "Error en el procesamiento",
+            description: apiResponse.error || apiResponse.message || "Error al procesar el archivo",
+            variant: "destructive",
+          })
+          return
         } else {
-          // Si el API responde pero no tiene datos estructurados, crear un objeto básico
-          extracted = {
-            [fields[0]?.field_name || "contenido"]: apiResponse.message || JSON.stringify(apiResponse),
+          // Respuesta exitosa del API
+          console.log("✅ Respuesta exitosa del API, procesando datos...")
+
+          // Usar directamente la respuesta del API si es un objeto válido
+          if (typeof apiResponse === "object" && apiResponse !== null) {
+            // Filtrar propiedades del sistema y usar solo los datos relevantes
+            const systemProps = ["success", "message", "status", "timestamp", "warning"]
+            const dataProps = Object.keys(apiResponse).filter((key) => !systemProps.includes(key))
+
+            if (dataProps.length > 0) {
+              // Usar las propiedades de datos directamente
+              dataProps.forEach((key) => {
+                extracted[key] = apiResponse[key]
+              })
+              console.log("📊 Datos extraídos del API:", extracted)
+            } else if (apiResponse.extractedData) {
+              extracted = apiResponse.extractedData
+              console.log("📊 Usando extractedData del API:", extracted)
+            } else if (apiResponse.data) {
+              extracted = apiResponse.data
+              console.log("📊 Usando data del API:", extracted)
+            } else {
+              // Si no hay datos estructurados, crear un mensaje básico
+              extracted = {
+                [fields[0]?.field_name || "contenido"]: apiResponse.message || "Datos procesados por API",
+              }
+              console.log("📊 Creando datos básicos del API:", extracted)
+            }
           }
         }
       } else {
-        console.log("⚠️ No hay respuesta válida del API, usando simulación")
+        // No hay respuesta del API, usar simulación solo como último recurso
+        console.log("⚠️ No hay respuesta del API, usando simulación")
         extracted = simulateDataExtraction(file.name, file.type)
       }
 
