@@ -11,6 +11,9 @@ export function useFileUpload() {
   const [isWaitingApiResponse, setIsWaitingApiResponse] = useState(false)
   const { settings } = useTheme()
 
+  // Endpoint por defecto para todos los usuarios
+  const DEFAULT_API_ENDPOINT = "https://cibet.app.n8n.cloud/webhook/invitu-public-upload"
+
   // Función para resetear la respuesta del API
   const resetApiResponse = useCallback(() => {
     setApiResponse(null)
@@ -40,9 +43,12 @@ export function useFileUpload() {
       metadata: FileMetadata
       apiData?: any
     }> => {
-      if (!settings?.api_endpoint) {
-        throw new Error("API endpoint not configured")
-      }
+      // Usar endpoint por defecto si no hay configuración específica
+      const apiEndpoint = settings?.api_endpoint || DEFAULT_API_ENDPOINT
+
+      console.log("🔗 [UPLOAD] Using API endpoint:", apiEndpoint)
+      console.log("🔗 [UPLOAD] Settings available:", !!settings)
+      console.log("🔗 [UPLOAD] User settings endpoint:", settings?.api_endpoint)
 
       setIsUploading(true)
       setUploadProgress(0)
@@ -90,7 +96,7 @@ export function useFileUpload() {
           await new Promise((resolve) => setTimeout(resolve, 1500))
 
           try {
-            const response = await fetch(settings.api_endpoint, {
+            const response = await fetch(apiEndpoint, {
               method: "POST",
               body: formData,
             })
@@ -139,7 +145,7 @@ export function useFileUpload() {
             method: "POST",
             body: formData,
             headers: {
-              "X-Target-URL": settings.api_endpoint,
+              "X-Target-URL": apiEndpoint,
             },
           })
 

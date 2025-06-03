@@ -35,7 +35,7 @@ const defaultSettings: UserSettings = {
   id: "1",
   user_id: "demo-user",
   project_name: "Invitu",
-  api_endpoint: "",
+  api_endpoint: "https://cibet.app.n8n.cloud/webhook/invitu-public-upload",
   api_keys: {
     openai: "",
     google_vision: "",
@@ -169,7 +169,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setSettings(mergedSettings)
         console.log("🔗 [THEME] API Endpoint for public:", mergedSettings.api_endpoint)
       } else {
-        console.log("⚠️ [THEME] No global settings found, using defaults")
+        console.log("⚠️ [THEME] No global settings found, using defaults with public endpoint")
         setSettings({ ...defaultSettings, user_id: "public" })
       }
     } catch (error) {
@@ -203,14 +203,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       } else {
         // Si no es superadmin, cargar configuración de superadmin
         console.log("🌍 [THEME] Loading superadmin settings for regular user")
-        const { data: superAdminSettings } = await getSuperAdminSettings()
-        if (superAdminSettings) {
-          console.log("✅ [THEME] Superadmin settings found:", superAdminSettings)
-          settingsData = superAdminSettings
-        } else {
-          console.log("⚠️ [THEME] No superadmin settings found, trying global settings")
-          const { data: globalSettings } = await getGlobalSettings()
-          settingsData = globalSettings
+        try {
+          const { data: superAdminSettings } = await getSuperAdminSettings()
+          if (superAdminSettings) {
+            console.log("✅ [THEME] Superadmin settings found:", superAdminSettings)
+            settingsData = superAdminSettings
+          } else {
+            console.log("⚠️ [THEME] No superadmin settings found, trying global settings")
+            const { data: globalSettings } = await getGlobalSettings()
+            settingsData = globalSettings
+          }
+        } catch (error) {
+          console.error("❌ [THEME] Error loading superadmin settings:", error)
+          console.log("🔄 [THEME] Falling back to default settings with public endpoint")
         }
       }
 
@@ -225,13 +230,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setSettings(mergedSettings)
         console.log("🔗 [THEME] API Endpoint loaded:", mergedSettings.api_endpoint)
       } else {
-        console.log("⚠️ [THEME] No settings found, using defaults")
+        console.log("⚠️ [THEME] No settings found, using defaults with public endpoint")
         const newSettings = { ...defaultSettings, user_id: userId }
         setSettings(newSettings)
+        console.log("🔗 [THEME] Using default API endpoint:", newSettings.api_endpoint)
       }
     } catch (error) {
       console.error("❌ [THEME] Error in loadUserSettings:", error)
-      setSettings({ ...defaultSettings, user_id: userId })
+      const fallbackSettings = { ...defaultSettings, user_id: userId }
+      setSettings(fallbackSettings)
+      console.log("🔗 [THEME] Using fallback API endpoint:", fallbackSettings.api_endpoint)
     } finally {
       setIsLoadingSettings(false)
     }
