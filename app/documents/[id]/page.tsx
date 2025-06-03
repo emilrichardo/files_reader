@@ -458,81 +458,6 @@ export default function DocumentDetailPage() {
     }
   }
 
-  // Función para extraer datos de la respuesta del API
-  const extractDataFromApiResponse = (response: any): Record<string, any> => {
-    try {
-      console.log("🔍 Extrayendo datos de la respuesta del API:", response)
-
-      // Si no hay respuesta, retornar objeto vacío
-      if (!response) {
-        console.log("⚠️ No hay respuesta del API")
-        return {}
-      }
-
-      let extractedData: Record<string, any> = {}
-
-      // Caso 1: Respuesta es un array con objetos que tienen propiedad output
-      if (Array.isArray(response) && response.length > 0) {
-        const firstItem = response[0]
-        if (firstItem && typeof firstItem === "object" && firstItem.output) {
-          extractedData = { ...firstItem.output }
-          console.log("📊 Datos extraídos del output del array:", extractedData)
-          return extractedData
-        }
-      }
-
-      // Caso 2: Respuesta es un objeto con propiedad output
-      if (response && typeof response === "object" && response.output) {
-        extractedData = { ...response.output }
-        console.log("📊 Datos extraídos del output directo:", extractedData)
-        return extractedData
-      }
-
-      // Caso 3: Respuesta es un objeto simple con datos directos
-      if (response && typeof response === "object" && !Array.isArray(response)) {
-        // Filtrar propiedades del sistema que no son datos
-        const systemProps = ["success", "message", "status", "timestamp", "warning", "error"]
-        const responseKeys = Object.keys(response)
-        console.log("🔍 Claves en la respuesta:", responseKeys)
-
-        // Buscar datos directos en la respuesta
-        const dataKeys = responseKeys.filter((key) => !systemProps.includes(key))
-        console.log("🔍 Claves de datos encontradas:", dataKeys)
-
-        if (dataKeys.length > 0) {
-          // Usar los datos directos
-          dataKeys.forEach((key) => {
-            extractedData[key] = response[key]
-          })
-          console.log("📊 Datos extraídos directamente:", extractedData)
-          return extractedData
-        }
-      }
-
-      // Caso 4: Respuesta tiene extractedData o data
-      if (response && typeof response === "object") {
-        if (response.extractedData) {
-          extractedData = { ...response.extractedData }
-          console.log("📊 Usando extractedData del API:", extractedData)
-          return extractedData
-        }
-
-        if (response.data) {
-          extractedData = { ...response.data }
-          console.log("📊 Usando data del API:", extractedData)
-          return extractedData
-        }
-      }
-
-      // Si llegamos aquí, no pudimos extraer datos estructurados
-      console.log("⚠️ No se pudieron extraer datos estructurados de la respuesta")
-      return {}
-    } catch (error) {
-      console.error("❌ Error al extraer datos de la respuesta:", error)
-      return {}
-    }
-  }
-
   // Función para limpiar los datos antes de una nueva carga
   const resetUploadData = () => {
     setExtractedData({})
@@ -594,24 +519,12 @@ export default function DocumentDetailPage() {
         setUploadWarning(apiResponse.message || apiResponse.warning)
       }
 
-      // PROCESAMIENTO MEJORADO: Extraer datos del API
-      let extracted: Record<string, any> = {}
-
       console.log("🔍 Respuesta completa del API:", JSON.stringify(apiResponse, null, 2))
 
+      // SOLUCIÓN DIRECTA: Usar directamente la respuesta del API como datos extraídos
       if (apiResponse && !apiResponse.error) {
-        console.log("✅ Procesando respuesta exitosa del API...")
-
-        // Extraer datos de la respuesta del API
-        extracted = extractDataFromApiResponse(apiResponse)
-
-        // Si no se pudieron extraer datos de la respuesta, usar simulación
-        if (Object.keys(extracted).length === 0) {
-          console.log("⚠️ No se pudieron extraer datos de la respuesta, usando simulación")
-          extracted = simulateDataExtraction(file.name, file.type)
-        } else {
-          console.log("✅ Datos extraídos exitosamente del API:", extracted)
-        }
+        console.log("✅ Usando directamente la respuesta del API como datos extraídos")
+        setExtractedData(apiResponse)
       } else if (apiResponse?.error) {
         console.log("❌ Error en respuesta del API:", apiResponse.error)
         toast({
@@ -622,18 +535,15 @@ export default function DocumentDetailPage() {
         return
       } else {
         console.log("⚠️ No hay respuesta del API, usando simulación")
-        extracted = simulateDataExtraction(file.name, file.type)
+        setExtractedData(simulateDataExtraction(file.name, file.type))
       }
-
-      console.log("🎯 Datos finales para el modal:", extracted)
-      setExtractedData(extracted)
 
       // Mostrar modal de preview
       setShowPreviewModal(true)
 
       toast({
         title: "Archivo procesado",
-        description: `Se han extraído ${Object.keys(extracted).length} campos del archivo.`,
+        description: "Archivo procesado correctamente.",
       })
     } catch (error) {
       console.error("Error processing file:", error)

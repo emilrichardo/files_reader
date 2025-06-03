@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import type { DocumentRow, DocumentField, FileMetadata } from "@/lib/types"
 import { useTheme } from "@/contexts/theme-context"
+import type { DocumentRow, DocumentField, FileMetadata } from "@/lib/types"
 
 export function useFileUpload() {
   const [isUploading, setIsUploading] = useState(false)
@@ -17,316 +17,167 @@ export function useFileUpload() {
     setIsWaitingApiResponse(false)
   }, [])
 
-  // Función para comprimir imágenes
-  const compressImage = async (file: File): Promise<File> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement("canvas")
-      const ctx = canvas.getContext("2d")
-      const img = new Image()
-
-      img.crossOrigin = "anonymous"
-
-      img.onload = () => {
-        // Calcular dimensiones máximas basadas en el tamaño del archivo
-        const maxDimension = file.size > 1024 * 1024 ? 800 : 1200 // Más agresivo para archivos grandes
-
-        let { width, height } = img
-
-        // Redimensionar manteniendo proporción
-        if (width > height) {
-          if (width > maxDimension) {
-            height = (height * maxDimension) / width
-            width = maxDimension
-          }
-        } else {
-          if (height > maxDimension) {
-            width = (width * maxDimension) / height
-            height = maxDimension
-          }
-        }
-
-        canvas.width = width
-        canvas.height = height
-
-        // Configurar contexto para mejor calidad
-        if (ctx) {
-          ctx.imageSmoothingEnabled = true
-          ctx.imageSmoothingQuality = "high"
-          ctx.drawImage(img, 0, 0, width, height)
-
-          // Determinar calidad basada en el tamaño original
-          let quality = 0.7
-          if (file.size > 2 * 1024 * 1024)
-            quality = 0.5 // Muy agresivo para archivos > 2MB
-          else if (file.size > 1024 * 1024) quality = 0.6 // Agresivo para archivos > 1MB
-
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressedFile = new File([blob], file.name, {
-                  type: "image/jpeg",
-                  lastModified: Date.now(),
-                })
-                console.log(`🗜️ Imagen comprimida: ${file.size} → ${compressedFile.size} bytes`)
-                resolve(compressedFile)
-              } else {
-                resolve(file)
-              }
-            },
-            "image/jpeg",
-            quality,
-          )
-        } else {
-          resolve(file)
-        }
+  const uploadFile = useCallback(
+    async (file: File, existingRows: DocumentRow[], fields: DocumentField[]): Promise<FileMetadata> => {
+      if (!settings?.api_endpoint) {
+        throw new Error("API endpoint not configured")
       }
 
-      img.onerror = () => resolve(file)
-      img.src = URL.createObjectURL(file)
-    })
-  }
-
-  // Función para convertir archivo a base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = (error) => reject(error)
-    })
-  }
-
-  // Función principal para subir archivos
-  const uploadFile = useCallback(
-    async (
-      file: File,
-      existingRows: DocumentRow[] = [],
-      fields: DocumentField[] = [],
-      retryCount = 0,
-    ): Promise<FileMetadata> => {
-      const maxRetries = 2
-      const maxFileSize = 2 * 1024 * 1024 // 2MB
+      setIsUploading(true)
+      setUploadProgress(0)
+      setApiResponse(null)
+      setIsWaitingApiResponse(false)
 
       try {
-        setIsUploading(true)
-        setUploadProgress(10)
-        setApiResponse(null)
+        // Verificar tamaño del archivo (máximo 2MB)
+        const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+        if (file.size > MAX_FILE_SIZE) {
+          console.warn("⚠️ Archivo demasiado grande, enviando solo metadatos")
 
-        console.log(`📤 Intento ${retryCount + 1} de subida para: ${file.name}`)
+          // Crear metadatos del archivo
+          const metadata: FileMetadata = {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            last_modified: new Date(file.lastModified).toISOString(),
+          }
 
-        // Verificar tamaño antes de procesar
-        if (file.size > maxFileSize) {
-          console.log(
-            `⚠️ Archivo demasiado grande: ${(file.size / 1024 / 1024).toFixed(2)}MB > ${maxFileSize / 1024 / 1024}MB`,
-          )
+          // Simular progreso
+          const simulateProgress = () => {
+            let progress = 0
+            const interval = setInterval(() => {
+              progress += 10
+              setUploadProgress(Math.min(progress, 100))
+              if (progress >= 100) {
+                clearInterval(interval)
+                setIsUploading(false)
+                setIsWaitingApiResponse(true)
+              }
+            }, 100)
+          }
 
-          // Si es una imagen, intentar comprimir
-          if (file.type.startsWith("image/")) {
-            console.log("🗜️ Intentando comprimir imagen...")
-            file = await compressImage(file)
+          simulateProgress()
 
-            // Si después de comprimir sigue siendo muy grande
-            if (file.size > maxFileSize) {
-              throw new Error(
-                `Archivo demasiado grande después de compresión: ${(file.size / 1024 / 1024).toFixed(2)}MB`,
-              )
+          // Enviar solo metadatos al API
+          const formData = new FormData()
+          formData.append("metadata", JSON.stringify(metadata))
+          formData.append("fields", JSON.stringify(fields))
+          formData.append("existing_rows", JSON.stringify(existingRows))
+          formData.append("file_too_large", "true")
+
+          // Esperar un poco para simular procesamiento
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+
+          try {
+            const response = await fetch(settings.api_endpoint, {
+              method: "POST",
+              body: formData,
+            })
+
+            if (!response.ok) {
+              throw new Error(`API responded with status ${response.status}`)
             }
-          } else {
-            // Para otros tipos de archivo, solo enviar metadatos
-            console.log("📋 Archivo demasiado grande, enviando solo metadatos")
 
-            const metadata: FileMetadata = {
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              lastModified: file.lastModified,
-              error: "FILE_TOO_LARGE",
-              warning: `El archivo excede el límite de ${maxFileSize / 1024 / 1024}MB y no puede ser procesado automáticamente.`,
-            }
-
-            setUploadProgress(100)
-            setIsUploading(false)
+            const data = await response.json()
+            setApiResponse(data)
+            setIsWaitingApiResponse(false)
+            return metadata
+          } catch (error) {
+            console.error("Error calling API:", error)
+            setApiResponse({
+              error: "Error al procesar el archivo en el servidor",
+              message: "El archivo es demasiado grande para ser procesado (máximo 2MB)",
+              warning: "Se ha enviado solo los metadatos del archivo",
+            })
+            setIsWaitingApiResponse(false)
             return metadata
           }
         }
 
-        setUploadProgress(30)
+        // Para archivos de tamaño normal, proceder con la carga completa
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("fields", JSON.stringify(fields))
+        formData.append("existing_rows", JSON.stringify(existingRows))
 
-        // Convertir a base64
-        console.log("🔄 Convirtiendo archivo a base64...")
-        const base64 = await fileToBase64(file)
-        console.log(`✅ Archivo convertido a base64, tamaño: ${base64.length}`)
+        // Usar el endpoint de proxy para evitar CORS
+        const uploadUrl = "/api/upload-proxy"
 
-        setUploadProgress(50)
-
-        // Preparar datos para enviar al API
-        const body = {
-          filename: file.name,
-          content: base64,
-          size: file.size,
-          type: file.type,
-          timestamp: Date.now(),
-          fields: fields.map((f) => ({
-            name: f.field_name,
-            type: f.type,
-            variants: f.variants || [],
-            formats: f.formats || [],
-          })),
-          existingData: existingRows.map((row) => row.data),
-          retryCount,
-        }
-
-        console.log("📤 Enviando POST con body:", {
-          filename: body.filename,
-          size: body.size,
-          type: body.type,
-          contentLength: body.content.length,
-          fieldsCount: body.fields.length,
-          existingDataCount: body.existingData.length,
-          retryCount: body.retryCount,
-        })
-
-        // Usar el proxy interno para evitar CORS
-        console.log("🔄 Usando proxy interno para evitar CORS")
-        console.log(
-          "🎯 Target endpoint:",
-          settings?.api_endpoint || "https://cibet.app.n8n.cloud/webhook-test/uploadfile",
-        )
-
-        setIsWaitingApiResponse(true)
-
-        const response = await fetch("/api/upload-proxy", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        })
-
-        setUploadProgress(80)
-
-        console.log(`📡 Status de respuesta del proxy: ${response.status}`)
-        console.log("📡 Headers de respuesta:", Object.fromEntries(response.headers.entries()))
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.log(`⚠️ Error en respuesta del proxy: ${response.status}`)
-          console.log("⚠️ Error text:", errorText)
-
-          // Si es error 413 y no hemos agotado los reintentos, intentar con archivo más pequeño
-          if (response.status === 413 && retryCount < maxRetries) {
-            console.log("🔄 Reintentando con compresión más agresiva...")
-
-            if (file.type.startsWith("image/")) {
-              // Comprimir aún más agresivamente
-              const canvas = document.createElement("canvas")
-              const ctx = canvas.getContext("2d")
-              const img = new Image()
-
-              return new Promise((resolve, reject) => {
-                img.onload = async () => {
-                  const maxDim = 600 // Muy pequeño para reintentos
-                  let { width, height } = img
-
-                  if (width > height) {
-                    if (width > maxDim) {
-                      height = (height * maxDim) / width
-                      width = maxDim
-                    }
-                  } else {
-                    if (height > maxDim) {
-                      width = (width * maxDim) / height
-                      height = maxDim
-                    }
-                  }
-
-                  canvas.width = width
-                  canvas.height = height
-
-                  if (ctx) {
-                    ctx.drawImage(img, 0, 0, width, height)
-                    canvas.toBlob(
-                      async (blob) => {
-                        if (blob) {
-                          const veryCompressedFile = new File([blob], file.name, {
-                            type: "image/jpeg",
-                            lastModified: Date.now(),
-                          })
-                          try {
-                            const result = await uploadFile(veryCompressedFile, existingRows, fields, retryCount + 1)
-                            resolve(result)
-                          } catch (error) {
-                            reject(error)
-                          }
-                        } else {
-                          reject(new Error("No se pudo comprimir más el archivo"))
-                        }
-                      },
-                      "image/jpeg",
-                      0.3,
-                    ) // Calidad muy baja
-                  }
-                }
-                img.crossOrigin = "anonymous"
-                img.src = URL.createObjectURL(file)
-              })
-            } else {
-              throw new Error(`Error ${response.status}: ${errorText}`)
+        // Simular progreso de carga
+        const simulateProgress = () => {
+          let progress = 0
+          const interval = setInterval(() => {
+            progress += 5
+            setUploadProgress(Math.min(progress, 95)) // Máximo 95% hasta que se complete
+            if (progress >= 95) {
+              clearInterval(interval)
             }
-          } else {
-            throw new Error(`Error ${response.status}: ${errorText}`)
+          }, 100)
+          return interval
+        }
+
+        const progressInterval = simulateProgress()
+
+        try {
+          // Enviar al endpoint de proxy
+          const response = await fetch(uploadUrl, {
+            method: "POST",
+            body: formData,
+            headers: {
+              "X-Target-URL": settings.api_endpoint,
+            },
+          })
+
+          clearInterval(progressInterval)
+          setUploadProgress(100)
+
+          if (!response.ok) {
+            throw new Error(`API responded with status ${response.status}`)
           }
+
+          const data = await response.json()
+          console.log("✅ API Response:", data)
+          setApiResponse(data)
+
+          // Crear metadatos del archivo
+          const metadata: FileMetadata = {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            last_modified: new Date(file.lastModified).toISOString(),
+          }
+
+          setIsUploading(false)
+          return metadata
+        } catch (error) {
+          console.error("Error uploading file:", error)
+          clearInterval(progressInterval)
+          setUploadProgress(100)
+          setIsUploading(false)
+
+          // Crear metadatos del archivo a pesar del error
+          const metadata: FileMetadata = {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            last_modified: new Date(file.lastModified).toISOString(),
+          }
+
+          setApiResponse({
+            error: "Error al procesar el archivo en el servidor",
+            message: error instanceof Error ? error.message : "Error desconocido",
+          })
+
+          return metadata
         }
-
-        const result = await response.json()
-        console.log("✅ Archivo procesado exitosamente:", result)
-
-        setApiResponse(result)
-        setUploadProgress(100)
-
-        // Crear metadata del archivo
-        const metadata: FileMetadata = {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified,
-          uploadedAt: new Date().toISOString(),
-          processingResult: result,
-        }
-
-        return metadata
       } catch (error) {
-        console.error("❌ Error en uploadFile:", error)
-
-        // Si es un error de red y no hemos agotado los reintentos
-        if (retryCount < maxRetries && (error as Error).message.includes("fetch")) {
-          console.log(`🔄 Reintentando por error de red... (${retryCount + 1}/${maxRetries})`)
-          await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1))) // Esperar más tiempo en cada reintento
-          return uploadFile(file, existingRows, fields, retryCount + 1)
-        }
-
-        setApiResponse({
-          error: true,
-          message: (error as Error).message,
-        })
-
-        // Devolver metadata con error
-        const metadata: FileMetadata = {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified,
-          error: "UPLOAD_ERROR",
-          errorMessage: (error as Error).message,
-        }
-
-        return metadata
-      } finally {
+        console.error("Error in uploadFile:", error)
         setIsUploading(false)
-        setIsWaitingApiResponse(false)
+        setUploadProgress(0)
+        throw error
       }
     },
-    [settings],
+    [settings?.api_endpoint],
   )
 
   return {
