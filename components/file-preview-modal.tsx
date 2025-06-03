@@ -48,14 +48,15 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     if (apiResponse && typeof apiResponse === "object" && !apiResponse.error) {
       console.log("✅ Usando datos de apiResponse")
       dataToUse = { ...apiResponse }
-    } else if (extractedData && Object.keys(extractedData).length > 0) {
+    } else if (extractedData && typeof extractedData === "object" && Object.keys(extractedData).length > 0) {
       console.log("⚠️ Usando datos de extractedData como fallback")
       dataToUse = { ...extractedData }
     }
 
+    console.log("📝 Datos finales para el modal:", dataToUse)
+
     if (Object.keys(dataToUse).length > 0) {
       setEditableData(dataToUse)
-      console.log("📝 Datos establecidos en el modal:", dataToUse)
     } else {
       console.log("⚠️ No hay datos para mostrar")
     }
