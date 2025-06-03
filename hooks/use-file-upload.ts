@@ -148,6 +148,14 @@ export function useFileUpload() {
           console.log("✅ API Response:", data)
           setApiResponse(data)
           setUploadProgress(100)
+          setIsUploading(false)
+
+          // Asegurar que la respuesta esté disponible inmediatamente
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              resolve(metadata)
+            }, 100)
+          })
 
           // Crear metadatos del archivo
           const metadata: FileMetadata = {
