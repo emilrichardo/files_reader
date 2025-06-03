@@ -15,6 +15,7 @@ import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
 import { Textarea } from "@/components/ui/textarea"
 import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
+import ChipsInput from "@/components/chips-input"
 
 export default function CreateDocumentPage() {
   const router = useRouter()
@@ -470,34 +471,16 @@ export default function CreateDocumentPage() {
                           />
                         </td>
                         <td className="border border-gray-200 p-2">
-                          <Input
-                            value={field.variants?.join(", ") || ""}
-                            onChange={(e) => {
-                              const value = e.target.value
-                              const variants = value
-                                ? value
-                                    .split(",")
-                                    .map((v) => v.trim())
-                                    .filter((v) => v.length > 0)
-                                : []
-                              updateField(field.id, { variants })
-                            }}
+                          <ChipsInput
+                            value={field.variants || []}
+                            onChange={(variants) => updateField(field.id, { variants })}
                             placeholder="variante1, variante2"
                           />
                         </td>
                         <td className="border border-gray-200 p-2">
-                          <Input
-                            value={field.formats?.join(", ") || ""}
-                            onChange={(e) => {
-                              const value = e.target.value
-                              const formats = value
-                                ? value
-                                    .split(",")
-                                    .map((f) => f.trim())
-                                    .filter((f) => f.length > 0)
-                                : []
-                              updateField(field.id, { formats })
-                            }}
+                          <ChipsInput
+                            value={field.formats || []}
+                            onChange={(formats) => updateField(field.id, { formats })}
                             placeholder="formato1, formato2"
                           />
                         </td>
