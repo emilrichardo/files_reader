@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
+  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,6 +47,7 @@ export default function DocumentDetailPage() {
     templates,
     addTemplate,
     documents,
+    refreshDocuments,
   } = useApp()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -55,6 +57,8 @@ export default function DocumentDetailPage() {
 
   const [document, setDocument] = useState<Document | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Estados para edición del nombre
   const [isEditingName, setIsEditingName] = useState(false)
@@ -78,33 +82,94 @@ export default function DocumentDetailPage() {
 
   // Ref para el input de archivo
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Ref para controlar si el componente está montado
+  const isMounted = useRef(true)
 
-  useEffect(() => {
-    const docId = params.id as string
-    const doc = getDocument(docId)
-    if (doc) {
-      setDocument(doc)
-      setTempName(doc.name)
-      setFields(doc.fields || [])
-      setRows(doc.rows || [])
+  // Función para cargar el documento de forma segura
+  const loadDocument = useCallback(async () => {
+    if (!isMounted.current) return
+
+    setLoading(true)
+    setLoadError(null)
+
+    try {
+      const docId = params.id as string
+      if (!docId) {
+        setLoadError("ID de documento no válido")
+        setLoading(false)
+        return
+      }
+
+      const doc = getDocument(docId)
+      if (!doc) {
+        setLoadError("Documento no encontrado")
+        setLoading(false)
+        return
+      }
+
+      if (isMounted.current) {
+        setDocument(doc)
+        setTempName(doc.name || "")
+        setFields(doc.fields || [])
+        setRows(doc.rows || [])
+        setPendingRows([])
+      }
+    } catch (error) {
+      console.error("Error al cargar el documento:", error)
+      if (isMounted.current) {
+        setLoadError("Error al cargar el documento")
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false)
+      }
     }
-    setLoading(false)
   }, [params.id, getDocument])
 
-  // Agregar después del primer useEffect:
-  useEffect(() => {
-    const docId = params.id as string
-    const doc = getDocument(docId)
-    if (doc) {
-      setDocument(doc)
-      setTempName(doc.name)
-      setFields(doc.fields || [])
-      setRows(doc.rows || [])
-      // Limpiar filas pendientes al recargar
-      setPendingRows([])
+  // Función para refrescar los datos
+  const handleRefresh = async () => {
+    if (refreshing) return
+
+    setRefreshing(true)
+    try {
+      await refreshDocuments()
+      await loadDocument()
+      toast({
+        title: "Datos actualizados",
+        description: "Los datos del documento han sido actualizados.",
+      })
+    } catch (error) {
+      console.error("Error al refrescar datos:", error)
+      toast({
+        title: "Error",
+        description: "Error al refrescar los datos.",
+        variant: "destructive",
+      })
+    } finally {
+      setRefreshing(false)
     }
-    setLoading(false)
-  }, [params.id, getDocument, documents]) // Agregar 'documents' como dependencia
+  }
+
+  // Efecto para cargar el documento al montar el componente
+  useEffect(() => {
+    isMounted.current = true
+    loadDocument()
+
+    return () => {
+      isMounted.current = false
+    }
+  }, [loadDocument])
+
+  // Efecto para actualizar cuando cambian los documentos
+  useEffect(() => {
+    if (isMounted.current && document) {
+      const updatedDoc = getDocument(document.id)
+      if (updatedDoc) {
+        setDocument(updatedDoc)
+        setRows(updatedDoc.rows || [])
+      }
+    }
+  }, [documents, document, getDocument])
 
   // Función mejorada para parsear arrays separados por comas
   const parseCommaSeparatedArray = (value: string): string[] => {
@@ -391,6 +456,62 @@ export default function DocumentDetailPage() {
     }
   }
 
+  // Función para extraer datos de la respuesta del API
+  const extractDataFromApiResponse = (response: any): Record<string, any> => {
+    try {
+      console.log("🔍 Extrayendo datos de la respuesta del API:", response)
+
+      // Caso 1: Respuesta es un array con objetos que tienen propiedad output
+      if (Array.isArray(response) && response.length > 0) {
+        const firstItem = response[0]
+        if (firstItem && typeof firstItem === "object" && firstItem.output) {
+          console.log("📊 Datos extraídos del output del array:", firstItem.output)
+          return { ...firstItem.output }
+        }
+      }
+
+      // Caso 2: Respuesta es un objeto con propiedad output
+      if (response && typeof response === "object" && response.output) {
+        console.log("📊 Datos extraídos del output directo:", response.output)
+        return { ...response.output }
+      }
+
+      // Caso 3: Respuesta es un objeto con propiedades de datos
+      if (response && typeof response === "object") {
+        // Filtrar propiedades del sistema
+        const systemProps = ["success", "message", "status", "timestamp", "warning"]
+        const dataProps = Object.keys(response).filter((key) => !systemProps.includes(key))
+
+        if (dataProps.length > 0) {
+          const extractedData: Record<string, any> = {}
+          dataProps.forEach((key) => {
+            extractedData[key] = response[key]
+          })
+          console.log("📊 Datos extraídos directamente del API:", extractedData)
+          return extractedData
+        }
+
+        // Caso 4: Respuesta tiene extractedData o data
+        if (response.extractedData) {
+          console.log("📊 Usando extractedData del API:", response.extractedData)
+          return { ...response.extractedData }
+        }
+
+        if (response.data) {
+          console.log("📊 Usando data del API:", response.data)
+          return { ...response.data }
+        }
+      }
+
+      // Si llegamos aquí, no pudimos extraer datos estructurados
+      console.log("⚠️ No se pudieron extraer datos estructurados de la respuesta")
+      return {}
+    } catch (error) {
+      console.error("❌ Error al extraer datos de la respuesta:", error)
+      return {}
+    }
+  }
+
   // Manejo de archivos
   const handleFileUpload = async (files: FileList) => {
     const file = files[0]
@@ -464,48 +585,11 @@ export default function DocumentDetailPage() {
         } else {
           // Respuesta exitosa del API
           console.log("✅ Respuesta exitosa del API, procesando datos...")
+          extracted = extractDataFromApiResponse(apiResponse)
 
-          // Manejar la estructura específica del webhook: [{"output": {...}}]
-          if (Array.isArray(apiResponse) && apiResponse.length > 0) {
-            const firstItem = apiResponse[0]
-            if (firstItem && typeof firstItem === "object" && firstItem.output) {
-              // Usar los datos del output
-              extracted = { ...firstItem.output }
-              console.log("📊 Datos extraídos del output del API:", extracted)
-            } else {
-              console.log("⚠️ Estructura de array no reconocida:", firstItem)
-              extracted = simulateDataExtraction(file.name, file.type)
-            }
-          } else if (typeof apiResponse === "object" && apiResponse !== null) {
-            // Manejar respuesta como objeto directo (fallback)
-            if (apiResponse.output) {
-              extracted = { ...apiResponse.output }
-              console.log("📊 Datos extraídos del output directo:", extracted)
-            } else {
-              // Filtrar propiedades del sistema y usar solo los datos relevantes
-              const systemProps = ["success", "message", "status", "timestamp", "warning"]
-              const dataProps = Object.keys(apiResponse).filter((key) => !systemProps.includes(key))
-
-              if (dataProps.length > 0) {
-                // Usar las propiedades de datos directamente
-                dataProps.forEach((key) => {
-                  extracted[key] = apiResponse[key]
-                })
-                console.log("📊 Datos extraídos directamente del API:", extracted)
-              } else if (apiResponse.extractedData) {
-                extracted = apiResponse.extractedData
-                console.log("📊 Usando extractedData del API:", extracted)
-              } else if (apiResponse.data) {
-                extracted = apiResponse.data
-                console.log("📊 Usando data del API:", extracted)
-              } else {
-                // Si no hay datos estructurados, usar simulación
-                console.log("⚠️ No se encontraron datos estructurados en la respuesta")
-                extracted = simulateDataExtraction(file.name, file.type)
-              }
-            }
-          } else {
-            console.log("⚠️ Respuesta del API no es un objeto válido")
+          // Si no se pudieron extraer datos, usar simulación
+          if (Object.keys(extracted).length === 0) {
+            console.log("⚠️ No se pudieron extraer datos, usando simulación")
             extracted = simulateDataExtraction(file.name, file.type)
           }
         }
@@ -588,21 +672,27 @@ export default function DocumentDetailPage() {
     )
   }
 
-  if (!document) {
+  if (loadError || !document) {
     return (
       <div className="p-4 lg:p-8 pt-16 lg:pt-8">
         <div className="max-w-7xl mx-auto">
           <Card>
             <CardContent className="p-12 text-center">
               <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Documento no encontrado</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">{loadError || "Documento no encontrado"}</h3>
               <p className="text-gray-600 mb-6">El documento que buscas no existe o ha sido eliminado.</p>
-              <Link href="/documents">
-                <Button style={getPrimaryButtonStyles()}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Volver a Documentos
+              <div className="flex justify-center space-x-4">
+                <Link href="/documents">
+                  <Button style={getPrimaryButtonStyles()}>
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Volver a Documentos
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                  Reintentar
                 </Button>
-              </Link>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -665,6 +755,10 @@ export default function DocumentDetailPage() {
             </div>
           </div>
           <div className="flex space-x-2">
+            <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Actualizar
+            </Button>
             <Button variant="outline" onClick={() => exportDocument("csv")}>
               <Download className="w-4 h-4 mr-2" />
               Exportar
