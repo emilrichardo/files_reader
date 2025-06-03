@@ -1,131 +1,98 @@
-import { type NextRequest, NextResponse } from "next/server"
-
-// Aumentar el límite de tamaño del body a 10MB
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
-  },
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    // Obtener el body de la petición
-    const body = await request.json()
+    console.log("🔄 Proxy recibiendo request...")
 
-    console.log("📡 Proxy: Recibiendo petición para reenviar")
-
-    // Verificar el modo de operación
-    const mode = body.metadata?.mode || "full_content"
-    console.log("🔄 Proxy: Modo de operación:", mode)
-
-    // Información básica sobre el contenido
-    const logInfo = {
-      file: body.file
-        ? { name: body.file.name, type: body.file.type, size: body.file.size }
-        : body.fileMetadata
-          ? {
-              name: body.fileMetadata.name,
-              type: body.fileMetadata.type,
-              size: body.fileMetadata.size,
-              mode: "metadata_only",
-            }
-          : "No file info",
-      entries: body.entries ? body.entries.length + " entries" : "No entries",
-      fieldsStructure: body.fieldsStructure ? body.fieldsStructure.length + " fields" : "No fields",
-      metadata: body.metadata || "No metadata",
-      bodySize: JSON.stringify(body).length + " bytes",
-    }
-
-    console.log("📋 Proxy: Body recibido:", logInfo)
-
-    // Obtener el endpoint desde los headers
-    const targetEndpoint = request.headers.get("x-target-endpoint")
-
-    if (!targetEndpoint) {
-      console.error("❌ Proxy: No target endpoint provided")
-      return new NextResponse(
+    // Verificar Content-Length antes de procesar
+    const contentLength = request.headers.get("content-length")
+    if (contentLength && Number.parseInt(contentLength) > 5 * 1024 * 1024) {
+      console.log(`❌ Payload demasiado grande: ${contentLength} bytes`)
+      return new Response(
         JSON.stringify({
-          error: "No target endpoint",
-          message: "No se proporcionó endpoint de destino",
+          error: "Payload too large",
+          maxSize: "5MB",
+          receivedSize: contentLength,
         }),
         {
-          status: 400,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Content-Type": "application/json",
-          },
+          status: 413,
+          headers: { "Content-Type": "application/json" },
         },
       )
     }
 
-    console.log("🎯 Proxy: Enviando a:", targetEndpoint)
+    const body = await request.json()
+    console.log("📦 Body recibido:", {
+      filename: body.filename,
+      size: body.size,
+      type: body.type,
+      contentLength: body.content?.length,
+      retryCount: body.retryCount || 0,
+    })
 
-    // Reenviar la petición al endpoint real
-    const response = await fetch(targetEndpoint, {
+    // Verificar tamaño del contenido base64
+    if (body.content && body.content.length > 6 * 1024 * 1024) {
+      // ~4.5MB después de decodificar
+      console.log(`❌ Contenido base64 demasiado grande: ${body.content.length} caracteres`)
+      return new Response(
+        JSON.stringify({
+          error: "Content too large after base64 encoding",
+          maxSize: "4.5MB",
+          receivedSize: `${(body.content.length / 1024 / 1024).toFixed(2)}MB`,
+        }),
+        {
+          status: 413,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
+    }
+
+    console.log("🎯 Enviando a webhook externo...")
+
+    const response = await fetch("https://cibet.app.n8n.cloud/webhook-test/uploadfile", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Reenviar algunos headers importantes
-        ...(request.headers.get("authorization") && {
-          Authorization: request.headers.get("authorization")!,
-        }),
       },
       body: JSON.stringify(body),
     })
 
-    console.log("📡 Proxy: Respuesta del servidor:", response.status)
-    console.log("📡 Proxy: Headers de respuesta:", Object.fromEntries(response.headers.entries()))
+    console.log(`📡 Respuesta del webhook: ${response.status}`)
 
-    // Obtener la respuesta
-    const responseData = await response.text()
-    console.log(
-      "📋 Proxy: Datos de respuesta:",
-      responseData.substring(0, 500) + (responseData.length > 500 ? "..." : ""),
-    )
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.log("❌ Error del webhook:", errorText)
 
-    // Crear respuesta con headers CORS
-    const corsResponse = new NextResponse(responseData, {
-      status: response.status,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-target-endpoint",
-        "Content-Type": response.headers.get("content-type") || "application/json",
-      },
+      return new Response(
+        JSON.stringify({
+          error: "External webhook error",
+          status: response.status,
+          message: errorText,
+        }),
+        {
+          status: response.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
+    }
+
+    const result = await response.json()
+    console.log("✅ Respuesta exitosa del webhook")
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
     })
-
-    return corsResponse
   } catch (error) {
-    console.error("❌ Proxy error:", error)
+    console.error("❌ Error en proxy:", error)
 
-    return new NextResponse(
+    return new Response(
       JSON.stringify({
-        error: "Proxy error",
-        message: error instanceof Error ? error.message : "Unknown error",
-        details: error instanceof Error ? error.stack : undefined,
+        error: "Proxy internal error",
+        message: (error as Error).message,
       }),
       {
         status: 500,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       },
     )
   }
-}
-
-// Manejar preflight requests
-export async function OPTIONS(request: NextRequest) {
-  console.log("🔄 Proxy: Handling OPTIONS preflight request")
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-target-endpoint",
-    },
-  })
 }
