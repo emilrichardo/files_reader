@@ -471,7 +471,7 @@ export default function DocumentDetailPage() {
     setModalKey((prev) => prev + 1) // Incrementar la clave para forzar re-renderizado
   }
 
-  // Manejo de archivos
+  // Manejo de archivos mejorado
   const handleFileUpload = async (files: FileList) => {
     const file = files[0]
     if (!file || !document) return
@@ -507,10 +507,6 @@ export default function DocumentDetailPage() {
 
       setCurrentFile(file)
       console.log("🔄 Iniciando upload desde documento existente...")
-      console.log("📊 Rows:", rows.length)
-      console.log("📊 Pending rows:", pendingRows.length)
-      console.log("🏗️ Fields:", fields.length)
-      console.log("🎯 Endpoint configurado:", settings.api_endpoint)
 
       // Mostrar toast de procesamiento
       toast({
@@ -521,62 +517,44 @@ export default function DocumentDetailPage() {
       const metadata = await uploadFile(file, [...rows, ...pendingRows], fields)
       setFileMetadata(metadata)
 
-      console.log("🔍 Respuesta completa del API:", JSON.stringify(apiResponse, null, 2))
+      // Esperar un poco para que apiResponse se actualice
+      setTimeout(() => {
+        console.log("🔍 Respuesta del API después del timeout:", apiResponse)
 
-      // Verificar si hay error en la respuesta del API
-      if (apiResponse?.error) {
-        console.log("❌ Error en respuesta del API:", apiResponse.error)
-        toast({
-          title: "Error en el procesamiento",
-          description: apiResponse.message || apiResponse.error || "Error al procesar el archivo",
-          variant: "destructive",
-          action: (
-            <Button variant="outline" size="sm" onClick={() => handleRefresh()}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reintentar
-            </Button>
-          ),
-        })
+        // Verificar si hay error en la respuesta del API
+        if (apiResponse?.error) {
+          console.log("❌ Error en respuesta del API:", apiResponse.error)
+          toast({
+            title: "Error en el procesamiento",
+            description: apiResponse.message || apiResponse.error || "Error al procesar el archivo",
+            variant: "destructive",
+          })
+          resetUploadData()
+          return
+        }
 
-        // No mostrar el modal si hay error
-        resetUploadData()
-        return
-      }
-
-      // Solo proceder si hay respuesta exitosa del API
-      if (apiResponse && !apiResponse.error) {
-        console.log("✅ Usando directamente la respuesta del API como datos extraídos")
-        setExtractedData(apiResponse)
-
-        // Mostrar modal de preview
-        setShowPreviewModal(true)
-
-        toast({
-          title: "Archivo procesado",
-          description: `Se han extraído ${Object.keys(apiResponse).length} campos del archivo.`,
-        })
-      } else {
-        console.log("⚠️ No hay respuesta válida del API")
-
-        // Usar datos simulados como fallback
-        const simulatedData = simulateDataExtraction(file.name, file.type)
-        setExtractedData(simulatedData)
-
-        toast({
-          title: "Procesamiento limitado",
-          description: "Usando extracción local debido a problemas con el servidor.",
-          variant: "warning",
-          action: (
-            <Button variant="outline" size="sm" onClick={() => handleRefresh()}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Reintentar
-            </Button>
-          ),
-        })
-
-        // Mostrar modal con datos simulados
-        setShowPreviewModal(true)
-      }
+        // Si hay respuesta exitosa del API, usarla directamente
+        if (apiResponse && !apiResponse.error) {
+          console.log("✅ Usando respuesta del API:", apiResponse)
+          setExtractedData(apiResponse)
+          setShowPreviewModal(true)
+          toast({
+            title: "Archivo procesado",
+            description: `Se han extraído ${Object.keys(apiResponse).length} campos del archivo.`,
+          })
+        } else {
+          // Usar datos simulados como fallback
+          console.log("⚠️ No hay respuesta válida del API, usando simulación")
+          const simulatedData = simulateDataExtraction(file.name, file.type)
+          setExtractedData(simulatedData)
+          setShowPreviewModal(true)
+          toast({
+            title: "Procesamiento limitado",
+            description: "Usando extracción local debido a problemas con el servidor.",
+            variant: "warning",
+          })
+        }
+      }, 500) // Esperar 500ms para que se actualice apiResponse
     } catch (error) {
       console.error("Error processing file:", error)
       toast({
@@ -1161,7 +1139,7 @@ export default function DocumentDetailPage() {
 
         {/* Modal de preview */}
         <FilePreviewModal
-          key={modalKey} // Usar clave para forzar re-renderizado
+          key={modalKey}
           isOpen={showPreviewModal}
           onClose={handleCloseModal}
           onConfirm={handleConfirmExtractedData}
