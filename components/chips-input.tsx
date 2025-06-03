@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState, type KeyboardEvent, useEffect } from "react"
-import { X } from "lucide-react"
+import { X, Plus } from "lucide-react"
 
 interface ChipsInputProps {
   value: string[]
@@ -28,9 +27,22 @@ export const ChipsInput: React.FC<ChipsInputProps> = ({
   }, [value, onChange])
 
   const addChip = () => {
-    const trimmedValue = inputValue.trim()
-    if (trimmedValue && !value.includes(trimmedValue)) {
-      onChange([...value, trimmedValue])
+    // Manejar múltiples valores separados por coma
+    const values = inputValue
+      .split(/[,;]/)
+      .map((v) => v.trim())
+      .filter((v) => v)
+
+    if (values.length > 0) {
+      const newChips = [...value]
+
+      values.forEach((val) => {
+        if (!newChips.includes(val)) {
+          newChips.push(val)
+        }
+      })
+
+      onChange(newChips)
       setInputValue("")
     }
   }
@@ -47,49 +59,67 @@ export const ChipsInput: React.FC<ChipsInputProps> = ({
       removeChip(value[value.length - 1])
     } else if (e.key === "," || e.key === ";") {
       e.preventDefault()
-      addChip()
+      // Agregar el contenido actual antes de la coma
+      const currentValue = inputValue.trim()
+      if (currentValue) {
+        const newChips = [...value]
+        if (!newChips.includes(currentValue)) {
+          newChips.push(currentValue)
+        }
+        onChange(newChips)
+        setInputValue("")
+      }
     }
   }
 
   return (
     <div className={`w-full ${className}`}>
       <div className="flex flex-wrap gap-2 mb-2">
-        {Array.isArray(value) &&
-          value.map((chip, index) => (
-            <div
-              key={index}
-              className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-sm px-2 py-1 rounded-md"
-            >
-              <span>{chip}</span>
-              <button
-                type="button"
-                onClick={() => removeChip(chip)}
-                className="hover:bg-gray-200 rounded-full p-0.5 transition-colors"
-                aria-label={`Eliminar ${chip}`}
+        {Array.isArray(value) && value.length > 0
+          ? value.map((chip, index) => (
+              <div
+                key={index}
+                className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-sm px-2 py-1 rounded-md"
               >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+                <span>{chip}</span>
+                <button
+                  type="button"
+                  onClick={() => removeChip(chip)}
+                  className="hover:bg-gray-200 rounded-full p-0.5 transition-colors"
+                  aria-label={`Eliminar ${chip}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))
+          : null}
       </div>
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => {
-          if (inputValue.trim()) {
-            addChip()
-          }
-        }}
-        placeholder={placeholder}
-        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-      />
-      <p className="text-xs text-gray-500 mt-1">Presiona Enter o coma para agregar. Haz clic en X para eliminar.</p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (inputValue.trim()) {
+              addChip()
+            }
+          }}
+          placeholder={placeholder}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+        />
+        <button
+          type="button"
+          onClick={addChip}
+          disabled={!inputValue.trim()}
+          className="px-2 py-1 border border-gray-300 rounded-md hover:bg-gray-100"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mt-1">Escribe y presiona Enter, o separa con comas para agregar varios.</p>
     </div>
   )
 }
 
 export default ChipsInput
-
-// Named export para compatibilidad

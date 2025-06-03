@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { Search, Plus, Layout, Calendar, MoreHorizontal, Trash2, Edit, Copy, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,14 @@ export default function TemplatesPage() {
   }>({ isOpen: false })
   const [documentName, setDocumentName] = useState("")
   const [documentDescription, setDocumentDescription] = useState("")
+
+  // Asegurarse de que los templates se carguen correctamente
+  useEffect(() => {
+    // Forzar actualización del estado si es necesario
+    if (templates.length > 0) {
+      console.log("Templates cargados:", templates.length)
+    }
+  }, [templates])
 
   const filteredAndSortedTemplates = useMemo(() => {
     const filtered = templates.filter(

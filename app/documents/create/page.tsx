@@ -15,7 +15,7 @@ import FileUploadProgress from "@/components/file-upload-progress"
 import FilePreviewModal from "@/components/file-preview-modal"
 import { Textarea } from "@/components/ui/textarea"
 import type { DocumentField, DocumentRow, FileMetadata } from "@/lib/types"
-import ChipsInput from "@/components/chips-input"
+import { ChipsInput } from "@/components/chips-input"
 
 export default function CreateDocumentPage() {
   const router = useRouter()
@@ -474,14 +474,14 @@ export default function CreateDocumentPage() {
                           <ChipsInput
                             value={field.variants || []}
                             onChange={(variants) => updateField(field.id, { variants })}
-                            placeholder="variante1, variante2"
+                            placeholder="Agregar variante..."
                           />
                         </td>
                         <td className="border border-gray-200 p-2">
                           <ChipsInput
                             value={field.formats || []}
                             onChange={(formats) => updateField(field.id, { formats })}
-                            placeholder="formato1, formato2"
+                            placeholder="Agregar formato..."
                           />
                         </td>
                         <td className="border border-gray-200 p-2 text-center">
