@@ -11,19 +11,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useApp } from "@/contexts/app-context"
 import ChipsInput from "@/components/chips-input"
 import type { DocumentField } from "@/lib/types"
 
 export default function CreateTemplatePage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { addTemplate } = useApp()
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     category: "",
-    variants: [] as string[],
-    formatos: [] as string[],
   })
 
   const [fields, setFields] = useState<DocumentField[]>([
@@ -33,6 +33,8 @@ export default function CreateTemplatePage() {
       type: "text",
       required: false,
       description: "",
+      formats: [],
+      variants: [],
     },
   ])
 
@@ -56,6 +58,8 @@ export default function CreateTemplatePage() {
       type: "text",
       required: false,
       description: "",
+      formats: [],
+      variants: [],
     }
     setFields([...fields, newField])
   }
@@ -90,8 +94,11 @@ export default function CreateTemplatePage() {
     }
 
     try {
-      // Aquí iría la lógica para guardar la plantilla
-      console.log("Guardando plantilla:", { ...formData, fields: validFields })
+      // Crear la plantilla
+      await addTemplate({
+        ...formData,
+        fields: validFields,
+      })
 
       toast({
         title: "Éxito",
@@ -100,6 +107,7 @@ export default function CreateTemplatePage() {
 
       router.push("/templates")
     } catch (error) {
+      console.error("Error al crear la plantilla:", error)
       toast({
         title: "Error",
         description: "Error al crear la plantilla",
@@ -164,24 +172,6 @@ export default function CreateTemplatePage() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Variantes</label>
-              <ChipsInput
-                value={formData.variants}
-                onChange={(variants) => handleInputChange("variants", variants)}
-                placeholder="Agregar variante (ej: factura, invoice, bill)..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Formatos</label>
-              <ChipsInput
-                value={formData.formatos}
-                onChange={(formatos) => handleInputChange("formatos", formatos)}
-                placeholder="Agregar formato (ej: PDF, JPG, PNG)..."
-              />
-            </div>
           </CardContent>
         </Card>
 
@@ -235,6 +225,24 @@ export default function CreateTemplatePage() {
                     value={field.description || ""}
                     onChange={(e) => handleFieldChange(index, "description", e.target.value)}
                     placeholder="Describe qué información debe contener este campo"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Variantes</label>
+                  <ChipsInput
+                    value={field.variants || []}
+                    onChange={(variants) => handleFieldChange(index, "variants", variants)}
+                    placeholder="Agregar variante (ej: factura, invoice, bill)..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Formatos de respuesta</label>
+                  <ChipsInput
+                    value={field.formats || []}
+                    onChange={(formats) => handleFieldChange(index, "formats", formats)}
+                    placeholder="Agregar formato (ej: DD/MM/YYYY, numérico)..."
                   />
                 </div>
 
