@@ -1,65 +1,69 @@
-"use client"
+"use client";
 
-import { useState, useCallback } from "react"
-import { useTheme } from "@/contexts/theme-context"
-import type { DocumentRow, DocumentField, FileMetadata } from "@/lib/types"
+import { useState, useCallback } from "react";
+import { useTheme } from "@/contexts/theme-context";
+import type { DocumentRow, DocumentField, FileMetadata } from "@/lib/types";
 
 export function useFileUpload() {
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [apiResponse, setApiResponse] = useState<any>(null)
-  const [isWaitingApiResponse, setIsWaitingApiResponse] = useState(false)
-  const { settings } = useTheme()
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [apiResponse, setApiResponse] = useState<any>(null);
+  const [isWaitingApiResponse, setIsWaitingApiResponse] = useState(false);
+  const { settings } = useTheme();
 
   // Endpoint por defecto para todos los usuarios
-  const DEFAULT_API_ENDPOINT = "https://cibet.app.n8n.cloud/webhook/invitu-public-upload"
+  const DEFAULT_API_ENDPOINT =
+    "https://cibet.app.n8n.cloud/webhook/Civet-public-upload";
 
   // Función para resetear la respuesta del API
   const resetApiResponse = useCallback(() => {
-    setApiResponse(null)
-    setIsWaitingApiResponse(false)
-  }, [])
+    setApiResponse(null);
+    setIsWaitingApiResponse(false);
+  }, []);
 
   // Función para convertir archivo a base64
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
       reader.onload = () => {
         // Extraer solo la parte base64 (eliminar el prefijo data:image/jpeg;base64,)
-        const base64String = (reader.result as string).split(",")[1]
-        resolve(base64String)
-      }
-      reader.onerror = (error) => reject(error)
-    })
-  }
+        const base64String = (reader.result as string).split(",")[1];
+        resolve(base64String);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   const uploadFile = useCallback(
     async (
       file: File,
       existingRows: DocumentRow[],
-      fields: DocumentField[],
+      fields: DocumentField[]
     ): Promise<{
-      metadata: FileMetadata
-      apiData?: any
+      metadata: FileMetadata;
+      apiData?: any;
     }> => {
       // Usar endpoint por defecto si no hay configuración específica
-      const apiEndpoint = settings?.api_endpoint || DEFAULT_API_ENDPOINT
+      const apiEndpoint = settings?.api_endpoint || DEFAULT_API_ENDPOINT;
 
-      console.log("🔗 [UPLOAD] Using API endpoint:", apiEndpoint)
-      console.log("🔗 [UPLOAD] Settings available:", !!settings)
-      console.log("🔗 [UPLOAD] User settings endpoint:", settings?.api_endpoint)
+      console.log("🔗 [UPLOAD] Using API endpoint:", apiEndpoint);
+      console.log("🔗 [UPLOAD] Settings available:", !!settings);
+      console.log(
+        "🔗 [UPLOAD] User settings endpoint:",
+        settings?.api_endpoint
+      );
 
-      setIsUploading(true)
-      setUploadProgress(0)
-      setApiResponse(null)
-      setIsWaitingApiResponse(false)
+      setIsUploading(true);
+      setUploadProgress(0);
+      setApiResponse(null);
+      setIsWaitingApiResponse(false);
 
       try {
         // Verificar tamaño del archivo (máximo 2MB)
-        const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+        const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
         if (file.size > MAX_FILE_SIZE) {
-          console.warn("⚠️ Archivo demasiado grande, enviando solo metadatos")
+          console.warn("⚠️ Archivo demasiado grande, enviando solo metadatos");
 
           // Crear metadatos del archivo
           const metadata: FileMetadata = {
@@ -67,78 +71,79 @@ export function useFileUpload() {
             type: file.type,
             size: file.size,
             last_modified: new Date(file.lastModified).toISOString(),
-          }
+          };
 
           // Simular progreso
           const simulateProgress = () => {
-            let progress = 0
+            let progress = 0;
             const interval = setInterval(() => {
-              progress += 10
-              setUploadProgress(Math.min(progress, 100))
+              progress += 10;
+              setUploadProgress(Math.min(progress, 100));
               if (progress >= 100) {
-                clearInterval(interval)
-                setIsUploading(false)
-                setIsWaitingApiResponse(true)
+                clearInterval(interval);
+                setIsUploading(false);
+                setIsWaitingApiResponse(true);
               }
-            }, 100)
-          }
+            }, 100);
+          };
 
-          simulateProgress()
+          simulateProgress();
 
           // Enviar solo metadatos al API
-          const formData = new FormData()
-          formData.append("metadata", JSON.stringify(metadata))
-          formData.append("fields", JSON.stringify(fields))
-          formData.append("existing_rows", JSON.stringify(existingRows))
-          formData.append("file_too_large", "true")
+          const formData = new FormData();
+          formData.append("metadata", JSON.stringify(metadata));
+          formData.append("fields", JSON.stringify(fields));
+          formData.append("existing_rows", JSON.stringify(existingRows));
+          formData.append("file_too_large", "true");
 
           // Esperar un poco para simular procesamiento
-          await new Promise((resolve) => setTimeout(resolve, 1500))
+          await new Promise((resolve) => setTimeout(resolve, 1500));
 
           try {
             const response = await fetch(apiEndpoint, {
               method: "POST",
               body: formData,
-            })
+            });
 
             if (!response.ok) {
-              throw new Error(`API responded with status ${response.status}`)
+              throw new Error(`API responded with status ${response.status}`);
             }
 
-            const data = await response.json()
-            setApiResponse(data)
-            setIsWaitingApiResponse(false)
-            return { metadata, apiData: data }
+            const data = await response.json();
+            setApiResponse(data);
+            setIsWaitingApiResponse(false);
+            return { metadata, apiData: data };
           } catch (error) {
-            console.error("Error calling API:", error)
+            console.error("Error calling API:", error);
             const errorResponse = {
               error: "Error al procesar el archivo en el servidor",
-              message: "El archivo es demasiado grande para ser procesado (máximo 2MB)",
+              message:
+                "El archivo es demasiado grande para ser procesado (máximo 2MB)",
               warning: "Se ha enviado solo los metadatos del archivo",
-            }
-            setApiResponse(errorResponse)
-            setIsWaitingApiResponse(false)
-            return { metadata, apiData: errorResponse }
+            };
+            setApiResponse(errorResponse);
+            setIsWaitingApiResponse(false);
+            return { metadata, apiData: errorResponse };
           }
         }
 
         // Para archivos de tamaño normal, proceder con la carga completa
-        setUploadProgress(10)
-        console.log("🔄 Preparando archivo para subir...")
+        setUploadProgress(10);
+        console.log("🔄 Preparando archivo para subir...");
 
         try {
           // Usar FormData para enviar el archivo
-          const formData = new FormData()
-          formData.append("file", file)
-          formData.append("fields", JSON.stringify(fields))
-          formData.append("existing_rows", JSON.stringify(existingRows))
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("fields", JSON.stringify(fields));
+          formData.append("existing_rows", JSON.stringify(existingRows));
 
           // Usar el endpoint de proxy para evitar CORS
-          const uploadUrl = "/api/upload-proxy"
+          const uploadUrl = "/api/upload-proxy";
 
           // Simular progreso de carga
-          setUploadProgress(30)
-          console.log("📤 Enviando archivo al proxy...")
+          setUploadProgress(30);
+          console.log("📤 Enviando archivo al proxy...");
 
           // Enviar al endpoint de proxy
           const response = await fetch(uploadUrl, {
@@ -147,22 +152,22 @@ export function useFileUpload() {
             headers: {
               "X-Target-URL": apiEndpoint,
             },
-          })
+          });
 
-          setUploadProgress(90)
-          console.log(`📡 Respuesta del proxy: ${response.status}`)
+          setUploadProgress(90);
+          console.log(`📡 Respuesta del proxy: ${response.status}`);
 
           if (!response.ok) {
-            const errorText = await response.text()
-            console.error("❌ Error del proxy:", errorText)
-            throw new Error(`API responded with status ${response.status}`)
+            const errorText = await response.text();
+            console.error("❌ Error del proxy:", errorText);
+            throw new Error(`API responded with status ${response.status}`);
           }
 
-          const data = await response.json()
-          console.log("✅ API Response:", data)
-          setApiResponse(data)
-          setUploadProgress(100)
-          setIsUploading(false)
+          const data = await response.json();
+          console.log("✅ API Response:", data);
+          setApiResponse(data);
+          setUploadProgress(100);
+          setIsUploading(false);
 
           // Crear metadatos del archivo
           const metadata: FileMetadata = {
@@ -170,13 +175,13 @@ export function useFileUpload() {
             type: file.type,
             size: file.size,
             last_modified: new Date(file.lastModified).toISOString(),
-          }
+          };
 
-          return { metadata, apiData: data }
+          return { metadata, apiData: data };
         } catch (error) {
-          console.error("Error uploading file:", error)
-          setUploadProgress(100)
-          setIsUploading(false)
+          console.error("Error uploading file:", error);
+          setUploadProgress(100);
+          setIsUploading(false);
 
           // Crear metadatos del archivo a pesar del error
           const metadata: FileMetadata = {
@@ -184,27 +189,28 @@ export function useFileUpload() {
             type: file.type,
             size: file.size,
             last_modified: new Date(file.lastModified).toISOString(),
-          }
+          };
 
           const errorResponse = {
             error: true,
-            message: error instanceof Error ? error.message : "Error desconocido",
+            message:
+              error instanceof Error ? error.message : "Error desconocido",
             details: "Error al procesar el archivo en el servidor",
-          }
-          console.log("❌ Setting error response:", errorResponse)
-          setApiResponse(errorResponse)
+          };
+          console.log("❌ Setting error response:", errorResponse);
+          setApiResponse(errorResponse);
 
-          return { metadata, apiData: errorResponse }
+          return { metadata, apiData: errorResponse };
         }
       } catch (error) {
-        console.error("Error in uploadFile:", error)
-        setIsUploading(false)
-        setUploadProgress(0)
-        throw error
+        console.error("Error in uploadFile:", error);
+        setIsUploading(false);
+        setUploadProgress(0);
+        throw error;
       }
     },
-    [settings?.api_endpoint],
-  )
+    [settings?.api_endpoint]
+  );
 
   return {
     uploadFile,
@@ -213,5 +219,5 @@ export function useFileUpload() {
     apiResponse,
     isWaitingApiResponse,
     resetApiResponse,
-  }
+  };
 }
