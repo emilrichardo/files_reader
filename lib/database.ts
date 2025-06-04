@@ -1,7 +1,7 @@
 import { supabase } from "./supabase"
 import type { Document, Template, DocumentRow, UserSettings } from "./types"
 
-// Servicios para User Settings (solo configuraciones)
+// Servicios para User Settings (SIMPLIFICADOS)
 export const getUserSettings = async (userId: string) => {
   try {
     console.log("Getting user settings for user:", userId)
@@ -9,7 +9,6 @@ export const getUserSettings = async (userId: string) => {
     const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", userId).single()
 
     if (error && error.code !== "PGRST116") {
-      // PGRST116 = no rows returned
       console.error("Supabase error getting user settings:", error)
     } else if (!error) {
       console.log("User settings retrieved successfully:", data)
@@ -22,108 +21,9 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Función simplificada para obtener configuración global sin verificar roles
-export const getGlobalSettings = async () => {
-  try {
-    console.log("Getting global settings (public access)")
-
-    // Buscar configuración más reciente que tenga configuración de tema/diseño
-    const { data, error } = await supabase
-      .from("user_settings")
-      .select("*")
-      .not("project_name", "is", null)
-      .not("color_scheme", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Error getting global settings:", error)
-      return { data: null, error }
-    }
-
-    if (data && data.length > 0) {
-      console.log("Global settings retrieved successfully:", data[0])
-      return { data: data[0], error: null }
-    } else {
-      console.log("No global settings found")
-      return { data: null, error: null }
-    }
-  } catch (error) {
-    console.error("Error getting global settings:", error)
-    return { data: null, error }
-  }
-}
-
-// Función específica para obtener configuración de superadmin (solo para usuarios autenticados)
-export const getSuperAdminSettings = async () => {
-  try {
-    console.log("Getting superadmin settings (authenticated access)")
-
-    // Verificar que hay un usuario autenticado
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      console.log("No authenticated user, cannot access superadmin settings")
-      return { data: null, error: null }
-    }
-
-    // Primero obtener todos los usuarios con rol superadmin
-    const { data: superAdmins, error: roleError } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "superadmin")
-
-    if (roleError) {
-      console.error("Error getting superadmin users:", roleError)
-      return { data: null, error: roleError }
-    }
-
-    if (!superAdmins || superAdmins.length === 0) {
-      console.log("No superadmin users found")
-      return { data: null, error: null }
-    }
-
-    // Obtener los user_ids de los superadmins
-    const superAdminIds = superAdmins.map((admin) => admin.user_id)
-    console.log("Found superadmin IDs:", superAdminIds)
-
-    // Buscar configuración de cualquier superadmin
-    const { data: settings, error: settingsError } = await supabase
-      .from("user_settings")
-      .select("*")
-      .in("user_id", superAdminIds)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-
-    if (settingsError) {
-      console.error("Error getting superadmin settings:", settingsError)
-      return { data: null, error: settingsError }
-    }
-
-    if (settings && settings.length > 0) {
-      console.log("Superadmin settings retrieved successfully:", settings[0])
-      return { data: settings[0], error: null }
-    } else {
-      console.log("No superadmin settings found")
-      return { data: null, error: null }
-    }
-  } catch (error) {
-    console.error("Error getting superadmin settings:", error)
-    return { data: null, error }
-  }
-}
-
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>) => {
   try {
     console.log("Updating user settings for user:", userId, settings)
-
-    // Verificar si el usuario es superadmin
-    const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userId).single()
-
-    const isSuperAdmin = roleData?.role === "superadmin"
-    console.log("User role check - isSuperAdmin:", isSuperAdmin, "role:", roleData?.role)
 
     // Preparar configuración para guardar
     const finalSettings = {
@@ -156,7 +56,7 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
   }
 }
 
-// Servicios para User Roles
+// Servicios para User Roles (SIMPLIFICADOS)
 export const getUserRole = async (userId: string) => {
   try {
     console.log("Getting user role for user:", userId)
@@ -213,101 +113,7 @@ export const updateUserRole = async (
   }
 }
 
-// Servicios para gestión de usuarios (solo admins)
-export const getAllUsersWithRoles = async () => {
-  try {
-    console.log("Getting all users with roles (admin only)")
-
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select(`
-        user_id,
-        role,
-        assigned_at,
-        created_at,
-        updated_at
-      `)
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error getting all users with roles:", error)
-      return { data: null, error }
-    }
-
-    console.log("All users with roles retrieved successfully:", data?.length, "users")
-    return { data, error: null }
-  } catch (error) {
-    console.error("Error getting all users with roles:", error)
-    return { data: null, error }
-  }
-}
-
-export const logUserManagement = async (userId: string, action: string, details: Record<string, any> = {}) => {
-  try {
-    console.log("Logging user management action:", action, "for user:", userId)
-
-    const { data, error } = await supabase
-      .from("user_management")
-      .insert({
-        user_id: userId,
-        managed_by: (await supabase.auth.getUser()).data.user?.id,
-        action,
-        details,
-      })
-      .select()
-
-    if (error) {
-      console.error("Error logging user management:", error)
-      return { data: null, error }
-    }
-
-    console.log("User management logged successfully:", data)
-    return { data, error: null }
-  } catch (error) {
-    console.error("Error logging user management:", error)
-    return { data: null, error }
-  }
-}
-
-// Función para verificar si el usuario actual es admin o superadmin
-export const checkIsAdmin = async () => {
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return false
-
-    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
-
-    if (error || !data) return false
-
-    return data.role === "admin" || data.role === "superadmin"
-  } catch (error) {
-    console.error("Error checking admin status:", error)
-    return false
-  }
-}
-
-// Función para verificar si el usuario actual es superadmin
-export const checkIsSuperAdmin = async () => {
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return false
-
-    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
-
-    if (error || !data) return false
-
-    return data.role === "superadmin"
-  } catch (error) {
-    console.error("Error checking superadmin status:", error)
-    return false
-  }
-}
-
-// Mejorar la función getCurrentUserRole
+// Función simplificada para obtener rol actual
 export const getCurrentUserRole = async (): Promise<"admin" | "user" | "premium" | "moderator" | "superadmin"> => {
   try {
     const {
@@ -448,7 +254,7 @@ export const deleteTemplate = async (id: string) => {
   }
 }
 
-// Servicios para Documents - MEJORADOS
+// Servicios para Documents
 export const getDocuments = async (userId: string) => {
   try {
     console.log("Getting documents for user:", userId)
@@ -663,7 +469,7 @@ export const deleteDocument = async (id: string) => {
   }
 }
 
-// Servicios para Document Rows - MEJORADOS
+// Servicios para Document Rows
 export const createDocumentRow = async (row: Omit<DocumentRow, "id" | "created_at" | "updated_at">) => {
   try {
     console.log("Creating document row for document:", row.document_id)
@@ -748,5 +554,42 @@ export const deleteDocumentRow = async (id: string) => {
   } catch (error) {
     console.error("Error deleting document row:", error)
     return { error }
+  }
+}
+
+// Funciones auxiliares simplificadas
+export const checkIsAdmin = async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
+
+    if (error || !data) return false
+
+    return data.role === "admin" || data.role === "superadmin"
+  } catch (error) {
+    console.error("Error checking admin status:", error)
+    return false
+  }
+}
+
+export const checkIsSuperAdmin = async () => {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single()
+
+    if (error || !data) return false
+
+    return data.role === "superadmin"
+  } catch (error) {
+    console.error("Error checking superadmin status:", error)
+    return false
   }
 }
