@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { AppProvider } from "@/contexts/app-context"
 import { ThemeProvider as CustomThemeProvider } from "@/contexts/theme-context"
 import { ThemeLoader } from "@/components/theme-loader"
+import { GlobalLoader } from "@/components/global-loader"
 import Sidebar from "@/components/sidebar"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -31,6 +32,7 @@ export default function RootLayout({
             <ThemeLoader>
               <CustomThemeProvider>
                 <AppProvider>
+                  <GlobalLoader isLoading={true} />
                   <div className="flex min-h-screen">
                     <Sidebar />
                     <main className="flex-1 md:ml-64">{children}</main>

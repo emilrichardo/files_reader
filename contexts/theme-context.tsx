@@ -131,7 +131,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { user, isSuperAdmin, loading: authLoading } = useAuth()
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true) // Iniciar como true
   const [settingsInitialized, setSettingsInitialized] = useState(false)
   const [isSettingsReady, setIsSettingsReady] = useState(false)
 
@@ -160,7 +160,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [authLoading, settingsInitialized])
 
   const loadGlobalSettings = async () => {
-    if (isLoadingSettings) {
+    if (isLoadingSettings && settingsInitialized) {
       console.log("🎨 [THEME] Already loading settings, skipping...")
       return
     }
@@ -219,9 +219,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       console.log("✅ [THEME] Final settings applied:", finalSettings)
       console.log("🔗 [THEME] API Endpoint:", finalSettings.api_endpoint)
       console.log("🏢 [THEME] Project Name:", finalSettings.project_name)
+      console.log("🎨 [THEME] Company Logo:", finalSettings.company_logo ? "Present" : "Not found")
 
       setSettings(finalSettings)
-      setIsSettingsReady(true)
+
+      // Pequeño delay para asegurar que el logo se renderice
+      setTimeout(() => {
+        setIsSettingsReady(true)
+        setIsLoadingSettings(false)
+        console.log("✅ [THEME] Settings ready, hiding loader")
+      }, 500)
     } catch (error) {
       console.error("❌ [THEME] Error loading settings:", error)
       // En caso de error, usar configuración por defecto pero marcar como listo
@@ -231,9 +238,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         user_id: user?.id || "public",
       }
       setSettings(fallbackSettings)
-      setIsSettingsReady(true)
-    } finally {
-      setIsLoadingSettings(false)
+      setTimeout(() => {
+        setIsSettingsReady(true)
+        setIsLoadingSettings(false)
+      }, 500)
     }
   }
 
@@ -259,6 +267,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
 
         console.log("✅ [THEME] Global settings saved successfully:", data)
+
+        // Recargar configuración después de guardar
+        await loadGlobalSettings()
       } else if (user) {
         // Usuario normal solo puede cambiar su tema personal
         const personalUpdates = { theme: updates.theme }
@@ -277,15 +288,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         console.log("💾 [THEME] Public user updating theme locally")
       }
 
-      // Actualizar estado local
-      const updatedSettings = {
-        ...settings,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      }
+      // Actualizar estado local solo si no es superadmin (ya se recarga arriba)
+      if (!isSuperAdmin) {
+        const updatedSettings = {
+          ...settings,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        }
 
-      setSettings(updatedSettings)
-      console.log("✅ [THEME] Local settings updated")
+        setSettings(updatedSettings)
+        console.log("✅ [THEME] Local settings updated")
+      }
     } catch (error) {
       console.error("❌ [THEME] Error updating settings:", error)
       throw error
