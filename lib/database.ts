@@ -24,47 +24,61 @@ export const getUserSettings = async (userId: string) => {
   }
 }
 
-// Nueva función para obtener configuración global
+// Nueva función para obtener configuración global mejorada
 export const getGlobalSettings = async () => {
   try {
-    console.log("Getting global settings with ID:", GLOBAL_SETTINGS_ID)
+    console.log("🔍 [DB] Looking for global/superadmin settings...")
 
-    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single()
+    // Primero intentar cargar configuración global con UUID fijo
+    const { data: globalData, error: globalError } = await supabase
+      .from("user_settings")
+      .select("*")
+      .eq("user_id", GLOBAL_SETTINGS_ID)
+      .single()
 
-    if (error && error.code !== "PGRST116") {
-      console.error("Supabase error getting global settings:", error)
-      return { data: null, error }
-    } else if (!error) {
-      console.log("Global settings retrieved successfully:", data)
-      return { data, error: null }
+    if (!globalError && globalData) {
+      console.log("✅ [DB] Global settings found with fixed UUID:", globalData)
+      return { data: globalData, error: null }
     }
 
-    // Si no hay configuración global, intentar encontrar la de un superadmin
-    console.log("No global settings found, looking for superadmin settings...")
+    console.log("⚠️ [DB] No global settings with fixed UUID, looking for superadmin settings...")
 
-    // Esta consulta podría fallar si no hay tabla user_roles, pero está bien
-    try {
-      const { data: superAdminData, error: superAdminError } = await supabase
+    // Si no hay configuración global, buscar la de un superadmin
+    // Primero obtener todos los superadmins
+    const { data: superAdmins, error: rolesError } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "superadmin")
+
+    if (rolesError || !superAdmins || superAdmins.length === 0) {
+      console.log("⚠️ [DB] No superadmins found")
+      return { data: null, error: rolesError }
+    }
+
+    console.log(
+      "🔍 [DB] Found superadmins:",
+      superAdmins.map((sa) => sa.user_id),
+    )
+
+    // Buscar configuración de cualquier superadmin que tenga datos completos
+    for (const superAdmin of superAdmins) {
+      const { data: superAdminSettings, error: settingsError } = await supabase
         .from("user_settings")
-        .select(`
-          *,
-          user_roles!inner(role)
-        `)
-        .eq("user_roles.role", "superadmin")
-        .limit(1)
+        .select("*")
+        .eq("user_id", superAdmin.user_id)
         .single()
 
-      if (!superAdminError && superAdminData) {
-        console.log("Found superadmin settings to use as global:", superAdminData)
-        return { data: superAdminData, error: null }
+      if (!settingsError && superAdminSettings) {
+        console.log("✅ [DB] Superadmin settings found:", superAdminSettings)
+        console.log("🔗 [DB] API Endpoint from superadmin:", superAdminSettings.api_endpoint)
+        return { data: superAdminSettings, error: null }
       }
-    } catch (superAdminError) {
-      console.log("Could not find superadmin settings, using defaults")
     }
 
-    return { data: null, error }
+    console.log("⚠️ [DB] No superadmin settings found")
+    return { data: null, error: null }
   } catch (error) {
-    console.error("Error getting global settings:", error)
+    console.error("❌ [DB] Error getting global settings:", error)
     return { data: null, error }
   }
 }

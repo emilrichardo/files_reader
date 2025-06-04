@@ -189,6 +189,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         console.log("⚠️ [THEME] Error loading global settings, using defaults:", error)
       }
 
+      // Cargar configuración global - SIEMPRE buscar configuración de superadmin
+      let superadminSettings = null
+
+      try {
+        console.log("🎨 [THEME] Loading superadmin settings...")
+        const { data: superadminData } = await getGlobalSettings()
+
+        if (superadminData) {
+          superadminSettings = superadminData
+          console.log("✅ [THEME] Superadmin settings loaded:", superadminSettings)
+        } else {
+          console.log("⚠️ [THEME] No superadmin settings found, using defaults")
+        }
+      } catch (error) {
+        console.log("⚠️ [THEME] Error loading superadmin settings:", error)
+      }
+
       // Cargar tema personal si hay usuario autenticado
       let personalTheme = "light" // tema por defecto
 
@@ -209,12 +226,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Combinar configuraciones
       const finalSettings = {
         ...defaultSettings,
-        ...(globalSettings || {}), // Configuración global
+        ...(superadminSettings || {}), // Configuración global
         theme: personalTheme, // Tema personal o por defecto
         user_id: user?.id || "public",
         // Asegurar valores por defecto si no hay configuración global
-        project_name: globalSettings?.project_name || "Invitu",
-        api_endpoint: globalSettings?.api_endpoint || "https://cibet.app.n8n.cloud/webhook/invitu-public-upload",
+        project_name: superadminSettings?.project_name || "Invitu",
+        api_endpoint: superadminSettings?.api_endpoint || "https://cibet.app.n8n.cloud/webhook/invitu-public-upload",
       }
 
       console.log("✅ [THEME] Final settings applied:", finalSettings)

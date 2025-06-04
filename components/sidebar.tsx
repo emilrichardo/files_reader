@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
-import { FileText, LayoutTemplateIcon as Template, Users, Settings, Menu, LogOut, Sun, Moon, Home } from "lucide-react"
+import { FileText, LayoutTemplateIcon as Template, Users, Settings, Menu, LogOut, Home } from "lucide-react"
 
 const navigation = [
   { name: "Inicio", href: "/", icon: Home },
@@ -23,8 +23,6 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
   const {
-    isDark,
-    toggleTheme,
     companyLogo,
     logoType,
     projectName,
@@ -88,12 +86,6 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t p-4 space-y-2">
-        {/* Theme toggle */}
-        <Button variant="ghost" size="sm" onClick={toggleTheme} className="w-full justify-start">
-          {isDark ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
-          {isDark ? "Modo claro" : "Modo oscuro"}
-        </Button>
-
         {/* User info and logout */}
         {user && (
           <div className="space-y-2">
