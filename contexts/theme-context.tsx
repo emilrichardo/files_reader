@@ -128,7 +128,7 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { user, isSuperAdmin, loading: authLoading } = useAuth()
+  const { user, userRole, loading: authLoading } = useAuth()
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoadingSettings, setIsLoadingSettings] = useState(true) // Iniciar como true
@@ -253,6 +253,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (!user && Object.keys(updates).some((key) => key !== "theme")) {
         throw new Error("Usuario no autenticado")
       }
+
+      // Verificar si es superadmin usando userRole del auth context
+      const isSuperAdmin = userRole === "superadmin"
+      console.log("🔍 [THEME] User role:", userRole, "Is superadmin:", isSuperAdmin)
 
       // Si es superadmin, puede cambiar configuración global
       if (isSuperAdmin) {
@@ -402,6 +406,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const logoType = settings.company_logo_type || null
   const projectName = settings.project_name || "Civet"
 
+  // Determinar si es admin usando el userRole del auth context
+  const isAdmin = userRole === "admin" || userRole === "superadmin"
+
   const isLightColor = (color: string): boolean => {
     return getLuminance(color) > 0.5
   }
@@ -435,7 +442,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         getContrastColor,
         isLoaded,
         isLoadingSettings,
-        isAdmin: isSuperAdmin,
+        isAdmin,
         isSettingsReady,
       }}
     >

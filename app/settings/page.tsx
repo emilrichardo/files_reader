@@ -15,10 +15,13 @@ import { Save, Palette, Shield, Key, Upload, X, Lock } from "lucide-react"
 import AuthGuard from "@/components/auth-guard"
 
 export default function SettingsPage() {
-  const { user, loading } = useAuth()
-  const { settings, updateSettings, fontFamilies, colorSchemes, isSuperAdmin } = useTheme()
+  const { user, loading, userRole } = useAuth()
+  const { settings, updateSettings, fontFamilies, colorSchemes, isAdmin } = useTheme()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+
+  // Determinar si es superadmin
+  const isSuperAdmin = userRole === "superadmin"
 
   // Estados locales para el formulario
   const [projectName, setProjectName] = useState("")
@@ -35,6 +38,14 @@ export default function SettingsPage() {
   const [styleMode, setStyleMode] = useState("flat")
   const [companyLogo, setCompanyLogo] = useState("")
   const [logoFile, setLogoFile] = useState<File | null>(null)
+
+  // Debug logs
+  useEffect(() => {
+    console.log("🔍 [SETTINGS] User:", user?.email)
+    console.log("🔍 [SETTINGS] User role:", userRole)
+    console.log("🔍 [SETTINGS] Is superadmin:", isSuperAdmin)
+    console.log("🔍 [SETTINGS] Is admin (from theme):", isAdmin)
+  }, [user, userRole, isSuperAdmin, isAdmin])
 
   // Cargar configuraciones
   useEffect(() => {
@@ -161,6 +172,11 @@ export default function SettingsPage() {
                 Solo los superadministradores pueden modificar la configuración del sistema.
               </p>
               <p className="text-sm text-gray-500">Contacta con un administrador si necesitas realizar cambios.</p>
+              <div className="mt-4 text-xs text-gray-400">
+                <p>Usuario: {user.email}</p>
+                <p>Rol: {userRole || "user"}</p>
+                <p>Es superadmin: {isSuperAdmin ? "Sí" : "No"}</p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -480,6 +496,10 @@ export default function SettingsPage() {
                   <div>
                     <Label className="text-sm font-medium">Registrado</Label>
                     <p className="text-sm text-gray-600">{new Date(user.created_at).toLocaleDateString("es-ES")}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Rol</Label>
+                    <p className="text-sm text-blue-600">{userRole || "user"}</p>
                   </div>
                   {isSuperAdmin && (
                     <div>
