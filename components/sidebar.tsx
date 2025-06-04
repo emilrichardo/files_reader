@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -11,28 +11,19 @@ import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 import { FileText, LayoutTemplateIcon as Template, Users, Settings, Menu, LogOut, Home } from "lucide-react"
 
-// Logo SVG de respaldo
-const FALLBACK_LOGO =
-  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMzYjgyZjYiIHJ4PSIyMCIgcnk9IjIwIi8+PHRleHQgeD0iNTAiIHk9IjYwIiBmb250LXNpemU9IjQwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DPC90ZXh0Pjwvc3ZnPg=="
-
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut, signInWithGoogle, userRole } = useAuth()
   const { companyLogo, logoType, projectName, isSettingsReady, primaryColor } = useTheme()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const [logoSrc, setLogoSrc] = useState<string | null>(null)
 
-  // Usar useEffect para establecer el logo cuando esté disponible
-  useEffect(() => {
-    if (companyLogo && companyLogo.startsWith("data:")) {
-      setLogoSrc(companyLogo)
-      console.log("✅ [SIDEBAR] Logo set from context")
-    } else {
-      // Usar logo de respaldo
-      setLogoSrc(FALLBACK_LOGO)
-      console.log("⚠️ [SIDEBAR] Using fallback logo")
-    }
-  }, [companyLogo])
+  // Debug del logo
+  console.log("🖼️ [SIDEBAR] Company logo from context:", companyLogo ? "Present" : "Missing")
+  console.log("🖼️ [SIDEBAR] Settings ready:", isSettingsReady)
+  if (companyLogo) {
+    console.log("🖼️ [SIDEBAR] Logo length:", companyLogo.length)
+    console.log("🖼️ [SIDEBAR] Logo type:", logoType)
+  }
 
   // Navegación dinámica basada en el rol del usuario
   const getNavigation = () => {
@@ -72,23 +63,26 @@ export default function Sidebar() {
       {/* Header con logo y nombre */}
       <div className="flex h-16 items-center border-b px-6">
         <div className="flex items-center space-x-3">
-          {/* Logo - Siempre mostrar algo */}
-          {logoSrc ? (
+          {/* Logo - Mostrar siempre algo */}
+          {companyLogo && companyLogo.length > 0 ? (
             <img
-              src={logoSrc || "/placeholder.svg"}
+              src={companyLogo || "/placeholder.svg"}
               alt="Logo"
               className="h-8 w-8 object-contain"
-              onError={() => {
-                console.log("⚠️ [SIDEBAR] Logo error, using fallback")
-                setLogoSrc(FALLBACK_LOGO)
+              onLoad={() => {
+                console.log("✅ [SIDEBAR] Logo loaded successfully")
+              }}
+              onError={(e) => {
+                console.error("❌ [SIDEBAR] Error loading logo:", e)
+                console.log("🖼️ [SIDEBAR] Logo data:", companyLogo?.substring(0, 100))
               }}
             />
           ) : (
             <div
-              className="h-8 w-8 rounded flex items-center justify-center text-white"
+              className="h-8 w-8 rounded flex items-center justify-center text-white font-bold text-sm"
               style={{ backgroundColor: primaryColor || "#3b82f6" }}
             >
-              <span className="font-bold text-sm">{projectName?.charAt(0)?.toUpperCase() || "C"}</span>
+              {projectName?.charAt(0)?.toUpperCase() || "C"}
             </div>
           )}
 

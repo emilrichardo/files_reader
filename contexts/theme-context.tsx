@@ -130,92 +130,74 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { user, userRole, loading: authLoading } = useAuth()
   const [settings, setSettings] = useState<UserSettings>(defaultSettings)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const [isSettingsReady, setIsSettingsReady] = useState(false)
 
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  // Cargar configuración una sola vez cuando la auth esté lista
+  // Cargar configuración inmediatamente
   useEffect(() => {
-    if (!authLoading && !isSettingsReady) {
+    if (!authLoading) {
       loadSettings()
     }
-  }, [authLoading, isSettingsReady])
+  }, [authLoading])
 
   const loadSettings = async () => {
     console.log("🎨 [THEME] Starting settings load...")
-    console.log("🎨 [THEME] User:", user?.email || "No user")
-    console.log("🎨 [THEME] User role:", userRole || "No role")
     setIsLoadingSettings(true)
 
     try {
-      // 1. Cargar configuración global SIEMPRE
+      // FORZAR carga de configuración global
       console.log("🔍 [THEME] Loading global settings...")
       const globalResult = await getGlobalSettings()
 
       let globalSettings = null
       if (globalResult && globalResult.data && !globalResult.error) {
         globalSettings = globalResult.data
-        console.log("✅ [THEME] Global settings loaded successfully:")
+        console.log("✅ [THEME] Global settings loaded successfully")
         console.log("📋 [THEME] - Project name:", globalSettings.project_name)
-        console.log("📋 [THEME] - Color scheme:", globalSettings.color_scheme)
-        console.log("📋 [THEME] - Custom color:", globalSettings.custom_color)
-        console.log("📋 [THEME] - API endpoint:", globalSettings.api_endpoint)
         console.log("📋 [THEME] - Has logo:", !!globalSettings.company_logo)
 
         if (globalSettings.company_logo) {
-          console.log("🖼️ [THEME] - Logo found!")
-          console.log("🖼️ [THEME] - Logo type:", globalSettings.company_logo_type)
           console.log("🖼️ [THEME] - Logo length:", globalSettings.company_logo.length)
-          console.log("🖼️ [THEME] - Logo starts with:", globalSettings.company_logo.substring(0, 50))
-
-          // Verificar si es un data URL válido
-          if (globalSettings.company_logo.startsWith("data:")) {
-            console.log("✅ [THEME] - Logo is valid data URL")
-          } else {
-            console.log("⚠️ [THEME] - Logo is not a data URL, might be invalid")
-          }
-        } else {
-          console.log("❌ [THEME] - No logo found in global settings")
+          console.log("🖼️ [THEME] - Logo type:", globalSettings.company_logo_type)
+          console.log("🖼️ [THEME] - Logo preview:", globalSettings.company_logo.substring(0, 100))
         }
       } else {
-        console.log("⚠️ [THEME] No global settings found or error:", globalResult?.error?.message)
+        console.log("⚠️ [THEME] No global settings found:", globalResult?.error?.message)
       }
 
-      // 2. Cargar tema personal si hay usuario
+      // Cargar tema personal si hay usuario
       let personalTheme = globalSettings?.theme || defaultSettings.theme
       if (user) {
         try {
-          console.log("🔍 [THEME] Loading personal theme for user:", user.id)
           const userResult = await getUserSettings(user.id)
           if (userResult && userResult.data && userResult.data.theme) {
             personalTheme = userResult.data.theme
             console.log("✅ [THEME] Personal theme loaded:", personalTheme)
           }
         } catch (error) {
-          console.log("⚠️ [THEME] Error loading personal theme:", error)
+          console.log("⚠️ [THEME] Could not load personal theme")
         }
       }
 
-      // 3. Combinar configuraciones - ASEGURAR que el logo se preserve
+      // Combinar configuraciones - PRESERVAR EL LOGO
       const finalSettings: UserSettings = {
         ...defaultSettings,
-        ...globalSettings,
+        ...globalSettings, // Esto debe incluir el logo
         theme: personalTheme,
         user_id: user?.id || "public",
       }
 
-      // Debug final del logo
       console.log("✅ [THEME] Final settings applied:")
       console.log("📋 [THEME] - Project name:", finalSettings.project_name)
-      console.log("📋 [THEME] - Color scheme:", finalSettings.color_scheme)
-      console.log("📋 [THEME] - Custom color:", finalSettings.custom_color)
       console.log("📋 [THEME] - Theme:", finalSettings.theme)
-      console.log("📋 [THEME] - Final logo present:", !!finalSettings.company_logo)
+      console.log("🖼️ [THEME] - Final logo present:", !!finalSettings.company_logo)
 
       if (finalSettings.company_logo) {
+        console.log("🖼️ [THEME] - Final logo length:", finalSettings.company_logo.length)
         console.log("🖼️ [THEME] - Final logo preview:", finalSettings.company_logo.substring(0, 50))
       }
 
@@ -224,8 +206,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setIsSettingsReady(true)
     } catch (error) {
       console.error("❌ [THEME] Error loading settings:", error)
-      // Usar configuración por defecto en caso de error
-      console.log("🔄 [THEME] Using fallback settings")
       setSettings(defaultSettings)
       applyThemeStyles(defaultSettings)
       setIsSettingsReady(true)
@@ -244,10 +224,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       primaryColor = "#3b82f6" // Azul por defecto
     }
 
-    console.log("🎨 [THEME] Applying styles:")
-    console.log("🎨 [THEME] - Input custom color:", settings.custom_color)
-    console.log("🎨 [THEME] - Input color scheme:", settings.color_scheme)
-    console.log("🎨 [THEME] - Final primary color:", primaryColor)
+    console.log("🎨 [THEME] Applying styles with color:", primaryColor)
 
     const root = document.documentElement
     root.style.setProperty("--primary-color", primaryColor)
@@ -278,7 +255,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         color: white !important;
       }
 
-      /* Botón de guardar configuración - FORZAR estilos */
+      /* Botón de guardar configuración */
       .settings-save-button,
       button.settings-save-button {
         background-color: #000000 !important;
@@ -325,50 +302,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       button.bg-primary svg {
         color: ${primaryColor} !important;
       }
-
-      /* Elementos con clases específicas */
-      .bg-primary-custom { 
-        background-color: ${primaryColor} !important; 
-        color: white !important;
-      }
-
-      .text-primary-custom { 
-        color: ${primaryColor} !important; 
-      }
-
-      .border-primary-custom { 
-        border-color: ${primaryColor} !important; 
-      }
-
-      /* Iconos en general con color primario */
-      .lucide {
-        color: ${primaryColor};
-      }
-
-      /* Excepciones para iconos que deben mantener su color */
-      .text-red-600 .lucide,
-      .text-red-700 .lucide,
-      .hover\\:text-red-700 .lucide,
-      .text-gray-400 .lucide,
-      .text-gray-500 .lucide {
-        color: inherit !important;
-      }
-
-      /* Forzar estilos en botones con clases específicas de Tailwind */
-      .bg-blue-600 {
-        background-color: #000000 !important;
-      }
-
-      .hover\\:bg-blue-700:hover {
-        background-color: #333333 !important;
-      }
     `
 
     if (!document.head.contains(style)) {
       document.head.appendChild(style)
     }
 
-    console.log("✅ [THEME] Styles applied successfully with color:", primaryColor)
+    console.log("✅ [THEME] Styles applied successfully")
   }
 
   const reloadSettings = async () => {
@@ -382,19 +322,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const isSuperAdmin = userRole === "superadmin"
-      console.log("🔍 [THEME] Is superadmin:", isSuperAdmin)
 
       if (isSuperAdmin) {
         console.log("💾 [THEME] Superadmin updating global settings")
-
         const result = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
 
         if (result.error) {
-          console.error("❌ [THEME] Error saving global settings:", result.error)
           throw new Error("Error al guardar configuración global")
         }
-
-        console.log("✅ [THEME] Global settings saved successfully")
 
         // Actualizar estado local inmediatamente
         const updatedSettings = {
@@ -407,8 +342,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       } else if (user) {
         // Usuario normal solo puede cambiar tema
         const personalUpdates = { theme: updates.theme }
-        console.log("💾 [THEME] User updating personal theme")
-
         const result = await updateUserSettings(user.id, personalUpdates)
 
         if (result.error) {
@@ -528,17 +461,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const isDark = settings.theme === "dark"
   const primaryColor =
     settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || "#3b82f6"
-
-  // IMPORTANTE: Asegurar que el logo se exponga correctamente
   const companyLogo = settings.company_logo || null
   const logoType = settings.company_logo_type || null
   const projectName = settings.project_name || "Civet"
   const isAdmin = userRole === "admin" || userRole === "superadmin"
 
-  // Debug del logo en el contexto
+  // Debug final del logo en el contexto
   console.log("🖼️ [THEME CONTEXT] Company logo:", companyLogo ? "Present" : "Missing")
   if (companyLogo) {
-    console.log("🖼️ [THEME CONTEXT] Logo preview:", companyLogo.substring(0, 50))
+    console.log("🖼️ [THEME CONTEXT] Logo length:", companyLogo.length)
   }
 
   const isLightColor = (color: string): boolean => {

@@ -1,46 +1,53 @@
-import { createClient } from "@supabase/supabase-js"
+import { supabase } from "./supabase"
 import type { Document, Template, DocumentRow } from "./types"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseKey)
-
+// UUID fijo para configuración global
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
-// Función con retry y timeout mejorados
-async function executeWithRetry<T>(operation: () => Promise<T>, maxRetries = 3, timeoutMs = 10000): Promise<T> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`🔄 [DB] Attempt ${attempt}/${maxRetries}`)
+// Función simplificada sin retry excesivo
+async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = 5000): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Database timeout")), timeoutMs)
+  })
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Database timeout")), timeoutMs)
-      })
+  return Promise.race([operation(), timeoutPromise])
+}
 
-      const result = await Promise.race([operation(), timeoutPromise])
-      console.log(`✅ [DB] Success on attempt ${attempt}`)
-      return result
-    } catch (error) {
-      console.log(`❌ [DB] Attempt ${attempt} failed:`, error)
+export async function getGlobalSettings() {
+  console.log("🌍 [DB] Getting global settings...")
 
-      if (attempt === maxRetries) {
-        throw error
+  try {
+    const { data, error } = await executeWithTimeout(async () => {
+      return await supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single()
+    })
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        console.log("⚠️ [DB] No global settings found")
+      } else {
+        console.error("❌ [DB] Error getting global settings:", error.message)
       }
-
-      // Esperar antes del siguiente intento
-      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+      return { data: null, error }
     }
-  }
 
-  throw new Error("Max retries exceeded")
+    console.log("✅ [DB] Global settings loaded successfully")
+    if (data?.company_logo) {
+      console.log("🖼️ [DB] Logo found in global settings")
+    }
+    return { data, error: null }
+  } catch (error) {
+    console.error("❌ [DB] Exception getting global settings:", error)
+    return { data: null, error }
+  }
 }
 
 export async function getUserSettings(userId: string) {
   console.log(`🔍 [DB] Getting user settings for: ${userId}`)
 
-  return executeWithRetry(async () => {
-    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", userId).single()
+  try {
+    const { data, error } = await executeWithTimeout(async () => {
+      return await supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle()
+    })
 
     if (error) {
       console.log(`⚠️ [DB] Error getting user settings:`, error.message)
@@ -49,83 +56,50 @@ export async function getUserSettings(userId: string) {
 
     console.log(`✅ [DB] User settings retrieved successfully`)
     return { data, error: null }
-  })
-}
-
-export async function getGlobalSettings() {
-  console.log(`🌍 [DB] Getting global settings...`)
-
-  return executeWithRetry(async () => {
-    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single()
-
-    if (error) {
-      console.log(`⚠️ [DB] Error getting global settings:`, error.message)
-      return { data: null, error }
-    }
-
-    console.log(`✅ [DB] Global settings retrieved successfully`)
-    console.log(`📋 [DB] - Project name: ${data?.project_name}`)
-    console.log(`📋 [DB] - Has logo: ${!!data?.company_logo}`)
-    if (data?.company_logo) {
-      console.log(`📋 [DB] - Logo length: ${data.company_logo.length}`)
-      console.log(`📋 [DB] - Logo type: ${data.company_logo_type}`)
-    }
-
-    return { data, error: null }
-  })
+  } catch (error) {
+    console.error("❌ [DB] Exception getting user settings:", error)
+    return { data: null, error }
+  }
 }
 
 export async function updateUserSettings(userId: string, updates: any) {
   console.log(`💾 [DB] Updating settings for user: ${userId}`)
-  console.log(`📝 [DB] Updates:`, Object.keys(updates))
 
-  return executeWithRetry(async () => {
-    const { data, error } = await supabase
-      .from("user_settings")
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId)
-      .select()
-      .single()
+  try {
+    // Verificar si existe primero
+    const { data: existing } = await supabase.from("user_settings").select("id").eq("user_id", userId).maybeSingle()
+
+    const settingsData = {
+      user_id: userId,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }
+
+    let result
+    if (existing) {
+      console.log("🔄 [DB] Updating existing record...")
+      result = await supabase.from("user_settings").update(settingsData).eq("user_id", userId).select().single()
+    } else {
+      console.log("➕ [DB] Creating new record...")
+      settingsData.created_at = new Date().toISOString()
+      result = await supabase.from("user_settings").insert(settingsData).select().single()
+    }
+
+    const { data, error } = result
 
     if (error) {
-      console.log(`❌ [DB] Error updating settings:`, error.message)
+      console.error("❌ [DB] Error updating settings:", error.message)
       return { data: null, error }
     }
 
-    console.log(`✅ [DB] Settings updated successfully`)
+    console.log("✅ [DB] Settings updated successfully")
     return { data, error: null }
-  })
+  } catch (error) {
+    console.error("❌ [DB] Exception updating settings:", error)
+    return { data: null, error }
+  }
 }
 
-export async function createUserSettings(userId: string, settings: any) {
-  console.log(`🆕 [DB] Creating settings for user: ${userId}`)
-
-  return executeWithRetry(async () => {
-    const { data, error } = await supabase
-      .from("user_settings")
-      .insert({
-        user_id: userId,
-        ...settings,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.log(`❌ [DB] Error creating settings:`, error.message)
-      return { data: null, error }
-    }
-
-    console.log(`✅ [DB] Settings created successfully`)
-    return { data, error: null }
-  })
-}
-
-// Resto de funciones sin cambios...
 export const getUserRole = async (userId: string) => {
   try {
     console.log("Getting user role for user:", userId)
