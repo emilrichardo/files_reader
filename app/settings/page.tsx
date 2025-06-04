@@ -511,8 +511,8 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            {/* Botón de guardar */}
-            <Button onClick={handleSave} disabled={isLoading} className="w-full bg-black hover:bg-gray-800 text-white">
+            {/* Botón de guardar con clase específica */}
+            <Button onClick={handleSave} disabled={isLoading} className="w-full settings-save-button">
               <Save className="w-4 h-4 mr-2" />
               {isLoading ? "Guardando..." : "Guardar Cambios"}
             </Button>

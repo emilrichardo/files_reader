@@ -35,11 +35,11 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 // UUID fijo para configuración global
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
-// Settings por defecto MÍNIMOS (sin nombre visible hasta cargar)
+// Settings por defecto MÍNIMOS
 const defaultSettings: UserSettings = {
   id: "1",
   user_id: "demo-user",
-  project_name: "Civet", // Default name
+  project_name: "Civet",
   api_endpoint: "https://cibet.app.n8n.cloud/webhook/Civet-public-upload",
   api_keys: {
     openai: "",
@@ -47,8 +47,8 @@ const defaultSettings: UserSettings = {
     supabase: "",
   },
   theme: "light",
-  color_scheme: "black",
-  custom_color: "",
+  color_scheme: "blue", // Cambiar a azul por defecto
+  custom_color: "#3b82f6", // Azul por defecto
   font_family: "Inter",
   style_mode: "flat",
   company_logo: "",
@@ -108,7 +108,7 @@ const fontFamilies = [
 // Funciones auxiliares
 function hexToRgb(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return "0, 0, 0"
+  if (!result) return "59, 130, 246" // RGB para azul por defecto
 
   const r = Number.parseInt(result[1], 16)
   const g = Number.parseInt(result[2], 16)
@@ -143,20 +143,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Cargar configuración automáticamente
   useEffect(() => {
-    // Si ya inicializamos las configuraciones, no hacer nada
-    if (settingsInitialized) {
+    if (settingsInitialized || authLoading) {
       return
     }
 
-    // Si todavía está cargando la autenticación, esperar
-    if (authLoading) {
-      return
-    }
-
-    // Marcar como inicializado para evitar múltiples cargas
     setSettingsInitialized(true)
-
-    // SIEMPRE cargar configuración global, independientemente del usuario
     loadGlobalSettings()
   }, [authLoading, settingsInitialized])
 
@@ -167,25 +158,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("🎨 [THEME] Loading global configuration...")
 
-      // Cargar configuración global usando la función mejorada
-      const globalSettings = await getGlobalSettings()
+      // Cargar configuración global
+      const { data: globalSettings, error } = await getGlobalSettings()
 
-      if (globalSettings) {
-        console.log("✅ [THEME] Global settings loaded:", globalSettings)
-        console.log("🎨 [THEME] Color scheme:", globalSettings.color_scheme)
-        console.log("🎨 [THEME] Custom color:", globalSettings.custom_color)
-        console.log("🖼️ [THEME] Company logo:", globalSettings.company_logo ? "Present" : "Not found")
+      if (error) {
+        console.log("⚠️ [THEME] Error loading global settings:", error.message)
+      }
+
+      if (globalSettings && !error) {
+        console.log("✅ [THEME] Global settings loaded successfully:")
+        console.log("🎨 [THEME] - Project name:", globalSettings.project_name)
+        console.log("🎨 [THEME] - Color scheme:", globalSettings.color_scheme)
+        console.log("🎨 [THEME] - Custom color:", globalSettings.custom_color)
+        console.log("🖼️ [THEME] - Company logo:", globalSettings.company_logo ? "Present" : "Not found")
       } else {
         console.log("⚠️ [THEME] No global settings found, using defaults")
       }
 
       // Cargar tema personal si hay usuario autenticado
-      let personalTheme = globalSettings?.theme || "light" // usar tema global como fallback
+      let personalTheme = globalSettings?.theme || defaultSettings.theme
 
       if (user) {
         try {
           console.log("🎨 [THEME] Loading personal theme for user:", user.id)
-          const userSettings = await getUserSettings(user.id)
+          const { data: userSettings } = await getUserSettings(user.id)
 
           if (userSettings?.theme) {
             personalTheme = userSettings.theme
@@ -196,43 +192,39 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Combinar configuraciones
-      const finalSettings = {
+      // Combinar configuraciones con valores por defecto seguros
+      const finalSettings: UserSettings = {
         ...defaultSettings,
-        ...(globalSettings || {}), // Configuración global
-        theme: personalTheme, // Tema personal o global
+        ...(globalSettings || {}),
+        theme: personalTheme,
         user_id: user?.id || "public",
-        // Asegurar valores por defecto si no hay configuración global
-        project_name: globalSettings?.project_name || "Civet",
-        api_endpoint: globalSettings?.api_endpoint || "https://cibet.app.n8n.cloud/webhook/Civet-public-upload",
-        color_scheme: globalSettings?.color_scheme || "black",
-        custom_color: globalSettings?.custom_color || "",
+        // Asegurar valores por defecto seguros
+        project_name: globalSettings?.project_name || defaultSettings.project_name,
+        api_endpoint: globalSettings?.api_endpoint || defaultSettings.api_endpoint,
+        color_scheme: globalSettings?.color_scheme || defaultSettings.color_scheme,
+        custom_color: globalSettings?.custom_color || defaultSettings.custom_color,
         company_logo: globalSettings?.company_logo || "",
         company_logo_type: globalSettings?.company_logo_type || undefined,
       }
 
-      console.log("✅ [THEME] Final settings applied:", finalSettings)
-      console.log("🔗 [THEME] API Endpoint:", finalSettings.api_endpoint)
-      console.log("🏢 [THEME] Project Name:", finalSettings.project_name)
-      console.log("🎨 [THEME] Color Scheme:", finalSettings.color_scheme)
-      console.log("🎨 [THEME] Custom Color:", finalSettings.custom_color)
-      console.log("🖼️ [THEME] Company Logo:", finalSettings.company_logo ? "Present" : "Not found")
+      console.log("✅ [THEME] Final settings applied:")
+      console.log("🏢 [THEME] - Project Name:", finalSettings.project_name)
+      console.log("🎨 [THEME] - Color Scheme:", finalSettings.color_scheme)
+      console.log("🎨 [THEME] - Custom Color:", finalSettings.custom_color)
+      console.log("🖼️ [THEME] - Company Logo:", finalSettings.company_logo ? "Present" : "Not found")
 
       setSettings(finalSettings)
-
-      // Aplicar estilos CSS inmediatamente
       applyThemeStyles(finalSettings)
-
-      // Marcar como listo inmediatamente
       setIsSettingsReady(true)
       setIsLoadingSettings(false)
+
       console.log("✅ [THEME] Settings ready and applied")
     } catch (error) {
       console.error("❌ [THEME] Error loading settings:", error)
-      // En caso de error, usar configuración por defecto pero marcar como listo
+
+      // En caso de error, usar configuración por defecto
       const fallbackSettings = {
         ...defaultSettings,
-        project_name: "Civet", // Fallback con nombre
         user_id: user?.id || "public",
       }
       setSettings(fallbackSettings)
@@ -244,14 +236,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Función para aplicar estilos CSS dinámicamente
   const applyThemeStyles = (settings: UserSettings) => {
-    const primaryColor =
-      settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
+    // Determinar color primario con fallback seguro
+    let primaryColor = settings.custom_color
+
+    if (!primaryColor) {
+      primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes]
+    }
+
+    if (!primaryColor) {
+      primaryColor = colorSchemes.blue // Fallback final
+    }
 
     console.log("🎨 [THEME] Applying CSS styles:")
     console.log("🎨 [THEME] - Custom color:", settings.custom_color)
     console.log("🎨 [THEME] - Color scheme:", settings.color_scheme)
     console.log("🎨 [THEME] - Final primary color:", primaryColor)
-    console.log("🎨 [THEME] - Optimal text color:", getOptimalTextColor(primaryColor))
 
     // Aplicar variables CSS al documento
     const root = document.documentElement
@@ -267,72 +266,67 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove("dark")
     }
 
-    // Aplicar color primario a elementos específicos
+    // Aplicar estilos específicos
     const style = document.getElementById("dynamic-theme-styles") || document.createElement("style")
     style.id = "dynamic-theme-styles"
     style.textContent = `
-    :root {
-      --primary: ${primaryColor};
-      --primary-rgb: ${hexToRgb(primaryColor)};
-    }
+      :root {
+        --primary: ${primaryColor};
+        --primary-rgb: ${hexToRgb(primaryColor)};
+      }
 
-    .bg-primary { 
-      background-color: ${primaryColor} !important; 
-      color: ${getOptimalTextColor(primaryColor)} !important;
-    }
+      /* Elementos de navegación activos en sidebar */
+      .sidebar-nav-active,
+      [data-sidebar-nav-active="true"] {
+        background-color: ${primaryColor} !important;
+        color: ${getOptimalTextColor(primaryColor)} !important;
+      }
 
-    .text-primary { color: ${primaryColor} !important; }
-    .border-primary { border-color: ${primaryColor} !important; }
+      /* Botones primarios específicos */
+      .btn-primary, 
+      button[data-primary="true"],
+      .button-primary,
+      .settings-save-button {
+        background-color: ${primaryColor} !important;
+        color: ${getOptimalTextColor(primaryColor)} !important;
+        border-color: ${primaryColor} !important;
+      }
 
-    /* Aplicar a botones y elementos interactivos */
-    .btn-primary, button[type="submit"], button.bg-primary {
-      background-color: ${primaryColor} !important;
-      border-color: ${primaryColor} !important;
-      color: ${getOptimalTextColor(primaryColor)} !important;
-    }
+      .settings-save-button:hover {
+        background-color: ${primaryColor}dd !important;
+      }
 
-    /* Botones con clase primary */
-    button.primary, .button-primary {
-      background-color: ${primaryColor} !important;
-      color: ${getOptimalTextColor(primaryColor)} !important;
-      border-color: ${primaryColor} !important;
-    }
+      /* Enlaces que específicamente deben usar el color primario */
+      .link-primary {
+        color: ${primaryColor} !important;
+      }
 
-    /* Aplicar a enlaces */
-    a:not(.no-primary) {
-      color: ${primaryColor} !important;
-    }
+      /* Elementos con clase específica para color primario */
+      .text-primary-custom { 
+        color: ${primaryColor} !important; 
+      }
+      
+      .bg-primary-custom { 
+        background-color: ${primaryColor} !important; 
+        color: ${getOptimalTextColor(primaryColor)} !important;
+      }
 
-    /* Aplicar a elementos de navegación activos */
-    .nav-active, .active {
-      background-color: ${primaryColor} !important;
-      color: ${getOptimalTextColor(primaryColor)} !important;
-    }
+      .border-primary-custom { 
+        border-color: ${primaryColor} !important; 
+      }
 
-    /* Sidebar items activos */
-    .sidebar-item-active {
-      background-color: ${primaryColor} !important;
-      color: ${getOptimalTextColor(primaryColor)} !important;
-    }
-
-    /* Asegurar contraste en elementos con data attributes */
-    [data-primary-bg="true"] {
-      background-color: ${primaryColor} !important;
-      color: ${getOptimalTextColor(primaryColor)} !important;
-    }
-
-    /* Aplicar a botones de shadcn/ui */
-    .bg-black, .bg-gray-900 {
-      background-color: ${primaryColor} !important;
-      color: ${getOptimalTextColor(primaryColor)} !important;
-    }
-  `
+      /* Elementos activos específicos */
+      .nav-item-active {
+        background-color: ${primaryColor} !important;
+        color: ${getOptimalTextColor(primaryColor)} !important;
+      }
+    `
 
     if (!document.head.contains(style)) {
       document.head.appendChild(style)
     }
 
-    console.log("✅ [THEME] CSS styles applied successfully with color:", primaryColor)
+    console.log("✅ [THEME] CSS styles applied with color:", primaryColor)
   }
 
   const reloadSettings = async () => {
@@ -345,36 +339,49 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     console.log("🔧 [THEME] Updating settings:", updates)
 
     try {
-      // Verificar que el usuario esté autenticado para cambios que no sean tema
-      if (!user && Object.keys(updates).some((key) => key !== "theme")) {
-        throw new Error("Usuario no autenticado")
-      }
-
-      // Verificar si es superadmin usando userRole del auth context
       const isSuperAdmin = userRole === "superadmin"
       console.log("🔍 [THEME] User role:", userRole, "Is superadmin:", isSuperAdmin)
 
-      // Si es superadmin, puede cambiar configuración global
       if (isSuperAdmin) {
         console.log("💾 [THEME] Superadmin updating global settings")
 
-        // Guardar configuración global usando el UUID fijo
-        const data = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
+        // Guardar configuración global
+        const { data, error } = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
+
+        if (error) {
+          console.error("❌ [THEME] Error saving global settings:", error)
+          throw new Error("Error al guardar la configuración global")
+        }
 
         console.log("✅ [THEME] Global settings saved successfully:", data)
 
-        // Recargar configuración después de guardar
-        await reloadSettings()
+        // Actualizar estado local inmediatamente
+        const updatedSettings = {
+          ...settings,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        }
+        setSettings(updatedSettings)
+        applyThemeStyles(updatedSettings)
+
+        // Recargar después de un breve delay
+        setTimeout(() => {
+          reloadSettings()
+        }, 500)
       } else if (user) {
         // Usuario normal solo puede cambiar su tema personal
         const personalUpdates = { theme: updates.theme }
         console.log("💾 [THEME] User updating personal theme:", personalUpdates)
 
-        const data = await updateUserSettings(user.id, personalUpdates)
+        const { data, error } = await updateUserSettings(user.id, personalUpdates)
+
+        if (error) {
+          throw new Error("Error al guardar el tema personal")
+        }
 
         console.log("✅ [THEME] Personal theme saved successfully:", data)
 
-        // Actualizar estado local para cambios de tema
+        // Actualizar estado local
         const updatedSettings = {
           ...settings,
           ...personalUpdates,
@@ -411,14 +418,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const updateLogo = async (file: File): Promise<void> => {
     return new Promise((resolve, reject) => {
-      // Validar tipo de archivo
       const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/svg+xml"]
       if (!allowedTypes.includes(file.type)) {
         reject(new Error("Formato de archivo no soportado. Use JPG, PNG o SVG."))
         return
       }
 
-      // Validar tamaño (máximo 5MB)
       const maxSize = 5 * 1024 * 1024 // 5MB
       if (file.size > maxSize) {
         reject(new Error("El archivo es demasiado grande. Máximo 5MB."))
@@ -430,7 +435,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       reader.onload = async (e) => {
         const result = e.target?.result as string
         if (result) {
-          // Determinar el tipo de logo
           let logoType: "jpg" | "png" | "svg"
           switch (file.type) {
             case "image/jpeg":
@@ -490,13 +494,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const isDark = settings.theme === "dark"
+
+  // Calcular color primario con fallback seguro
   const primaryColor =
-    settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.black
+    settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || colorSchemes.blue
+
   const companyLogo = settings.company_logo || null
   const logoType = settings.company_logo_type || null
   const projectName = settings.project_name || "Civet"
 
-  // Determinar si es admin usando el userRole del auth context
   const isAdmin = userRole === "admin" || userRole === "superadmin"
 
   const isLightColor = (color: string): boolean => {

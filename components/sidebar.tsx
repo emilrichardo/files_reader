@@ -26,19 +26,15 @@ export default function Sidebar() {
     ]
 
     if (!user) {
-      // Usuario público - solo navegación básica
       return baseNavigation
     }
 
-    // Usuario autenticado
     const authenticatedNavigation = [...baseNavigation]
 
-    // Solo administradores pueden ver "Usuarios"
     if (userRole === "admin" || userRole === "superadmin") {
       authenticatedNavigation.push({ name: "Usuarios", href: "/users", icon: Users })
     }
 
-    // Solo usuarios autenticados pueden ver "Configuración"
     authenticatedNavigation.push({ name: "Configuración", href: "/settings", icon: Settings })
 
     return authenticatedNavigation
@@ -63,8 +59,8 @@ export default function Sidebar() {
           {isSettingsReady && companyLogo ? (
             <img src={companyLogo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
           ) : (
-            <div className="h-8 w-8 rounded bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">
+            <div className="h-8 w-8 rounded bg-gray-800 flex items-center justify-center">
+              <span className="text-white font-bold text-sm">
                 {isSettingsReady ? projectName.charAt(0).toUpperCase() : "C"}
               </span>
             </div>
@@ -87,10 +83,11 @@ export default function Sidebar() {
                 className={cn(
                   "flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-primary text-primary-foreground"
+                    ? "sidebar-nav-active" // Usar clase específica para navegación activa
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                 )}
                 onClick={() => setIsMobileOpen(false)}
+                data-sidebar-nav-active={isActive}
               >
                 <item.icon className="h-4 w-4" />
                 <span>{item.name}</span>
@@ -102,7 +99,6 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="border-t p-4 space-y-2">
-        {/* User info and logout */}
         {user ? (
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground px-2">{user.email}</div>

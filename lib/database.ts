@@ -24,27 +24,27 @@ export async function getGlobalSettings() {
 
     if (testError) {
       console.error("❌ [DB] Connection test failed:", testError)
-      return null
+      return { data: null, error: testError }
     }
 
     console.log("✅ [DB] Connection test passed")
 
     // Buscar configuración global
     const { data, error } = await withTimeout(
-      supabase.from("user_settings").select("*").eq("user_id", "00000000-0000-0000-0000-000000000001").single(),
+      supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single(),
       10000,
     )
 
     if (error) {
-      console.log("⚠️ [DB] No global settings found, using defaults:", error.message)
-      return null
+      console.log("⚠️ [DB] No global settings found:", error.message)
+      return { data: null, error }
     }
 
     console.log("✅ [DB] Global settings loaded:", data)
-    return data
+    return { data, error: null }
   } catch (error) {
     console.error("❌ [DB] Error loading global settings:", error)
-    return null
+    return { data: null, error }
   }
 }
 
@@ -98,7 +98,7 @@ export async function updateUserSettings(userId: string, settings: any) {
     }
 
     console.log("✅ [DB] Settings updated successfully:", data)
-    return data
+    return { data, error: null }
   } catch (error) {
     console.error("❌ [DB] Error updating user settings:", error)
     throw error
@@ -116,14 +116,14 @@ export async function getUserSettings(userId: string) {
 
     if (error) {
       console.error("❌ [DB] Error getting user settings:", error)
-      return null
+      return { data: null, error }
     }
 
     console.log("📋 [DB] User settings loaded:", data)
-    return data
+    return { data, error: null }
   } catch (error) {
     console.error("❌ [DB] Timeout or error getting user settings:", error)
-    return null
+    return { data: null, error }
   }
 }
 
