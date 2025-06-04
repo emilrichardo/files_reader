@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -11,11 +11,28 @@ import { useAuth } from "@/contexts/auth-context"
 import { useTheme } from "@/contexts/theme-context"
 import { FileText, LayoutTemplateIcon as Template, Users, Settings, Menu, LogOut, Home } from "lucide-react"
 
+// Logo SVG de respaldo
+const FALLBACK_LOGO =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiMzYjgyZjYiIHJ4PSIyMCIgcnk9IjIwIi8+PHRleHQgeD0iNTAiIHk9IjYwIiBmb250LXNpemU9IjQwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DPC90ZXh0Pjwvc3ZnPg=="
+
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut, signInWithGoogle, userRole } = useAuth()
-  const { companyLogo, logoType, projectName, isSettingsReady } = useTheme()
+  const { companyLogo, logoType, projectName, isSettingsReady, primaryColor } = useTheme()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [logoSrc, setLogoSrc] = useState<string | null>(null)
+
+  // Usar useEffect para establecer el logo cuando esté disponible
+  useEffect(() => {
+    if (companyLogo && companyLogo.startsWith("data:")) {
+      setLogoSrc(companyLogo)
+      console.log("✅ [SIDEBAR] Logo set from context")
+    } else {
+      // Usar logo de respaldo
+      setLogoSrc(FALLBACK_LOGO)
+      console.log("⚠️ [SIDEBAR] Using fallback logo")
+    }
+  }, [companyLogo])
 
   // Navegación dinámica basada en el rol del usuario
   const getNavigation = () => {
@@ -55,19 +72,28 @@ export default function Sidebar() {
       {/* Header con logo y nombre */}
       <div className="flex h-16 items-center border-b px-6">
         <div className="flex items-center space-x-3">
-          {/* Logo */}
-          {isSettingsReady && companyLogo ? (
-            <img src={companyLogo || "/placeholder.svg"} alt="Logo" className="h-8 w-8 object-contain" />
+          {/* Logo - Siempre mostrar algo */}
+          {logoSrc ? (
+            <img
+              src={logoSrc || "/placeholder.svg"}
+              alt="Logo"
+              className="h-8 w-8 object-contain"
+              onError={() => {
+                console.log("⚠️ [SIDEBAR] Logo error, using fallback")
+                setLogoSrc(FALLBACK_LOGO)
+              }}
+            />
           ) : (
-            <div className="h-8 w-8 rounded bg-gray-800 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">
-                {isSettingsReady ? projectName.charAt(0).toUpperCase() : "C"}
-              </span>
+            <div
+              className="h-8 w-8 rounded flex items-center justify-center text-white"
+              style={{ backgroundColor: primaryColor || "#3b82f6" }}
+            >
+              <span className="font-bold text-sm">{projectName?.charAt(0)?.toUpperCase() || "C"}</span>
             </div>
           )}
 
           {/* Nombre del proyecto */}
-          <span className="font-semibold text-lg">{isSettingsReady ? projectName : "Civet"}</span>
+          <span className="font-semibold text-lg">{projectName || "Civet"}</span>
         </div>
       </div>
 
@@ -114,7 +140,11 @@ export default function Sidebar() {
           </div>
         ) : (
           <div className="space-y-2">
-            <Button className="w-full justify-center" onClick={signInWithGoogle}>
+            <Button
+              className="w-full justify-center"
+              onClick={signInWithGoogle}
+              style={{ backgroundColor: "#000000", color: "white" }}
+            >
               <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

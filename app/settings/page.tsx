@@ -512,8 +512,13 @@ export default function SettingsPage() {
             </Card>
 
             {/* Botón de guardar con clase específica */}
-            <Button onClick={handleSave} disabled={isLoading} className="w-full settings-save-button">
-              <Save className="w-4 h-4 mr-2" />
+            <Button
+              onClick={handleSave}
+              disabled={isLoading}
+              className="w-full settings-save-button"
+              style={{ backgroundColor: "#000000", color: "white" }}
+            >
+              <Save className="w-4 h-4 mr-2" style={{ color: "#3b82f6" }} />
               {isLoading ? "Guardando..." : "Guardar Cambios"}
             </Button>
           </div>
