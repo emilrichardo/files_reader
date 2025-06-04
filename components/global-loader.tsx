@@ -34,10 +34,9 @@ export function GlobalLoader({ isLoading }: GlobalLoaderProps) {
           />
         </div>
 
-        {/* Texto de carga */}
+        {/* Texto de carga simplificado */}
         <div className="text-center">
-          <p className="text-sm font-medium text-gray-700">Cargando configuración...</p>
-          <p className="text-xs text-gray-500 mt-1">Aplicando tema y configuraciones</p>
+          <p className="text-sm font-medium text-gray-700">Cargando...</p>
         </div>
 
         {/* Barra de progreso sutil */}
