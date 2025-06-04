@@ -1,6 +1,9 @@
 import { supabase } from "./supabase"
 import type { Document, Template, DocumentRow, UserSettings } from "./types"
 
+// UUID fijo para configuración global
+const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
+
 // Servicios para User Settings (SIMPLIFICADOS)
 export const getUserSettings = async (userId: string) => {
   try {
@@ -17,6 +20,51 @@ export const getUserSettings = async (userId: string) => {
     return { data, error }
   } catch (error) {
     console.error("Error getting user settings:", error)
+    return { data: null, error }
+  }
+}
+
+// Nueva función para obtener configuración global
+export const getGlobalSettings = async () => {
+  try {
+    console.log("Getting global settings with ID:", GLOBAL_SETTINGS_ID)
+
+    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single()
+
+    if (error && error.code !== "PGRST116") {
+      console.error("Supabase error getting global settings:", error)
+      return { data: null, error }
+    } else if (!error) {
+      console.log("Global settings retrieved successfully:", data)
+      return { data, error: null }
+    }
+
+    // Si no hay configuración global, intentar encontrar la de un superadmin
+    console.log("No global settings found, looking for superadmin settings...")
+
+    // Esta consulta podría fallar si no hay tabla user_roles, pero está bien
+    try {
+      const { data: superAdminData, error: superAdminError } = await supabase
+        .from("user_settings")
+        .select(`
+          *,
+          user_roles!inner(role)
+        `)
+        .eq("user_roles.role", "superadmin")
+        .limit(1)
+        .single()
+
+      if (!superAdminError && superAdminData) {
+        console.log("Found superadmin settings to use as global:", superAdminData)
+        return { data: superAdminData, error: null }
+      }
+    } catch (superAdminError) {
+      console.log("Could not find superadmin settings, using defaults")
+    }
+
+    return { data: null, error }
+  } catch (error) {
+    console.error("Error getting global settings:", error)
     return { data: null, error }
   }
 }

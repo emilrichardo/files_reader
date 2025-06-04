@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { getUserSettings, updateUserSettings } from "@/lib/database"
+import { getUserSettings, updateUserSettings, getGlobalSettings } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
 import { useAuth } from "./auth-context"
 
@@ -27,14 +27,19 @@ interface ThemeContextType {
   loadUserSettings: (userId: string) => Promise<void>
   isLoadingSettings: boolean
   isAdmin: boolean
+  isSettingsReady: boolean
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+// UUID fijo para configuración global
+const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
+
+// Settings por defecto MÍNIMOS (sin nombre visible hasta cargar)
 const defaultSettings: UserSettings = {
   id: "1",
   user_id: "demo-user",
-  project_name: "Invitu",
+  project_name: "", // VACÍO hasta cargar
   api_endpoint: "https://cibet.app.n8n.cloud/webhook/invitu-public-upload",
   api_keys: {
     openai: "",
@@ -129,13 +134,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const [settingsInitialized, setSettingsInitialized] = useState(false)
+  const [isSettingsReady, setIsSettingsReady] = useState(false)
 
   // Initialize
   useEffect(() => {
     setIsLoaded(true)
   }, [])
 
-  // Cargar configuración SOLO UNA VEZ cuando el usuario esté disponible
+  // Cargar configuración automáticamente
   useEffect(() => {
     // Si ya inicializamos las configuraciones, no hacer nada
     if (settingsInitialized) {
@@ -150,67 +156,92 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Marcar como inicializado para evitar múltiples cargas
     setSettingsInitialized(true)
 
-    if (user) {
-      console.log("🎨 [THEME] User authenticated, loading settings for:", user.email)
-      loadUserSettings(user.id)
-    } else {
-      console.log("🎨 [THEME] No user authenticated, using default settings")
-      setSettings({ ...defaultSettings, user_id: "public" })
-    }
-  }, [user, authLoading, settingsInitialized])
+    // SIEMPRE cargar configuración global, independientemente del usuario
+    loadGlobalSettings()
+  }, [authLoading, settingsInitialized])
 
-  const loadUserSettings = async (userId: string) => {
+  const loadGlobalSettings = async () => {
     if (isLoadingSettings) {
       console.log("🎨 [THEME] Already loading settings, skipping...")
       return
     }
 
     setIsLoadingSettings(true)
-    try {
-      console.log("🎨 [THEME] Loading settings for user:", userId)
+    setIsSettingsReady(false)
 
-      // NUEVA LÓGICA: Cargar configuración global primero
+    try {
+      console.log("🎨 [THEME] Loading global configuration...")
+
+      // Cargar configuración global
       let globalSettings = null
 
-      // Intentar cargar configuración del superadmin (configuración global)
       try {
-        console.log("🎨 [THEME] Loading global settings from superadmin...")
-        const { data: globalData } = await getUserSettings("global") // Buscar configuración global
+        console.log("🎨 [THEME] Attempting to load global settings with ID:", GLOBAL_SETTINGS_ID)
+        const { data: globalData } = await getGlobalSettings()
 
-        if (!globalData) {
-          // Si no hay configuración global, buscar la del primer superadmin
-          console.log("🎨 [THEME] No global settings found, looking for superadmin settings...")
-          // Aquí podrías implementar lógica para encontrar el primer superadmin
-          // Por ahora usaremos los defaults
-        } else {
+        if (globalData) {
           globalSettings = globalData
           console.log("✅ [THEME] Global settings loaded:", globalSettings)
+        } else {
+          console.log("⚠️ [THEME] No global settings found, using defaults")
         }
       } catch (error) {
-        console.log("⚠️ [THEME] No global settings found, using defaults")
+        console.log("⚠️ [THEME] Error loading global settings, using defaults:", error)
       }
 
-      // Cargar configuración personal del usuario (solo tema personal)
-      const { data: userSettings } = await getUserSettings(userId)
+      // Cargar tema personal si hay usuario autenticado
+      let personalTheme = "light" // tema por defecto
 
-      // Combinar configuraciones: global + personal
-      const mergedSettings = {
+      if (user) {
+        try {
+          console.log("🎨 [THEME] Loading personal theme for user:", user.id)
+          const { data: userSettings } = await getUserSettings(user.id)
+
+          if (userSettings?.theme) {
+            personalTheme = userSettings.theme
+            console.log("✅ [THEME] Personal theme loaded:", personalTheme)
+          }
+        } catch (error) {
+          console.log("⚠️ [THEME] Error loading personal theme, using default")
+        }
+      }
+
+      // Combinar configuraciones
+      const finalSettings = {
         ...defaultSettings,
-        ...(globalSettings || {}), // Configuración global (colores, logo, endpoint, etc.)
-        ...(userSettings ? { theme: userSettings.theme } : {}), // Solo tema personal
-        user_id: userId,
+        ...(globalSettings || {}), // Configuración global
+        theme: personalTheme, // Tema personal o por defecto
+        user_id: user?.id || "public",
+        // Asegurar valores por defecto si no hay configuración global
+        project_name: globalSettings?.project_name || "Invitu",
+        api_endpoint: globalSettings?.api_endpoint || "https://cibet.app.n8n.cloud/webhook/invitu-public-upload",
       }
 
-      console.log("✅ [THEME] Final merged settings:", mergedSettings)
-      console.log("🔗 [THEME] API Endpoint:", mergedSettings.api_endpoint)
+      console.log("✅ [THEME] Final settings applied:", finalSettings)
+      console.log("🔗 [THEME] API Endpoint:", finalSettings.api_endpoint)
+      console.log("🏢 [THEME] Project Name:", finalSettings.project_name)
 
-      setSettings(mergedSettings)
+      setSettings(finalSettings)
+      setIsSettingsReady(true)
     } catch (error) {
       console.error("❌ [THEME] Error loading settings:", error)
-      const fallbackSettings = { ...defaultSettings, user_id: userId }
+      // En caso de error, usar configuración por defecto pero marcar como listo
+      const fallbackSettings = {
+        ...defaultSettings,
+        project_name: "Invitu", // Fallback con nombre
+        user_id: user?.id || "public",
+      }
       setSettings(fallbackSettings)
+      setIsSettingsReady(true)
     } finally {
       setIsLoadingSettings(false)
+    }
+  }
+
+  const loadUserSettings = async (userId: string) => {
+    // Esta función ahora solo recarga si es necesario
+    if (!isSettingsReady) {
+      await loadGlobalSettings()
     }
   }
 
@@ -218,8 +249,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     console.log("🔧 [THEME] Updating settings:", updates)
 
     try {
-      // Verificar que el usuario esté autenticado
-      if (!user) {
+      // Verificar que el usuario esté autenticado para cambios que no sean tema
+      if (!user && Object.keys(updates).some((key) => key !== "theme")) {
         throw new Error("Usuario no autenticado")
       }
 
@@ -227,8 +258,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (isSuperAdmin) {
         console.log("💾 [THEME] Superadmin updating global settings")
 
-        // Guardar configuración global
-        const { data, error } = await updateUserSettings("global", updates)
+        // Guardar configuración global usando el UUID fijo
+        const { data, error } = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
 
         if (error) {
           console.error("❌ [THEME] Database error:", error)
@@ -236,7 +267,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
 
         console.log("✅ [THEME] Global settings saved successfully:", data)
-      } else {
+      } else if (user) {
         // Usuario normal solo puede cambiar su tema personal
         const personalUpdates = { theme: updates.theme }
         console.log("💾 [THEME] User updating personal theme:", personalUpdates)
@@ -249,6 +280,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
 
         console.log("✅ [THEME] Personal theme saved successfully:", data)
+      } else {
+        // Usuario público solo puede cambiar tema localmente
+        console.log("💾 [THEME] Public user updating theme locally")
       }
 
       // Actualizar estado local
@@ -398,6 +432,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         loadUserSettings,
         isLoadingSettings,
         isAdmin: isSuperAdmin,
+        isSettingsReady,
       }}
     >
       {children}
