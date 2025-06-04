@@ -91,9 +91,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               color: white !important;
             }
             
-            /* Asegurar que no hay loading infinito */
-            .loading-overlay {
-              display: none !important;
+            /* Ocultar contenido hasta que esté listo */
+            .theme-loading {
+              opacity: 0;
+              transition: opacity 0.3s ease-in-out;
+            }
+            
+            .theme-ready {
+              opacity: 1;
             }
           `,
           }}

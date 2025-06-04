@@ -1,25 +1,40 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useTheme } from "@/contexts/theme-context"
+import { useAuth } from "@/contexts/auth-context"
+import { useEffect, useState } from "react"
 
 export function ThemeLoader() {
-  const [isLoading, setIsLoading] = useState(false) // Cambiado a false para evitar loading infinito
-  const { isLoaded } = useTheme()
+  const { isSettingsReady, isLoadingSettings } = useTheme()
+  const { loading: authLoading } = useAuth()
+  const [showContent, setShowContent] = useState(false)
 
   useEffect(() => {
-    // No mostrar loader
-    setIsLoading(false)
-  }, [isLoaded])
+    // Solo mostrar contenido cuando todo esté listo
+    if (!authLoading && isSettingsReady && !isLoadingSettings) {
+      // Pequeño delay para evitar flashes
+      setTimeout(() => {
+        setShowContent(true)
+        document.body.classList.add("theme-ready")
+        document.body.classList.remove("theme-loading")
+      }, 100)
+    } else {
+      document.body.classList.add("theme-loading")
+      document.body.classList.remove("theme-ready")
+    }
+  }, [authLoading, isSettingsReady, isLoadingSettings])
 
-  if (!isLoading) return null
-
-  return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-2">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-        <p className="text-sm text-muted-foreground">Cargando tema...</p>
+  // Mostrar loader mientras no esté listo
+  if (!showContent) {
+    return (
+      <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-gray-600">Cargando configuración...</p>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  return null
 }

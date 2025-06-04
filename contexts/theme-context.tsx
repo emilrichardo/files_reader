@@ -34,11 +34,11 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
-// Logo SVG FIJO que sabemos que funciona
+// Logo SVG FIJO
 const FIXED_LOGO =
   "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiMzYjgyZjYiIHJ4PSIxMiIgcnk9IjEyIi8+PHRleHQgeD0iMzIiIHk9IjQyIiBmb250LXNpemU9IjI4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+QzwvdGV4dD48L3N2Zz4="
 
-// Configuración FIJA que funciona
+// Configuración FIJA HARDCODEADA
 const FIXED_SETTINGS: UserSettings = {
   id: "1",
   user_id: "global",
@@ -131,60 +131,84 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { user, userRole } = useAuth()
+  const { user, userRole, loading: authLoading } = useAuth()
   const [settings, setSettings] = useState<UserSettings>(FIXED_SETTINGS)
-  const [isLoaded, setIsLoaded] = useState(true) // SIEMPRE listo
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
-  const [isSettingsReady, setIsSettingsReady] = useState(true) // SIEMPRE listo
+  const [isLoaded, setIsLoaded] = useState(false) // CAMBIO: Empezar como false
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true) // CAMBIO: Empezar como true
+  const [isSettingsReady, setIsSettingsReady] = useState(false) // CAMBIO: Empezar como false
+  const [isSaving, setIsSaving] = useState(false)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  // Aplicar estilos INMEDIATAMENTE
+  // Aplicar estilos INMEDIATAMENTE pero sin mostrar la UI hasta que esté listo
   useEffect(() => {
-    console.log("🎨 [THEME] Applying IMMEDIATE styles...")
+    console.log("🎨 [THEME] Applying FIXED styles...")
     applyThemeStyles(FIXED_SETTINGS)
 
-    // Cargar configuración real en background SIN bloquear - CON DELAY MAYOR
-    setTimeout(() => {
-      loadSettingsAsync()
-    }, 2000) // 2 segundos de delay para evitar timeouts
-  }, [])
+    // Cargar configuración real INMEDIATAMENTE
+    if (!authLoading) {
+      loadSettingsOnce()
+    }
+  }, [authLoading])
 
-  const loadSettingsAsync = async () => {
+  const loadSettingsOnce = async () => {
+    if (hasLoadedOnce) return
+
+    console.log("🔍 [THEME] Loading settings for the first time...")
+    setIsLoadingSettings(true)
+
     try {
-      console.log("🔍 [THEME] Loading real settings in background...")
+      // Intentar cargar configuración real
+      const globalResult = await getGlobalSettings()
 
-      // Intentar cargar con timeout manual más largo
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Manual timeout")), 10000) // 10 segundos
-      })
-
-      const settingsPromise = getGlobalSettings()
-
-      const globalResult = await Promise.race([settingsPromise, timeoutPromise])
+      let finalSettings = FIXED_SETTINGS
 
       if (globalResult?.data && !globalResult.error) {
-        const realSettings = {
+        finalSettings = {
           ...FIXED_SETTINGS,
           ...globalResult.data,
-          // FORZAR logo si existe
+          // Preservar logo si existe
           company_logo: globalResult.data.company_logo || FIXED_LOGO,
         }
-
-        console.log("✅ [THEME] Real settings loaded, updating...")
-        setSettings(realSettings)
-        applyThemeStyles(realSettings)
+        console.log("✅ [THEME] Real settings loaded successfully")
       } else {
-        console.log("⚠️ [THEME] No real settings found, keeping fixed ones")
+        console.log("⚠️ [THEME] Using fixed settings")
       }
+
+      // Aplicar configuración final
+      setSettings(finalSettings)
+      applyThemeStyles(finalSettings)
+
+      // Marcar como listo
+      setHasLoadedOnce(true)
+      setIsLoaded(true)
+      setIsSettingsReady(true)
     } catch (error) {
-      console.log("⚠️ [THEME] Error loading real settings (timeout or error), keeping fixed ones:", error.message)
+      console.log("⚠️ [THEME] Error loading settings, using fixed ones:", error)
+
+      // Usar configuración fija en caso de error
+      setSettings(FIXED_SETTINGS)
+      applyThemeStyles(FIXED_SETTINGS)
+
+      // Marcar como listo de todos modos
+      setHasLoadedOnce(true)
+      setIsLoaded(true)
+      setIsSettingsReady(true)
+    } finally {
+      setIsLoadingSettings(false)
     }
   }
 
   const applyThemeStyles = (settings: UserSettings) => {
-    const primaryColor = settings.custom_color || "#3b82f6"
+    // Usar el color personalizado si existe, sino el del esquema, sino azul por defecto
+    let primaryColor = settings.custom_color
+    if (!primaryColor || primaryColor === "") {
+      primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes]
+    }
+    if (!primaryColor || primaryColor === "") {
+      primaryColor = "#3b82f6"
+    }
 
     console.log("🎨 [THEME] Applying styles with color:", primaryColor)
-    console.log("🖼️ [THEME] Logo:", settings.company_logo ? "Present" : "Missing")
 
     const root = document.documentElement
     root.style.setProperty("--primary-color", primaryColor)
@@ -199,7 +223,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove("dark")
     }
 
-    // FORZAR estilos adicionales MÁS AGRESIVOS
+    // FORZAR estilos adicionales
     const style = document.getElementById("ultra-dynamic-styles") || document.createElement("style")
     style.id = "ultra-dynamic-styles"
     style.textContent = `
@@ -255,32 +279,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.head.appendChild(style)
     }
 
-    console.log("✅ [THEME] ULTRA styles applied")
+    console.log("✅ [THEME] Styles applied with primary color:", primaryColor)
   }
 
   const reloadSettings = async () => {
-    await loadSettingsAsync()
+    console.log("🔄 [THEME] Reloading settings...")
+    setHasLoadedOnce(false)
+    setIsLoaded(false)
+    setIsSettingsReady(false)
+    await loadSettingsOnce()
   }
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
     console.log("🔧 [THEME] Updating settings:", updates)
 
-    try {
-      const isSuperAdmin = userRole === "superadmin"
+    if (isSaving) {
+      console.log("⚠️ [THEME] Already saving, ignoring request")
+      return
+    }
 
-      if (isSuperAdmin) {
-        console.log("💾 [THEME] Superadmin updating global settings")
-        const result = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
-        if (result.error) {
-          throw new Error("Error al guardar configuración global: " + result.error.message)
-        }
-      } else if (user && updates.theme) {
-        console.log("💾 [THEME] User updating personal theme")
-        const result = await updateUserSettings(user.id, { theme: updates.theme })
-        if (result.error) {
-          throw new Error("Error al guardar tema personal: " + result.error.message)
-        }
-      }
+    try {
+      setIsSaving(true)
 
       // Actualizar estado local INMEDIATAMENTE
       const updatedSettings = {
@@ -291,20 +310,59 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setSettings(updatedSettings)
       applyThemeStyles(updatedSettings)
 
-      console.log("✅ [THEME] Settings updated successfully")
+      // Si es superadmin, intentar guardar en BD
+      const isSuperAdmin = userRole === "superadmin"
+      if (isSuperAdmin) {
+        console.log("💾 [THEME] Superadmin updating global settings")
+
+        const result = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
+        if (result.error) {
+          console.error("❌ [THEME] Error saving to database:", result.error)
+          throw new Error("Error al guardar configuración: " + result.error.message)
+        }
+
+        console.log("✅ [THEME] Settings saved to database successfully")
+      } else if (user && updates.theme) {
+        console.log("💾 [THEME] User updating personal theme")
+
+        const result = await updateUserSettings(user.id, { theme: updates.theme })
+        if (result.error) {
+          console.error("❌ [THEME] Error saving theme:", result.error)
+          throw new Error("Error al guardar tema: " + result.error.message)
+        }
+
+        console.log("✅ [THEME] Theme saved successfully")
+      }
+
+      console.log("✅ [THEME] All settings updated successfully")
     } catch (error) {
       console.error("❌ [THEME] Error updating settings:", error)
       throw error
+    } finally {
+      setIsSaving(false)
     }
   }
 
   const toggleTheme = async () => {
+    const newTheme = settings.theme === "light" ? "dark" : "light"
+
+    // Actualizar inmediatamente
+    const updatedSettings = {
+      ...settings,
+      theme: newTheme,
+    }
+    setSettings(updatedSettings)
+    applyThemeStyles(updatedSettings)
+
+    // Intentar guardar en background
     try {
-      await updateSettings({
-        theme: settings.theme === "light" ? "dark" : "light",
-      })
+      if (user) {
+        updateUserSettings(user.id, { theme: newTheme })
+          .then(() => console.log("✅ Theme preference saved"))
+          .catch(() => console.log("⚠️ Could not save theme preference"))
+      }
     } catch (error) {
-      console.error("Error toggling theme:", error)
+      console.error("Error saving theme preference:", error)
     }
   }
 
@@ -366,27 +424,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateProjectName = async (name: string) => {
-    try {
-      const newName = name.trim() || "Civet"
-      await updateSettings({ project_name: newName })
-    } catch (error) {
-      console.error("Error updating project name:", error)
-    }
+    const newName = name.trim() || "Civet"
+    await updateSettings({ project_name: newName })
   }
 
   const removeLogo = async () => {
-    try {
-      await updateSettings({
-        company_logo: FIXED_LOGO,
-        company_logo_type: "svg",
-      })
-    } catch (error) {
-      console.error("Error removing logo:", error)
-    }
+    await updateSettings({
+      company_logo: FIXED_LOGO,
+      company_logo_type: "svg",
+    })
   }
 
   const isDark = settings.theme === "dark"
-  const primaryColor = settings.custom_color || "#3b82f6"
+  const primaryColor =
+    settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || "#3b82f6"
   const companyLogo = settings.company_logo || FIXED_LOGO
   const logoType = settings.company_logo_type || "svg"
   const projectName = settings.project_name || "Civet"

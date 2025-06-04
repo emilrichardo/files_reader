@@ -98,11 +98,6 @@ export default function SettingsPage() {
         title: "Configuración guardada",
         description: "Los cambios se han aplicado exitosamente.",
       })
-
-      // Recargar la página después de un breve delay para asegurar que los cambios se reflejen
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
     } catch (error) {
       console.error("❌ [SETTINGS] Error saving settings:", error)
       toast({
@@ -111,6 +106,7 @@ export default function SettingsPage() {
         variant: "destructive",
       })
     } finally {
+      // IMPORTANTE: Siempre detener el loading
       setIsLoading(false)
     }
   }
@@ -453,20 +449,21 @@ export default function SettingsPage() {
                       <div
                         className="w-8 h-8 rounded flex items-center justify-center text-white text-sm font-bold"
                         style={{
-                          backgroundColor: customColor || colorSchemes[colorScheme as keyof typeof colorSchemes],
+                          backgroundColor:
+                            customColor || colorSchemes[colorScheme as keyof typeof colorSchemes] || "#3b82f6",
                         }}
                       >
-                        {projectName ? projectName[0].toUpperCase() : "P"}
+                        {projectName ? projectName[0].toUpperCase() : "C"}
                       </div>
                     )}
                     <span
                       className="font-semibold"
                       style={{
-                        color: customColor || colorSchemes[colorScheme as keyof typeof colorSchemes],
+                        color: customColor || colorSchemes[colorScheme as keyof typeof colorSchemes] || "#3b82f6",
                         fontFamily: fontFamily,
                       }}
                     >
-                      {projectName || "Mi Proyecto"}
+                      {projectName || "Civet"}
                     </span>
                   </div>
                   <div className="text-sm text-gray-600" style={{ fontFamily: fontFamily }}>
