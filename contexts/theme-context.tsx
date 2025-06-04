@@ -169,25 +169,42 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log("🎨 [THEME] Loading settings for user:", userId)
 
-      // Cargar configuración del usuario actual
+      // NUEVA LÓGICA: Cargar configuración global primero
+      let globalSettings = null
+
+      // Intentar cargar configuración del superadmin (configuración global)
+      try {
+        console.log("🎨 [THEME] Loading global settings from superadmin...")
+        const { data: globalData } = await getUserSettings("global") // Buscar configuración global
+
+        if (!globalData) {
+          // Si no hay configuración global, buscar la del primer superadmin
+          console.log("🎨 [THEME] No global settings found, looking for superadmin settings...")
+          // Aquí podrías implementar lógica para encontrar el primer superadmin
+          // Por ahora usaremos los defaults
+        } else {
+          globalSettings = globalData
+          console.log("✅ [THEME] Global settings loaded:", globalSettings)
+        }
+      } catch (error) {
+        console.log("⚠️ [THEME] No global settings found, using defaults")
+      }
+
+      // Cargar configuración personal del usuario (solo tema personal)
       const { data: userSettings } = await getUserSettings(userId)
 
-      if (userSettings) {
-        console.log("✅ [THEME] User settings loaded:", userSettings)
-        const mergedSettings = {
-          ...defaultSettings,
-          ...userSettings,
-          api_keys: userSettings.api_keys || {},
-          user_id: userId,
-        }
-        setSettings(mergedSettings)
-        console.log("🔗 [THEME] API Endpoint:", mergedSettings.api_endpoint)
-      } else {
-        console.log("⚠️ [THEME] No user settings found, using defaults")
-        const newSettings = { ...defaultSettings, user_id: userId }
-        setSettings(newSettings)
-        console.log("🔗 [THEME] Using default API endpoint:", newSettings.api_endpoint)
+      // Combinar configuraciones: global + personal
+      const mergedSettings = {
+        ...defaultSettings,
+        ...(globalSettings || {}), // Configuración global (colores, logo, endpoint, etc.)
+        ...(userSettings ? { theme: userSettings.theme } : {}), // Solo tema personal
+        user_id: userId,
       }
+
+      console.log("✅ [THEME] Final merged settings:", mergedSettings)
+      console.log("🔗 [THEME] API Endpoint:", mergedSettings.api_endpoint)
+
+      setSettings(mergedSettings)
     } catch (error) {
       console.error("❌ [THEME] Error loading settings:", error)
       const fallbackSettings = { ...defaultSettings, user_id: userId }
@@ -206,22 +223,33 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Usuario no autenticado")
       }
 
-      // Verificar que sea superadmin
-      if (!isSuperAdmin) {
-        throw new Error("Solo los superadministradores pueden cambiar la configuración")
+      // Si es superadmin, puede cambiar configuración global
+      if (isSuperAdmin) {
+        console.log("💾 [THEME] Superadmin updating global settings")
+
+        // Guardar configuración global
+        const { data, error } = await updateUserSettings("global", updates)
+
+        if (error) {
+          console.error("❌ [THEME] Database error:", error)
+          throw error
+        }
+
+        console.log("✅ [THEME] Global settings saved successfully:", data)
+      } else {
+        // Usuario normal solo puede cambiar su tema personal
+        const personalUpdates = { theme: updates.theme }
+        console.log("💾 [THEME] User updating personal theme:", personalUpdates)
+
+        const { data, error } = await updateUserSettings(user.id, personalUpdates)
+
+        if (error) {
+          console.error("❌ [THEME] Database error:", error)
+          throw error
+        }
+
+        console.log("✅ [THEME] Personal theme saved successfully:", data)
       }
-
-      console.log("💾 [THEME] Saving settings to database for user:", user.id)
-
-      // Actualizar en la base de datos
-      const { data, error } = await updateUserSettings(user.id, updates)
-
-      if (error) {
-        console.error("❌ [THEME] Database error:", error)
-        throw error
-      }
-
-      console.log("✅ [THEME] Settings saved successfully:", data)
 
       // Actualizar estado local
       const updatedSettings = {
