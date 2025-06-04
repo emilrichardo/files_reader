@@ -1,120 +1,129 @@
 import { supabase } from "./supabase"
-import type { Document, Template, DocumentRow, UserSettings } from "./types"
+import type { Document, Template, DocumentRow } from "./types"
 
 // UUID fijo para configuración global
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
-// Servicios para User Settings (SIMPLIFICADOS)
-export const getUserSettings = async (userId: string) => {
-  try {
-    console.log("Getting user settings for user:", userId)
-
-    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", userId).single()
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Supabase error getting user settings:", error)
-    } else if (!error) {
-      console.log("User settings retrieved successfully:", data)
-    }
-
-    return { data, error }
-  } catch (error) {
-    console.error("Error getting user settings:", error)
-    return { data: null, error }
-  }
+// Función con timeout mejorada
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)),
+  ])
 }
 
-// Nueva función para obtener configuración global mejorada
-export const getGlobalSettings = async () => {
+export async function getGlobalSettings() {
+  console.log("🔍 [DB] Looking for global/superadmin settings...")
+
   try {
-    console.log("🔍 [DB] Looking for global/superadmin settings...")
-
-    // Primero intentar cargar configuración global con UUID fijo
-    const { data: globalData, error: globalError } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", GLOBAL_SETTINGS_ID)
-      .single()
-
-    if (!globalError && globalData) {
-      console.log("✅ [DB] Global settings found with fixed UUID:", globalData)
-      return { data: globalData, error: null }
-    }
-
-    console.log("⚠️ [DB] No global settings with fixed UUID, looking for superadmin settings...")
-
-    // Si no hay configuración global, buscar la de un superadmin
-    // Primero obtener todos los superadmins
-    const { data: superAdmins, error: rolesError } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "superadmin")
-
-    if (rolesError || !superAdmins || superAdmins.length === 0) {
-      console.log("⚠️ [DB] No superadmins found")
-      return { data: null, error: rolesError }
-    }
-
-    console.log(
-      "🔍 [DB] Found superadmins:",
-      superAdmins.map((sa) => sa.user_id),
+    // Verificar conexión primero
+    const { data: testData, error: testError } = await withTimeout(
+      supabase.from("user_settings").select("count").limit(1),
+      5000,
     )
 
-    // Buscar configuración de cualquier superadmin que tenga datos completos
-    for (const superAdmin of superAdmins) {
-      const { data: superAdminSettings, error: settingsError } = await supabase
-        .from("user_settings")
-        .select("*")
-        .eq("user_id", superAdmin.user_id)
-        .single()
-
-      if (!settingsError && superAdminSettings) {
-        console.log("✅ [DB] Superadmin settings found:", superAdminSettings)
-        console.log("🔗 [DB] API Endpoint from superadmin:", superAdminSettings.api_endpoint)
-        return { data: superAdminSettings, error: null }
-      }
+    if (testError) {
+      console.error("❌ [DB] Connection test failed:", testError)
+      return null
     }
 
-    console.log("⚠️ [DB] No superadmin settings found")
-    return { data: null, error: null }
+    console.log("✅ [DB] Connection test passed")
+
+    // Buscar configuración global
+    const { data, error } = await withTimeout(
+      supabase.from("user_settings").select("*").eq("user_id", "00000000-0000-0000-0000-000000000001").single(),
+      10000,
+    )
+
+    if (error) {
+      console.log("⚠️ [DB] No global settings found, using defaults:", error.message)
+      return null
+    }
+
+    console.log("✅ [DB] Global settings loaded:", data)
+    return data
   } catch (error) {
-    console.error("❌ [DB] Error getting global settings:", error)
-    return { data: null, error }
+    console.error("❌ [DB] Error loading global settings:", error)
+    return null
   }
 }
 
-export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>) => {
-  try {
-    console.log("Updating user settings for user:", userId, settings)
+export async function updateUserSettings(userId: string, settings: any) {
+  console.log("💾 [DB] Updating settings for user:", userId)
+  console.log("💾 [DB] Settings to save:", settings)
 
-    // Preparar configuración para guardar
-    const finalSettings = {
+  try {
+    // Verificar si el registro existe
+    console.log("🔍 [DB] Checking if record exists...")
+    const { data: existing, error: checkError } = await withTimeout(
+      supabase.from("user_settings").select("id").eq("user_id", userId).maybeSingle(),
+      8000,
+    )
+
+    if (checkError) {
+      console.error("❌ [DB] Error checking existing record:", checkError)
+      throw checkError
+    }
+
+    console.log("📋 [DB] Existing record:", existing ? "Found" : "Not found")
+
+    // Preparar datos sin el campo id
+    const { id, ...settingsData } = settings
+    const dataToSave = {
       user_id: userId,
-      ...settings,
+      ...settingsData,
       updated_at: new Date().toISOString(),
     }
 
-    console.log("Final settings to save:", finalSettings)
-
-    // Usar upsert para crear o actualizar según sea necesario
-    const { data, error } = await supabase
-      .from("user_settings")
-      .upsert(finalSettings, {
-        onConflict: "user_id",
-      })
-      .select()
-
-    if (error) {
-      console.error("Supabase error updating user settings:", error)
-      throw error
+    let result
+    if (existing) {
+      // Actualizar registro existente
+      console.log("🔄 [DB] Updating existing record...")
+      result = await withTimeout(
+        supabase.from("user_settings").update(dataToSave).eq("user_id", userId).select().single(),
+        15000,
+      )
     } else {
-      console.log("User settings updated successfully:", data)
+      // Crear nuevo registro
+      console.log("➕ [DB] Creating new record...")
+      dataToSave.created_at = new Date().toISOString()
+      result = await withTimeout(supabase.from("user_settings").insert(dataToSave).select().single(), 15000)
     }
 
-    return { data, error: null }
+    const { data, error } = result
+
+    if (error) {
+      console.error("❌ [DB] Supabase error updating user settings:", error)
+      throw error
+    }
+
+    console.log("✅ [DB] Settings updated successfully:", data)
+    return data
   } catch (error) {
-    console.error("Error updating user settings:", error)
+    console.error("❌ [DB] Error updating user settings:", error)
     throw error
+  }
+}
+
+export async function getUserSettings(userId: string) {
+  console.log("🔍 [DB] Getting settings for user:", userId)
+
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle(),
+      10000,
+    )
+
+    if (error) {
+      console.error("❌ [DB] Error getting user settings:", error)
+      return null
+    }
+
+    console.log("📋 [DB] User settings loaded:", data)
+    return data
+  } catch (error) {
+    console.error("❌ [DB] Timeout or error getting user settings:", error)
+    return null
   }
 }
 
