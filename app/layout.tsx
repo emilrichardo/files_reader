@@ -23,29 +23,81 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        <style>{`
-          /* Estilos críticos para botones */
-          button.bg-blue-600, 
-          button.bg-primary, 
-          button.settings-save-button,
-          button[type="submit"]:not([variant="ghost"]):not([variant="outline"]) {
-            background-color: #000000 !important;
-            color: white !important;
-          }
-          
-          button.bg-blue-600:hover, 
-          button.bg-primary:hover, 
-          button.settings-save-button:hover,
-          button[type="submit"]:not([variant="ghost"]):not([variant="outline"]):hover {
-            background-color: #333333 !important;
-          }
-          
-          /* Navegación activa */
-          .sidebar-nav-active, [data-sidebar-nav-active="true"] {
-            background-color: #3b82f6 !important;
-            color: white !important;
-          }
-        `}</style>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+            /* ESTILOS CRÍTICOS ULTRA FORZADOS */
+            * {
+              box-sizing: border-box;
+            }
+            
+            /* TODOS LOS BOTONES PRIMARIOS */
+            button[type="submit"],
+            .settings-save-button,
+            button.bg-blue-600,
+            button.bg-primary,
+            .btn-primary,
+            button[class*="bg-blue"],
+            button[class*="bg-primary"],
+            .bg-blue-600,
+            .bg-primary {
+              background-color: #000000 !important;
+              background: #000000 !important;
+              color: #ffffff !important;
+              border-color: #000000 !important;
+              border: 1px solid #000000 !important;
+            }
+            
+            button[type="submit"]:hover,
+            .settings-save-button:hover,
+            button.bg-blue-600:hover,
+            button.bg-primary:hover,
+            .btn-primary:hover,
+            button[class*="bg-blue"]:hover,
+            button[class*="bg-primary"]:hover,
+            .bg-blue-600:hover,
+            .bg-primary:hover {
+              background-color: #333333 !important;
+              background: #333333 !important;
+              color: #ffffff !important;
+            }
+            
+            /* FORZAR CLASES DE TAILWIND */
+            .bg-blue-600 {
+              background-color: #000000 !important;
+            }
+            
+            .hover\\:bg-blue-700:hover {
+              background-color: #333333 !important;
+            }
+            
+            .text-white {
+              color: #ffffff !important;
+            }
+            
+            /* Iconos en botones */
+            button[type="submit"] svg,
+            .settings-save-button svg,
+            button.bg-blue-600 svg,
+            button.bg-primary svg,
+            .btn-primary svg {
+              color: #3b82f6 !important;
+            }
+            
+            /* Navegación activa */
+            .sidebar-nav-active,
+            [data-sidebar-nav-active="true"] {
+              background-color: #3b82f6 !important;
+              color: white !important;
+            }
+            
+            /* Asegurar que no hay loading infinito */
+            .loading-overlay {
+              display: none !important;
+            }
+          `,
+          }}
+        />
       </head>
       <body className={inter.className}>
         <AuthProvider>

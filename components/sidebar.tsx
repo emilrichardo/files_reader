@@ -14,16 +14,11 @@ import { FileText, LayoutTemplateIcon as Template, Users, Settings, Menu, LogOut
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut, signInWithGoogle, userRole } = useAuth()
-  const { companyLogo, logoType, projectName, isSettingsReady, primaryColor } = useTheme()
+  const { companyLogo, projectName, primaryColor } = useTheme()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
 
-  // Debug del logo
-  console.log("🖼️ [SIDEBAR] Company logo from context:", companyLogo ? "Present" : "Missing")
-  console.log("🖼️ [SIDEBAR] Settings ready:", isSettingsReady)
-  if (companyLogo) {
-    console.log("🖼️ [SIDEBAR] Logo length:", companyLogo.length)
-    console.log("🖼️ [SIDEBAR] Logo type:", logoType)
-  }
+  console.log("🖼️ [SIDEBAR] Rendering with logo:", companyLogo ? "Present" : "Missing")
+  console.log("🖼️ [SIDEBAR] Logo preview:", companyLogo?.substring(0, 50))
 
   // Navegación dinámica basada en el rol del usuario
   const getNavigation = () => {
@@ -63,28 +58,34 @@ export default function Sidebar() {
       {/* Header con logo y nombre */}
       <div className="flex h-16 items-center border-b px-6">
         <div className="flex items-center space-x-3">
-          {/* Logo - Mostrar siempre algo */}
-          {companyLogo && companyLogo.length > 0 ? (
+          {/* Logo - FORZAR que se muestre */}
+          <div className="h-8 w-8 flex-shrink-0">
             <img
               src={companyLogo || "/placeholder.svg"}
               alt="Logo"
               className="h-8 w-8 object-contain"
               onLoad={() => {
-                console.log("✅ [SIDEBAR] Logo loaded successfully")
+                console.log("✅ [SIDEBAR] Logo loaded successfully!")
               }}
               onError={(e) => {
-                console.error("❌ [SIDEBAR] Error loading logo:", e)
-                console.log("🖼️ [SIDEBAR] Logo data:", companyLogo?.substring(0, 100))
+                console.error("❌ [SIDEBAR] Error loading logo")
+                // Mostrar fallback
+                const target = e.target as HTMLImageElement
+                target.style.display = "none"
+                const fallback = target.nextElementSibling as HTMLElement
+                if (fallback) {
+                  fallback.style.display = "flex"
+                }
               }}
             />
-          ) : (
+            {/* Fallback siempre presente */}
             <div
               className="h-8 w-8 rounded flex items-center justify-center text-white font-bold text-sm"
-              style={{ backgroundColor: primaryColor || "#3b82f6" }}
+              style={{ backgroundColor: primaryColor, display: "none" }}
             >
               {projectName?.charAt(0)?.toUpperCase() || "C"}
             </div>
-          )}
+          </div>
 
           {/* Nombre del proyecto */}
           <span className="font-semibold text-lg">{projectName || "Civet"}</span>
@@ -103,7 +104,7 @@ export default function Sidebar() {
                 className={cn(
                   "flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   isActive
-                    ? "sidebar-nav-active" // Usar clase específica para navegación activa
+                    ? "sidebar-nav-active"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                 )}
                 onClick={() => setIsMobileOpen(false)}
@@ -134,11 +135,7 @@ export default function Sidebar() {
           </div>
         ) : (
           <div className="space-y-2">
-            <Button
-              className="w-full justify-center"
-              onClick={signInWithGoogle}
-              style={{ backgroundColor: "#000000", color: "white" }}
-            >
+            <Button className="w-full justify-center bg-black text-white hover:bg-gray-800" onClick={signInWithGoogle}>
               <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
