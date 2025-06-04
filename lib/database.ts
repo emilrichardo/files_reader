@@ -4,22 +4,21 @@ import type { Document, Template, DocumentRow } from "./types"
 // UUID fijo para configuración global
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
-// Función simplificada sin retry excesivo
-async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = 5000): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error("Database timeout")), timeoutMs)
-  })
-
-  return Promise.race([operation(), timeoutPromise])
+// Función simplificada SIN timeout - dejar que Supabase maneje sus propios timeouts
+async function executeQuery<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    console.error("Database operation failed:", error)
+    throw error
+  }
 }
 
 export async function getGlobalSettings() {
   console.log("🌍 [DB] Getting global settings...")
 
   try {
-    const { data, error } = await executeWithTimeout(async () => {
-      return await supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single()
-    })
+    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", GLOBAL_SETTINGS_ID).single()
 
     if (error) {
       if (error.code === "PGRST116") {
@@ -45,9 +44,7 @@ export async function getUserSettings(userId: string) {
   console.log(`🔍 [DB] Getting user settings for: ${userId}`)
 
   try {
-    const { data, error } = await executeWithTimeout(async () => {
-      return await supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle()
-    })
+    const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle()
 
     if (error) {
       console.log(`⚠️ [DB] Error getting user settings:`, error.message)

@@ -142,16 +142,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     console.log("🎨 [THEME] Applying IMMEDIATE styles...")
     applyThemeStyles(FIXED_SETTINGS)
 
-    // Cargar configuración real en background SIN bloquear
+    // Cargar configuración real en background SIN bloquear - CON DELAY MAYOR
     setTimeout(() => {
       loadSettingsAsync()
-    }, 100)
+    }, 2000) // 2 segundos de delay para evitar timeouts
   }, [])
 
   const loadSettingsAsync = async () => {
     try {
       console.log("🔍 [THEME] Loading real settings in background...")
-      const globalResult = await getGlobalSettings()
+
+      // Intentar cargar con timeout manual más largo
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Manual timeout")), 10000) // 10 segundos
+      })
+
+      const settingsPromise = getGlobalSettings()
+
+      const globalResult = await Promise.race([settingsPromise, timeoutPromise])
 
       if (globalResult?.data && !globalResult.error) {
         const realSettings = {
@@ -164,9 +172,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         console.log("✅ [THEME] Real settings loaded, updating...")
         setSettings(realSettings)
         applyThemeStyles(realSettings)
+      } else {
+        console.log("⚠️ [THEME] No real settings found, keeping fixed ones")
       }
     } catch (error) {
-      console.log("⚠️ [THEME] Error loading real settings, keeping fixed ones")
+      console.log("⚠️ [THEME] Error loading real settings (timeout or error), keeping fixed ones:", error.message)
     }
   }
 
@@ -259,14 +269,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const isSuperAdmin = userRole === "superadmin"
 
       if (isSuperAdmin) {
+        console.log("💾 [THEME] Superadmin updating global settings")
         const result = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
         if (result.error) {
-          throw new Error("Error al guardar configuración global")
+          throw new Error("Error al guardar configuración global: " + result.error.message)
         }
       } else if (user && updates.theme) {
+        console.log("💾 [THEME] User updating personal theme")
         const result = await updateUserSettings(user.id, { theme: updates.theme })
         if (result.error) {
-          throw new Error("Error al guardar tema personal")
+          throw new Error("Error al guardar tema personal: " + result.error.message)
         }
       }
 
@@ -278,6 +290,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
       setSettings(updatedSettings)
       applyThemeStyles(updatedSettings)
+
+      console.log("✅ [THEME] Settings updated successfully")
     } catch (error) {
       console.error("❌ [THEME] Error updating settings:", error)
       throw error
