@@ -1,155 +1,174 @@
-export async function POST(request: Request) {
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase"
+
+// Aumentar el límite de tiempo para la función
+export const maxDuration = 25 // 25 segundos
+
+export async function POST(request: NextRequest) {
+  console.log("📡 Solicitud de upload recibida")
+
   try {
-    console.log("🔄 Proxy recibiendo request...");
-
-    // Verificar si es FormData o JSON
-    const contentType = request.headers.get("content-type") || "";
-    let body: any;
-
-    if (contentType.includes("multipart/form-data")) {
-      // Procesar FormData
-      console.log("📦 Procesando FormData...");
-      const formData = await request.formData();
-
-      // Extraer datos del FormData
-      const file = formData.get("file") as File;
-      const fieldsJson = formData.get("fields") as string;
-      const existingRowsJson = formData.get("existing_rows") as string;
-
-      // Convertir el archivo a base64 si existe
-      let fileContent = null;
-      let fileName = null;
-      let fileType = null;
-      let fileSize = null;
-
-      if (file) {
-        fileName = file.name;
-        fileType = file.type;
-        fileSize = file.size;
-
-        // Leer el archivo como ArrayBuffer y convertir a base64
-        const arrayBuffer = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const binaryString = uint8Array.reduce(
-          (acc, byte) => acc + String.fromCharCode(byte),
-          ""
-        );
-        fileContent = btoa(binaryString);
-      }
-
-      // Construir el cuerpo para el webhook
-      body = {
-        filename: fileName,
-        content: fileContent,
-        type: fileType,
-        size: fileSize,
-        fields: fieldsJson ? JSON.parse(fieldsJson) : [],
-        existingData: existingRowsJson ? JSON.parse(existingRowsJson) : [],
-        timestamp: Date.now(),
-      };
-    } else {
-      // Procesar JSON
-      console.log("📦 Procesando JSON...");
-      body = await request.json();
+    // Verificar si es multipart/form-data
+    const contentType = request.headers.get("content-type") || ""
+    if (!contentType.includes("multipart/form-data")) {
+      console.error("❌ Tipo de contenido incorrecto:", contentType)
+      return NextResponse.json({ error: true, message: "Tipo de contenido incorrecto" }, { status: 400 })
     }
 
-    console.log("📦 Body procesado:", {
-      filename: body.filename,
-      size: body.size,
-      type: body.type,
-      contentLength: body.content?.length,
-      fieldsCount: body.fields?.length || 0,
-      existingDataCount: body.existingData?.length || 0,
-    });
+    // Obtener el formulario
+    const formData = await request.formData()
+    const file = formData.get("file") as File
 
-    // Verificar tamaño del contenido base64
-    if (body.content && body.content.length > 6 * 1024 * 1024) {
-      console.log(
-        `❌ Contenido base64 demasiado grande: ${body.content.length} caracteres`
-      );
-      return new Response(
-        JSON.stringify({
-          error: "Content too large after base64 encoding",
-          maxSize: "4.5MB",
-          receivedSize: `${(body.content.length / 1024 / 1024).toFixed(2)}MB`,
-        }),
+    if (!file) {
+      console.error("❌ No se encontró el archivo en la solicitud")
+      return NextResponse.json({ error: true, message: "No se encontró el archivo en la solicitud" }, { status: 400 })
+    }
+
+    // Verificar tamaño del archivo (4MB máximo)
+    const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB
+    if (file.size > MAX_FILE_SIZE) {
+      console.error(`❌ Archivo demasiado grande: ${file.size} bytes`)
+      return NextResponse.json(
         {
-          status: 413,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+          error: true,
+          message: "El archivo es demasiado grande",
+          details: `El tamaño máximo permitido es ${MAX_FILE_SIZE / (1024 * 1024)}MB`,
+        },
+        { status: 400 },
+      )
     }
 
-    // Obtener URL del webhook desde headers o usar el predeterminado
-    // Modificado: Usar URL pública accesible para todos los usuarios
-    const targetUrl =
-      request.headers.get("X-Target-URL") ||
-      "https://cibet.app.n8n.cloud/webhook/Civet-public-upload";
-    console.log("🎯 Enviando a webhook externo:", targetUrl);
+    // Obtener la URL del endpoint desde la configuración global
+    const supabase = createClient()
+    const { data: settings, error: settingsError } = await supabase
+      .from("user_settings")
+      .select("api_endpoint")
+      .eq("user_id", "00000000-0000-0000-0000-000000000001")
+      .single()
+
+    if (settingsError) {
+      console.error("❌ Error al obtener la configuración:", settingsError)
+      return NextResponse.json({ error: true, message: "Error al obtener la configuración" }, { status: 500 })
+    }
+
+    const apiEndpoint = settings?.api_endpoint
+    if (!apiEndpoint) {
+      console.error("❌ No se encontró el endpoint en la configuración")
+      return NextResponse.json(
+        { error: true, message: "No se encontró el endpoint en la configuración" },
+        { status: 500 },
+      )
+    }
+
+    console.log(`📡 Enviando archivo a: ${apiEndpoint}`)
+
+    // Crear un nuevo FormData para enviar al endpoint
+    const proxyFormData = new FormData()
+    proxyFormData.append("file", file)
+
+    // Agregar todos los demás campos del formulario original
+    for (const [key, value] of formData.entries()) {
+      if (key !== "file") {
+        proxyFormData.append(key, value)
+      }
+    }
+
+    // Configurar el timeout para la solicitud
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 20000) // 20 segundos
 
     try {
-      const response = await fetch(targetUrl, {
+      // Enviar la solicitud al endpoint
+      const response = await fetch(apiEndpoint, {
         method: "POST",
+        body: proxyFormData,
+        signal: controller.signal,
         headers: {
-          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-Forwarded-By": "Civet-Document-System",
         },
-        body: JSON.stringify(body),
-      });
+      })
 
-      console.log(`📡 Respuesta del webhook: ${response.status}`);
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.log("❌ Error del webhook:", errorText);
+        console.error(`❌ Error del endpoint: ${response.status} ${response.statusText}`)
 
-        return new Response(
-          JSON.stringify({
-            error: "External webhook error",
-            status: response.status,
-            message: errorText,
-          }),
-          {
-            status: response.status,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const result = await response.json();
-      console.log("✅ Respuesta exitosa del webhook");
-
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (webhookError) {
-      console.error("❌ Error al llamar al webhook:", webhookError);
-
-      return new Response(
-        JSON.stringify({
-          error: "Error connecting to webhook",
-          message: (webhookError as Error).message,
-          details: "No se pudo conectar con el servicio externo",
-        }),
-        {
-          status: 502,
-          headers: { "Content-Type": "application/json" },
+        // Si es un timeout (504), devolver un mensaje más amigable
+        if (response.status === 504 || response.status === 408) {
+          return NextResponse.json({
+            success: true,
+            message: "Archivo recibido. El procesamiento continuará en segundo plano.",
+            data: {
+              status: "processing",
+              filename: file.name,
+              size: file.size,
+              type: file.type,
+            },
+          })
         }
-      );
-    }
-  } catch (error) {
-    console.error("❌ Error en proxy:", error);
 
-    return new Response(
-      JSON.stringify({
-        error: "Proxy internal error",
-        message: (error as Error).message,
-        stack: (error as Error).stack,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
+        return NextResponse.json(
+          {
+            error: true,
+            message: `El endpoint respondió con estado ${response.status}`,
+            details: "Error al procesar el archivo en el servidor",
+          },
+          { status: response.status },
+        )
       }
-    );
+
+      // Intentar parsear la respuesta como JSON
+      let responseData
+      try {
+        responseData = await response.json()
+      } catch (e) {
+        console.error("❌ Error al parsear la respuesta JSON:", e)
+        responseData = {
+          success: true,
+          message: "Archivo procesado, pero la respuesta no es JSON válido",
+        }
+      }
+
+      console.log("✅ Respuesta del endpoint:", responseData)
+      return NextResponse.json(responseData)
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+
+      console.error("❌ Error en la solicitud al endpoint:", error)
+
+      // Si es un error de timeout o abort
+      if (error.name === "AbortError") {
+        return NextResponse.json({
+          success: true,
+          message: "Archivo recibido. El procesamiento continuará en segundo plano.",
+          data: {
+            status: "processing",
+            filename: file.name,
+            size: file.size,
+            type: file.type,
+          },
+        })
+      }
+
+      return NextResponse.json(
+        {
+          error: true,
+          message: error.message || "Error al enviar el archivo al endpoint",
+          details: "Error de conexión con el servidor de procesamiento",
+        },
+        { status: 500 },
+      )
+    }
+  } catch (error: any) {
+    console.error("❌ Error general en el proxy:", error)
+    return NextResponse.json(
+      {
+        error: true,
+        message: error.message || "Error interno del servidor",
+        details: "Error en el procesamiento de la solicitud",
+      },
+      { status: 500 },
+    )
   }
 }

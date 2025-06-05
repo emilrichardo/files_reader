@@ -1,526 +1,419 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useTheme } from "@/contexts/theme-context"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { useToast } from "@/components/ui/use-toast"
+import { useFileUpload } from "@/hooks/use-file-upload"
+import { AuthGuard } from "@/components/auth-guard"
 import { useAuth } from "@/contexts/auth-context"
-import { useTheme } from "@/contexts/theme-context"
-import { useToast } from "@/hooks/use-toast"
-import { Save, Palette, Shield, Key, Upload, X, Lock } from "lucide-react"
-import AuthGuard from "@/components/auth-guard"
 
 export default function SettingsPage() {
-  const { user, loading, userRole } = useAuth()
-  const { settings, updateSettings, fontFamilies, colorSchemes, isAdmin } = useTheme()
+  const { themeConfig, updateThemeConfig, saveThemeConfig, isLoading, resetThemeConfig } = useTheme()
   const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
+  const { user } = useAuth()
+  const [localConfig, setLocalConfig] = useState({ ...themeConfig })
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Determinar si es superadmin
-  const isSuperAdmin = userRole === "superadmin"
+  // Estado para el upload de logo
+  const { uploadFile, progress, isUploading, error: uploadError, reset: resetUpload } = useFileUpload()
 
-  // Estados locales para el formulario
-  const [projectName, setProjectName] = useState("")
-  const [apiEndpoint, setApiEndpoint] = useState("")
-  const [apiKeys, setApiKeys] = useState({
-    openai: "",
-    google_vision: "",
-    supabase: "",
-  })
-  const [theme, setTheme] = useState("light")
-  const [colorScheme, setColorScheme] = useState("blue")
-  const [customColor, setCustomColor] = useState("")
-  const [fontFamily, setFontFamily] = useState("Inter")
-  const [styleMode, setStyleMode] = useState("flat")
-  const [companyLogo, setCompanyLogo] = useState("")
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-
-  // Debug logs
+  // Actualizar el estado local cuando cambia themeConfig
   useEffect(() => {
-    console.log("🔍 [SETTINGS] User:", user?.email)
-    console.log("🔍 [SETTINGS] User role:", userRole)
-    console.log("🔍 [SETTINGS] Is superadmin:", isSuperAdmin)
-    console.log("🔍 [SETTINGS] Is admin (from theme):", isAdmin)
-  }, [user, userRole, isSuperAdmin, isAdmin])
-
-  // Cargar configuraciones
-  useEffect(() => {
-    if (settings) {
-      setProjectName(settings.project_name || "")
-      setApiEndpoint(settings.api_endpoint || "")
-      setApiKeys(settings.api_keys || { openai: "", google_vision: "", supabase: "" })
-      setTheme(settings.theme || "light")
-      setColorScheme(settings.color_scheme || "blue")
-      setCustomColor(settings.custom_color || "")
-      setFontFamily(settings.font_family || "Inter")
-      setStyleMode(settings.style_mode || "flat")
-      setCompanyLogo(settings.company_logo || "")
+    setLocalConfig({ ...themeConfig })
+    if (themeConfig.companyLogo) {
+      setLogoPreview(themeConfig.companyLogo)
     }
-  }, [settings])
+  }, [themeConfig])
 
-  const handleSave = async () => {
-    if (!isSuperAdmin) {
+  // Manejar cambios en los inputs
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setLocalConfig((prev) => ({ ...prev, [name]: value }))
+  }
+
+  // Manejar cambios en los selects
+  const handleSelectChange = (name: string, value: string) => {
+    setLocalConfig((prev) => ({ ...prev, [name]: value }))
+  }
+
+  // Manejar cambio de tema (claro/oscuro)
+  const handleThemeChange = (checked: boolean) => {
+    setLocalConfig((prev) => ({ ...prev, theme: checked ? "dark" : "light" }))
+  }
+
+  // Manejar subida de logo
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validar tipo de archivo
+    const validTypes = ["image/jpeg", "image/png", "image/svg+xml"]
+    if (!validTypes.includes(file.type)) {
       toast({
-        title: "Acceso denegado",
-        description: "Solo los superadministradores pueden modificar la configuración.",
+        title: "Formato no soportado",
+        description: "Por favor sube una imagen JPG, PNG o SVG.",
         variant: "destructive",
       })
       return
     }
 
-    setIsLoading(true)
+    // Validar tamaño (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Archivo demasiado grande",
+        description: "El tamaño máximo permitido es 2MB.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
-      console.log("🔄 [SETTINGS] Saving settings...")
-
-      const settingsToSave = {
-        project_name: projectName,
-        api_endpoint: apiEndpoint,
-        api_keys: apiKeys,
-        theme,
-        color_scheme: colorScheme,
-        custom_color: customColor,
-        font_family: fontFamily,
-        style_mode: styleMode,
-        company_logo: companyLogo,
+      // Leer el archivo como Data URL
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          const dataUrl = event.target.result as string
+          setLogoPreview(dataUrl)
+          setLocalConfig((prev) => ({
+            ...prev,
+            companyLogo: dataUrl,
+            companyLogoType: file.type.split("/")[1], // Extraer el tipo (jpeg, png, svg+xml)
+          }))
+        }
       }
+      reader.readAsDataURL(file)
+    } catch (error) {
+      console.error("Error al procesar el logo:", error)
+      toast({
+        title: "Error al procesar el logo",
+        description: "No se pudo procesar el archivo seleccionado.",
+        variant: "destructive",
+      })
+    }
+  }
 
-      console.log("📝 [SETTINGS] Settings to save:", settingsToSave)
+  // Eliminar logo
+  const handleRemoveLogo = () => {
+    setLogoPreview(null)
+    setLocalConfig((prev) => ({ ...prev, companyLogo: null, companyLogoType: null }))
+  }
 
-      await updateSettings(settingsToSave)
-
-      console.log("✅ [SETTINGS] Settings saved successfully")
+  // Guardar configuración
+  const handleSave = async () => {
+    try {
+      setIsSaving(true)
+      // Actualizar el estado global primero
+      await updateThemeConfig(localConfig)
+      // Luego guardar en la base de datos
+      await saveThemeConfig()
 
       toast({
         title: "Configuración guardada",
-        description: "Los cambios se han aplicado exitosamente.",
+        description: "Los cambios han sido aplicados correctamente.",
       })
     } catch (error) {
-      console.error("❌ [SETTINGS] Error saving settings:", error)
+      console.error("Error al guardar la configuración:", error)
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "No se pudieron guardar los cambios.",
+        title: "Error al guardar",
+        description: "No se pudieron guardar los cambios. Intenta de nuevo.",
         variant: "destructive",
       })
     } finally {
-      // IMPORTANTE: Siempre detener el loading
-      setIsLoading(false)
+      setIsSaving(false)
     }
   }
 
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isSuperAdmin) return
-
-    const file = event.target.files?.[0]
-    if (file) {
-      setLogoFile(file)
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setCompanyLogo(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
+  // Restablecer configuración
+  const handleReset = () => {
+    resetThemeConfig()
+    setLogoPreview(null)
+    toast({
+      title: "Configuración restablecida",
+      description: "Se han restaurado los valores predeterminados.",
+    })
   }
 
-  const removeLogo = () => {
-    if (!isSuperAdmin) return
-
-    setCompanyLogo("")
-    setLogoFile(null)
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <AuthGuard>
-        <div />
-      </AuthGuard>
-    )
-  }
-
-  // Si no es superadmin, mostrar mensaje de acceso restringido
-  if (!isSuperAdmin) {
-    return (
-      <div className="p-4 lg:p-8 pt-16 lg:pt-8">
-        <div className="max-w-6xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                Configuración
-              </CardTitle>
-              <CardDescription>Configuración del sistema</CardDescription>
-            </CardHeader>
-            <CardContent className="text-center py-8">
-              <Lock className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Acceso restringido</h3>
-              <p className="text-gray-600 mb-4">
-                Solo los superadministradores pueden modificar la configuración del sistema.
-              </p>
-              <p className="text-sm text-gray-500">Contacta con un administrador si necesitas realizar cambios.</p>
-              <div className="mt-4 text-xs text-gray-400">
-                <p>Usuario: {user.email}</p>
-                <p>Rol: {userRole || "user"}</p>
-                <p>Es superadmin: {isSuperAdmin ? "Sí" : "No"}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // Resto del código original para superadmin...
   return (
-    <div className="p-4 lg:p-8 pt-16 lg:pt-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración</h1>
-          <p className="text-gray-600">
-            Personaliza tu experiencia y configuraciones del proyecto
-            {!isSuperAdmin && (
-              <span className="block text-sm text-amber-600 mt-1">
-                <Lock className="w-4 h-4 inline mr-1" />
-                Algunas configuraciones solo pueden ser modificadas por administradores
-              </span>
-            )}
-          </p>
+    <AuthGuard allowedRoles={["admin", "super_admin"]}>
+      <div className="container py-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Configuración</h1>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Configuración Principal */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Configuración del Proyecto */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="w-5 h-5" />
-                  Configuración del Proyecto
-                  {!isSuperAdmin && <Lock className="w-4 h-4 text-amber-500" />}
-                </CardTitle>
-                <CardDescription>
-                  Personaliza la apariencia y configuración de tu proyecto
-                  {!isSuperAdmin && " (Solo administradores)"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="project-name">Nombre del Proyecto</Label>
+        <Tabs defaultValue="general">
+          <TabsList className="mb-4">
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="appearance">Apariencia</TabsTrigger>
+            <TabsTrigger value="advanced">Avanzado</TabsTrigger>
+          </TabsList>
+
+          {/* Pestaña General */}
+          <TabsContent value="general">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Información General</CardTitle>
+                  <CardDescription>Configura la información básica de tu aplicación.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="projectName">Nombre del Proyecto</Label>
                     <Input
-                      id="project-name"
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
-                      placeholder="Mi Proyecto"
-                      className="mt-1"
-                      disabled={!isSuperAdmin}
+                      id="projectName"
+                      name="projectName"
+                      value={localConfig.projectName}
+                      onChange={handleInputChange}
                     />
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="theme">Tema</Label>
-                    <Select value={theme} onValueChange={setTheme}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Logo</CardTitle>
+                  <CardDescription>Sube el logo de tu empresa o proyecto.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 h-40">
+                    {logoPreview ? (
+                      <div className="relative w-full h-full flex items-center justify-center">
+                        <img
+                          src={logoPreview || "/placeholder.svg"}
+                          alt="Logo preview"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="absolute top-0 right-0"
+                          onClick={handleRemoveLogo}
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Label htmlFor="logo-upload" className="cursor-pointer text-primary hover:text-primary/80">
+                          Haz clic para subir un logo
+                        </Label>
+                        <p className="text-sm text-gray-500 mt-1">SVG, PNG o JPG (max. 2MB)</p>
+                        <Input
+                          id="logo-upload"
+                          type="file"
+                          accept="image/jpeg,image/png,image/svg+xml"
+                          className="hidden"
+                          onChange={handleLogoUpload}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Pestaña Apariencia */}
+          <TabsContent value="appearance">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tema y Colores</CardTitle>
+                  <CardDescription>Personaliza la apariencia visual de la aplicación.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="colorScheme">Esquema de Color</Label>
+                    <Select
+                      value={localConfig.colorScheme}
+                      onValueChange={(value) => handleSelectChange("colorScheme", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un esquema de color" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="light">Claro</SelectItem>
-                        <SelectItem value="dark">Oscuro</SelectItem>
+                        <SelectItem value="slate">Slate</SelectItem>
+                        <SelectItem value="gray">Gray</SelectItem>
+                        <SelectItem value="zinc">Zinc</SelectItem>
+                        <SelectItem value="neutral">Neutral</SelectItem>
+                        <SelectItem value="stone">Stone</SelectItem>
+                        <SelectItem value="red">Red</SelectItem>
+                        <SelectItem value="orange">Orange</SelectItem>
+                        <SelectItem value="amber">Amber</SelectItem>
+                        <SelectItem value="yellow">Yellow</SelectItem>
+                        <SelectItem value="lime">Lime</SelectItem>
+                        <SelectItem value="green">Green</SelectItem>
+                        <SelectItem value="emerald">Emerald</SelectItem>
+                        <SelectItem value="teal">Teal</SelectItem>
+                        <SelectItem value="cyan">Cyan</SelectItem>
+                        <SelectItem value="sky">Sky</SelectItem>
+                        <SelectItem value="blue">Blue</SelectItem>
+                        <SelectItem value="indigo">Indigo</SelectItem>
+                        <SelectItem value="violet">Violet</SelectItem>
+                        <SelectItem value="purple">Purple</SelectItem>
+                        <SelectItem value="fuchsia">Fuchsia</SelectItem>
+                        <SelectItem value="pink">Pink</SelectItem>
+                        <SelectItem value="rose">Rose</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="style-mode">Modo de Estilo</Label>
-                    <Select value={styleMode} onValueChange={setStyleMode} disabled={!isSuperAdmin}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="customColor">Color Personalizado</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="customColor"
+                        name="customColor"
+                        type="color"
+                        value={localConfig.customColor || "#3b82f6"}
+                        onChange={handleInputChange}
+                        className="w-12 h-10 p-1"
+                      />
+                      <Input
+                        name="customColor"
+                        value={localConfig.customColor || "#3b82f6"}
+                        onChange={handleInputChange}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fontFamily">Fuente</Label>
+                    <Select
+                      value={localConfig.fontFamily}
+                      onValueChange={(value) => handleSelectChange("fontFamily", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una fuente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Inter">Inter</SelectItem>
+                        <SelectItem value="Roboto">Roboto</SelectItem>
+                        <SelectItem value="Open Sans">Open Sans</SelectItem>
+                        <SelectItem value="Montserrat">Montserrat</SelectItem>
+                        <SelectItem value="Lato">Lato</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="darkMode">Modo Oscuro</Label>
+                    <Switch id="darkMode" checked={localConfig.theme === "dark"} onCheckedChange={handleThemeChange} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="styleMode">Estilo Visual</Label>
+                    <Select
+                      value={localConfig.styleMode}
+                      onValueChange={(value) => handleSelectChange("styleMode", value as "flat" | "soft" | "glass")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un estilo" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="flat">Plano</SelectItem>
-                        <SelectItem value="rounded">Redondeado</SelectItem>
-                        <SelectItem value="sharp">Angular</SelectItem>
+                        <SelectItem value="soft">Suave</SelectItem>
+                        <SelectItem value="glass">Cristal</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="color-scheme">Esquema de Color</Label>
-                    <Select value={colorScheme} onValueChange={setColorScheme} disabled={!isSuperAdmin}>
-                      <SelectTrigger className="mt-1">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(colorSchemes).map(([key, value]) => (
-                          <SelectItem key={key} value={key}>
-                            <div className="flex items-center gap-2">
-                              <div className="w-4 h-4 rounded-full border" style={{ backgroundColor: value }} />
-                              {key.charAt(0).toUpperCase() + key.slice(1)}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="custom-color">Color Personalizado</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        id="custom-color"
-                        type="color"
-                        value={customColor}
-                        onChange={(e) => setCustomColor(e.target.value)}
-                        className="w-16 h-10 p-1 border rounded"
-                        disabled={!isSuperAdmin}
-                      />
-                      <Input
-                        value={customColor}
-                        onChange={(e) => setCustomColor(e.target.value)}
-                        placeholder="#000000"
-                        className="flex-1"
-                        disabled={!isSuperAdmin}
-                      />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Vista Previa</CardTitle>
+                  <CardDescription>Así se verá tu aplicación con la configuración actual.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center gap-2">
+                      {logoPreview ? (
+                        <img src={logoPreview || "/placeholder.svg"} alt="Logo" className="w-8 h-8 object-contain" />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-md flex items-center justify-center text-white font-bold"
+                          style={{ backgroundColor: localConfig.customColor || "#3b82f6" }}
+                        >
+                          {localConfig.projectName.charAt(0)}
+                        </div>
+                      )}
+                      <span className="font-bold">{localConfig.projectName}</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div
+                        className="w-full h-4 rounded"
+                        style={{ backgroundColor: localConfig.customColor || "#3b82f6" }}
+                      ></div>
+                      <div className="flex gap-2">
+                        <div
+                          className="flex-1 h-8 rounded flex items-center justify-center text-white font-medium"
+                          style={{ backgroundColor: localConfig.customColor || "#3b82f6" }}
+                        >
+                          Botón Primario
+                        </div>
+                        <div className="flex-1 h-8 rounded border flex items-center justify-center font-medium">
+                          Botón Secundario
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="font-bold">Título de Ejemplo</h3>
+                      <p className="text-sm">
+                        Este es un texto de ejemplo para mostrar cómo se verá el contenido con la configuración
+                        seleccionada.
+                      </p>
                     </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
 
-                <div>
-                  <Label htmlFor="font-family">Tipografía</Label>
-                  <Select value={fontFamily} onValueChange={setFontFamily} disabled={!isSuperAdmin}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {fontFamilies.map((font) => (
-                        <SelectItem key={font} value={font}>
-                          <span style={{ fontFamily: font }}>{font}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="company-logo">Logo de la Empresa</Label>
-                  <div className="mt-2">
-                    {companyLogo ? (
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={companyLogo || "/placeholder.svg"}
-                          alt="Logo"
-                          className="h-16 w-auto border rounded"
-                        />
-                        <Button variant="outline" size="sm" onClick={removeLogo} disabled={!isSuperAdmin}>
-                          <X className="w-4 h-4 mr-2" />
-                          Remover
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                        <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600 mb-2">Sube tu logo</p>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleLogoUpload}
-                          className="hidden"
-                          id="logo-upload"
-                          disabled={!isSuperAdmin}
-                        />
-                        <Button variant="outline" size="sm" asChild disabled={!isSuperAdmin}>
-                          <label
-                            htmlFor="logo-upload"
-                            className={isSuperAdmin ? "cursor-pointer" : "cursor-not-allowed"}
-                          >
-                            Seleccionar archivo
-                          </label>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Configuración de APIs */}
+          {/* Pestaña Avanzado */}
+          <TabsContent value="advanced">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5" />
-                  Configuración de APIs
-                </CardTitle>
-                <CardDescription>Configura las claves de API para servicios externos</CardDescription>
+                <CardTitle>Configuración Avanzada</CardTitle>
+                <CardDescription>Opciones avanzadas para la integración con servicios externos.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="openai-key">OpenAI API Key</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="apiEndpoint">Endpoint de API</Label>
                   <Input
-                    id="openai-key"
-                    type="password"
-                    value={apiKeys.openai}
-                    onChange={(e) => setApiKeys({ ...apiKeys, openai: e.target.value })}
-                    placeholder="sk-..."
-                    className="mt-1"
+                    id="apiEndpoint"
+                    name="apiEndpoint"
+                    value={localConfig.apiEndpoint || ""}
+                    onChange={handleInputChange}
+                    placeholder="https://ejemplo.com/api/webhook"
                   />
-                </div>
-                <div>
-                  <Label htmlFor="google-vision-key">Google Vision API Key</Label>
-                  <Input
-                    id="google-vision-key"
-                    type="password"
-                    value={apiKeys.google_vision}
-                    onChange={(e) => setApiKeys({ ...apiKeys, google_vision: e.target.value })}
-                    placeholder="AIza..."
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="supabase-key">Supabase API Key</Label>
-                  <Input
-                    id="supabase-key"
-                    type="password"
-                    value={apiKeys.supabase}
-                    onChange={(e) => setApiKeys({ ...apiKeys, supabase: e.target.value })}
-                    placeholder="eyJ..."
-                    className="mt-1"
-                  />
+                  <p className="text-sm text-gray-500">URL del endpoint para procesar documentos subidos.</p>
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+        </Tabs>
 
-            {/* API Endpoint para carga de archivos */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  API Endpoint para carga de archivos
-                </CardTitle>
-                <CardDescription>
-                  Endpoint donde se enviará un POST cuando se suban archivos a los documentos
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div>
-                  <Label htmlFor="api-endpoint">URL del Endpoint</Label>
-                  <Input
-                    id="api-endpoint"
-                    type="url"
-                    value={apiEndpoint}
-                    onChange={(e) => setApiEndpoint(e.target.value)}
-                    placeholder="https://api.ejemplo.com/upload"
-                    className="mt-1"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Se enviará un POST con el contenido del archivo cuando se cargue una nueva fila en un documento
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Panel lateral */}
-          <div className="space-y-6">
-            {/* Vista previa */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Vista Previa</CardTitle>
-                <CardDescription>Así se verá tu proyecto</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex items-center gap-3 mb-3">
-                    {companyLogo ? (
-                      <img src={companyLogo || "/placeholder.svg"} alt="Logo" className="w-8 h-8 rounded" />
-                    ) : (
-                      <div
-                        className="w-8 h-8 rounded flex items-center justify-center text-white text-sm font-bold"
-                        style={{
-                          backgroundColor:
-                            customColor || colorSchemes[colorScheme as keyof typeof colorSchemes] || "#3b82f6",
-                        }}
-                      >
-                        {projectName ? projectName[0].toUpperCase() : "C"}
-                      </div>
-                    )}
-                    <span
-                      className="font-semibold"
-                      style={{
-                        color: customColor || colorSchemes[colorScheme as keyof typeof colorSchemes] || "#3b82f6",
-                        fontFamily: fontFamily,
-                      }}
-                    >
-                      {projectName || "Civet"}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600" style={{ fontFamily: fontFamily }}>
-                    Tema: {theme === "light" ? "Claro" : "Oscuro"}
-                  </div>
-                  <div className="text-sm text-gray-600" style={{ fontFamily: fontFamily }}>
-                    Estilo: {styleMode}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Información del usuario */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  Tu Cuenta
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-medium">Email</Label>
-                    <p className="text-sm text-gray-600">{user.email}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Registrado</Label>
-                    <p className="text-sm text-gray-600">{new Date(user.created_at).toLocaleDateString("es-ES")}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Rol</Label>
-                    <p className="text-sm text-blue-600">{userRole || "user"}</p>
-                  </div>
-                  {isSuperAdmin && (
-                    <div>
-                      <Label className="text-sm font-medium">Permisos</Label>
-                      <p className="text-sm text-green-600">Superadministrador</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Botón de guardar con clase específica */}
-            <Button
-              onClick={handleSave}
-              disabled={isLoading}
-              className="w-full settings-save-button"
-              style={{ backgroundColor: "#000000", color: "white" }}
-            >
-              <Save className="w-4 h-4 mr-2" style={{ color: "#3b82f6" }} />
-              {isLoading ? "Guardando..." : "Guardar Cambios"}
-            </Button>
-          </div>
+        <div className="flex justify-end gap-4">
+          <Button variant="outline" onClick={handleReset} disabled={isLoading || isSaving}>
+            Restablecer
+          </Button>
+          <Button onClick={handleSave} disabled={isLoading || isSaving}>
+            {isSaving ? "Guardando..." : "Guardar Cambios"}
+          </Button>
         </div>
       </div>
-    </div>
+    </AuthGuard>
   )
 }

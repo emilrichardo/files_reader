@@ -22,3 +22,25 @@ export const getThemeColors = (isDark: boolean) => ({
   textSecondary: isDark ? customTheme.textSecondaryDark : customTheme.textSecondary,
   border: isDark ? customTheme.borderDark : customTheme.border,
 })
+
+// Generate CSS variables for theme - SIMPLE VERSION
+export function generateCssVariables(config: {
+  primaryColor: string
+  colorScheme: string
+  theme: "light" | "dark"
+  styleMode: "flat" | "soft" | "glass"
+}): string {
+  const { primaryColor } = config
+  const actualColor = primaryColor || "#3b82f6"
+
+  return `
+  --primary-color: ${actualColor};
+  --primary-rgb: ${
+    actualColor
+      .replace("#", "")
+      .match(/.{2}/g)
+      ?.map((x) => Number.parseInt(x, 16))
+      .join(", ") || "59, 130, 246"
+  };
+`
+}

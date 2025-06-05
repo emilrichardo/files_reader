@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
-import { updateUserSettings, getGlobalSettings } from "@/lib/database"
+import { updateUserSettings } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
 import { useAuth } from "./auth-context"
 
@@ -33,31 +33,6 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
-
-// Logo SVG FIJO
-const FIXED_LOGO =
-  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiMzYjgyZjYiIHJ4PSIxMiIgcnk9IjEyIi8+PHRleHQgeD0iMzIiIHk9IjQyIiBmb250LXNpemU9IjI4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+QzwvdGV4dD48L3N2Zz4="
-
-// Configuración FIJA HARDCODEADA
-const FIXED_SETTINGS: UserSettings = {
-  id: "1",
-  user_id: "global",
-  project_name: "Civet",
-  api_endpoint: "https://cibet.app.n8n.cloud/webhook/Civet-public-upload",
-  api_keys: {
-    openai: "",
-    google_vision: "",
-    supabase: "",
-  },
-  theme: "light",
-  color_scheme: "blue",
-  custom_color: "#3b82f6",
-  font_family: "Inter",
-  style_mode: "flat",
-  company_logo: FIXED_LOGO,
-  company_logo_type: "svg",
-  updated_at: new Date().toISOString(),
-}
 
 const colorSchemes = {
   black: "#000000",
@@ -131,84 +106,129 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { user, userRole, loading: authLoading } = useAuth()
-  const [settings, setSettings] = useState<UserSettings>(FIXED_SETTINGS)
-  const [isLoaded, setIsLoaded] = useState(false) // CAMBIO: Empezar como false
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true) // CAMBIO: Empezar como true
-  const [isSettingsReady, setIsSettingsReady] = useState(false) // CAMBIO: Empezar como false
-  const [isSaving, setIsSaving] = useState(false)
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const { user, userRole } = useAuth()
+  const [settings, setSettings] = useState<UserSettings | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
+  const [isSettingsReady, setIsSettingsReady] = useState(false)
 
-  // Aplicar estilos INMEDIATAMENTE pero sin mostrar la UI hasta que esté listo
+  // Cargar configuración desde la base de datos
   useEffect(() => {
-    console.log("🎨 [THEME] Applying FIXED styles...")
-    applyThemeStyles(FIXED_SETTINGS)
+    const loadSettings = async () => {
+      try {
+        console.log("🔄 [THEME] Cargando configuración...")
 
-    // Cargar configuración real INMEDIATAMENTE
-    if (!authLoading) {
-      loadSettingsOnce()
-    }
-  }, [authLoading])
+        // Importar supabase dinámicamente para evitar errores de SSR
+        const { createClient } = await import("@/lib/supabase")
+        const supabase = createClient()
 
-  const loadSettingsOnce = async () => {
-    if (hasLoadedOnce) return
+        // Intentar cargar configuración global
+        const { data: globalData, error: globalError } = await supabase
+          .from("user_settings")
+          .select("*")
+          .eq("user_id", GLOBAL_SETTINGS_ID)
+          .single()
 
-    console.log("🔍 [THEME] Loading settings for the first time...")
-    setIsLoadingSettings(true)
-
-    try {
-      // Intentar cargar configuración real
-      const globalResult = await getGlobalSettings()
-
-      let finalSettings = FIXED_SETTINGS
-
-      if (globalResult?.data && !globalResult.error) {
-        finalSettings = {
-          ...FIXED_SETTINGS,
-          ...globalResult.data,
-          // Preservar logo si existe
-          company_logo: globalResult.data.company_logo || FIXED_LOGO,
+        if (globalError && globalError.code !== "PGRST116") {
+          console.error("❌ [THEME] Error cargando configuración global:", globalError)
         }
-        console.log("✅ [THEME] Real settings loaded successfully")
-      } else {
-        console.log("⚠️ [THEME] Using fixed settings")
+
+        // Si hay usuario, intentar cargar su configuración
+        let userData = null
+        if (user?.id) {
+          const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", user.id).single()
+
+          if (error && error.code !== "PGRST116") {
+            console.error("❌ [THEME] Error cargando configuración de usuario:", error)
+          } else if (data) {
+            userData = data
+          }
+        }
+
+        // Usar configuración de usuario o global
+        const settingsData = userData || globalData
+
+        if (settingsData) {
+          console.log("✅ [THEME] Configuración cargada:", {
+            projectName: settingsData.project_name,
+            customColor: settingsData.custom_color,
+            hasLogo: !!settingsData.company_logo,
+            logoLength: settingsData.company_logo?.length || 0,
+          })
+
+          const loadedSettings: UserSettings = {
+            id: settingsData.id || "1",
+            user_id: settingsData.user_id || "global",
+            project_name: settingsData.project_name || "Civet",
+            api_endpoint: settingsData.api_endpoint || "",
+            api_keys: settingsData.api_keys || { openai: "", google_vision: "", supabase: "" },
+            theme: settingsData.theme || "light",
+            color_scheme: settingsData.color_scheme || "blue",
+            custom_color: settingsData.custom_color || "#3b82f6",
+            font_family: settingsData.font_family || "Inter",
+            style_mode: settingsData.style_mode || "flat",
+            company_logo: settingsData.company_logo || null,
+            company_logo_type: settingsData.company_logo_type || null,
+            updated_at: settingsData.updated_at || new Date().toISOString(),
+          }
+
+          setSettings(loadedSettings)
+          applyThemeStyles(loadedSettings)
+        } else {
+          console.log("⚠️ [THEME] No se encontró configuración, usando valores por defecto")
+          const defaultSettings: UserSettings = {
+            id: "1",
+            user_id: "global",
+            project_name: "Civet",
+            api_endpoint: "",
+            api_keys: { openai: "", google_vision: "", supabase: "" },
+            theme: "light",
+            color_scheme: "blue",
+            custom_color: "#3b82f6",
+            font_family: "Inter",
+            style_mode: "flat",
+            company_logo: null,
+            company_logo_type: null,
+            updated_at: new Date().toISOString(),
+          }
+          setSettings(defaultSettings)
+          applyThemeStyles(defaultSettings)
+        }
+      } catch (error) {
+        console.error("❌ [THEME] Error al cargar configuración:", error)
+        // Configuración por defecto en caso de error
+        const defaultSettings: UserSettings = {
+          id: "1",
+          user_id: "global",
+          project_name: "Civet",
+          api_endpoint: "",
+          api_keys: { openai: "", google_vision: "", supabase: "" },
+          theme: "light",
+          color_scheme: "blue",
+          custom_color: "#3b82f6",
+          font_family: "Inter",
+          style_mode: "flat",
+          company_logo: null,
+          company_logo_type: null,
+          updated_at: new Date().toISOString(),
+        }
+        setSettings(defaultSettings)
+        applyThemeStyles(defaultSettings)
+      } finally {
+        setIsLoaded(true)
+        setIsLoadingSettings(false)
+        setIsSettingsReady(true)
       }
-
-      // Aplicar configuración final
-      setSettings(finalSettings)
-      applyThemeStyles(finalSettings)
-
-      // Marcar como listo
-      setHasLoadedOnce(true)
-      setIsLoaded(true)
-      setIsSettingsReady(true)
-    } catch (error) {
-      console.log("⚠️ [THEME] Error loading settings, using fixed ones:", error)
-
-      // Usar configuración fija en caso de error
-      setSettings(FIXED_SETTINGS)
-      applyThemeStyles(FIXED_SETTINGS)
-
-      // Marcar como listo de todos modos
-      setHasLoadedOnce(true)
-      setIsLoaded(true)
-      setIsSettingsReady(true)
-    } finally {
-      setIsLoadingSettings(false)
     }
-  }
+
+    loadSettings()
+  }, [user?.id])
 
   const applyThemeStyles = (settings: UserSettings) => {
-    // Usar el color personalizado si existe, sino el del esquema, sino azul por defecto
-    let primaryColor = settings.custom_color
-    if (!primaryColor || primaryColor === "") {
-      primaryColor = colorSchemes[settings.color_scheme as keyof typeof colorSchemes]
-    }
-    if (!primaryColor || primaryColor === "") {
-      primaryColor = "#3b82f6"
-    }
+    const primaryColor = settings.custom_color || "#3b82f6"
 
-    console.log("🎨 [THEME] Applying styles with color:", primaryColor)
+    console.log("🎨 [THEME] Aplicando estilos con color:", primaryColor)
+    console.log("🖼️ [THEME] Logo disponible:", !!settings.company_logo)
 
     const root = document.documentElement
     root.style.setProperty("--primary-color", primaryColor)
@@ -223,147 +243,130 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove("dark")
     }
 
-    // FORZAR estilos adicionales
-    const style = document.getElementById("ultra-dynamic-styles") || document.createElement("style")
-    style.id = "ultra-dynamic-styles"
+    // FORZAR estilos con el color real de la BD
+    const style = document.getElementById("dynamic-theme-styles") || document.createElement("style")
+    style.id = "dynamic-theme-styles"
     style.textContent = `
-      /* ULTRA FORZADO */
-      button[type="submit"],
-      .settings-save-button,
-      button.bg-blue-600,
-      button.bg-primary,
-      .btn-primary,
-      button[class*="bg-blue"],
-      button[class*="bg-primary"] {
-        background-color: #000000 !important;
-        background: #000000 !important;
-        color: #ffffff !important;
-        border-color: #000000 !important;
-        border: 1px solid #000000 !important;
-      }
-      
-      button[type="submit"]:hover,
-      .settings-save-button:hover,
-      button.bg-blue-600:hover,
-      button.bg-primary:hover,
-      .btn-primary:hover,
-      button[class*="bg-blue"]:hover,
-      button[class*="bg-primary"]:hover {
-        background-color: #333333 !important;
-        background: #333333 !important;
-        color: #ffffff !important;
-      }
-      
-      /* FORZAR CLASES TAILWIND */
-      .bg-blue-600 {
-        background-color: #000000 !important;
-      }
-      
-      .hover\\:bg-blue-700:hover {
-        background-color: #333333 !important;
-      }
-      
-      .text-white {
-        color: #ffffff !important;
-      }
-      
-      /* Navegación activa */
-      .sidebar-nav-active,
-      [data-sidebar-nav-active="true"] {
-        background-color: ${primaryColor} !important;
-        color: white !important;
-      }
-    `
+    /* FORZAR COLOR REAL DE LA BD */
+    button[type="submit"],
+    .settings-save-button,
+    button.bg-blue-600,
+    button.bg-primary,
+    .btn-primary,
+    button[class*="bg-blue"],
+    button[class*="bg-primary"] {
+      background-color: ${primaryColor} !important;
+      background: ${primaryColor} !important;
+      color: #ffffff !important;
+      border-color: ${primaryColor} !important;
+    }
+    
+    button[type="submit"]:hover,
+    .settings-save-button:hover,
+    button.bg-blue-600:hover,
+    button.bg-primary:hover,
+    .btn-primary:hover,
+    button[class*="bg-blue"]:hover,
+    button[class*="bg-primary"]:hover {
+      background-color: ${primaryColor}dd !important;
+      background: ${primaryColor}dd !important;
+      color: #ffffff !important;
+    }
+    
+    /* Navegación activa */
+    .sidebar-nav-active,
+    [data-sidebar-nav-active="true"] {
+      background-color: ${primaryColor} !important;
+      color: white !important;
+    }
+    
+    /* Iconos en botones */
+    button[type="submit"] svg,
+    .settings-save-button svg,
+    button.bg-blue-600 svg,
+    button.bg-primary svg,
+    .btn-primary svg {
+      color: #ffffff !important;
+    }
+  `
 
     if (!document.head.contains(style)) {
       document.head.appendChild(style)
     }
 
-    console.log("✅ [THEME] Styles applied with primary color:", primaryColor)
+    console.log("✅ [THEME] Estilos aplicados correctamente")
   }
 
   const reloadSettings = async () => {
-    console.log("🔄 [THEME] Reloading settings...")
-    setHasLoadedOnce(false)
-    setIsLoaded(false)
-    setIsSettingsReady(false)
-    await loadSettingsOnce()
+    setIsLoadingSettings(true)
+    // Recargar configuración
+    const loadSettings = async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase")
+        const supabase = createClient()
+
+        const { data: globalData } = await supabase
+          .from("user_settings")
+          .select("*")
+          .eq("user_id", GLOBAL_SETTINGS_ID)
+          .single()
+
+        if (globalData) {
+          const loadedSettings: UserSettings = {
+            id: globalData.id || "1",
+            user_id: globalData.user_id || "global",
+            project_name: globalData.project_name || "Civet",
+            api_endpoint: globalData.api_endpoint || "",
+            api_keys: globalData.api_keys || { openai: "", google_vision: "", supabase: "" },
+            theme: globalData.theme || "light",
+            color_scheme: globalData.color_scheme || "blue",
+            custom_color: globalData.custom_color || "#3b82f6",
+            font_family: globalData.font_family || "Inter",
+            style_mode: globalData.style_mode || "flat",
+            company_logo: globalData.company_logo || null,
+            company_logo_type: globalData.company_logo_type || null,
+            updated_at: globalData.updated_at || new Date().toISOString(),
+          }
+          setSettings(loadedSettings)
+          applyThemeStyles(loadedSettings)
+        }
+      } catch (error) {
+        console.error("Error recargando configuración:", error)
+      } finally {
+        setIsLoadingSettings(false)
+      }
+    }
+
+    await loadSettings()
   }
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
-    console.log("🔧 [THEME] Updating settings:", updates)
+    if (!settings) return
 
-    if (isSaving) {
-      console.log("⚠️ [THEME] Already saving, ignoring request")
-      return
-    }
+    console.log("🔧 [THEME] Actualizando configuración:", updates)
 
     try {
-      setIsSaving(true)
-
-      // Actualizar estado local INMEDIATAMENTE
-      const updatedSettings = {
-        ...settings,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      }
+      // Actualizar estado local inmediatamente
+      const updatedSettings = { ...settings, ...updates }
       setSettings(updatedSettings)
       applyThemeStyles(updatedSettings)
 
-      // Si es superadmin, intentar guardar en BD
+      // Guardar en BD si es superadmin
       const isSuperAdmin = userRole === "superadmin"
-      if (isSuperAdmin) {
-        console.log("💾 [THEME] Superadmin updating global settings")
-
-        const result = await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
-        if (result.error) {
-          console.error("❌ [THEME] Error saving to database:", result.error)
-          throw new Error("Error al guardar configuración: " + result.error.message)
-        }
-
-        console.log("✅ [THEME] Settings saved to database successfully")
-      } else if (user && updates.theme) {
-        console.log("💾 [THEME] User updating personal theme")
-
-        const result = await updateUserSettings(user.id, { theme: updates.theme })
-        if (result.error) {
-          console.error("❌ [THEME] Error saving theme:", result.error)
-          throw new Error("Error al guardar tema: " + result.error.message)
-        }
-
-        console.log("✅ [THEME] Theme saved successfully")
+      if (isSuperAdmin && user?.id) {
+        await updateUserSettings(user.id, updates)
+        console.log("✅ [THEME] Configuración guardada en BD")
       }
-
-      console.log("✅ [THEME] All settings updated successfully")
     } catch (error) {
-      console.error("❌ [THEME] Error updating settings:", error)
-      throw error
-    } finally {
-      setIsSaving(false)
+      console.error("❌ [THEME] Error actualizando configuración:", error)
     }
   }
 
   const toggleTheme = async () => {
+    if (!settings) return
+
     const newTheme = settings.theme === "light" ? "dark" : "light"
-
-    // Actualizar inmediatamente
-    const updatedSettings = {
-      ...settings,
-      theme: newTheme,
-    }
-    setSettings(updatedSettings)
-    applyThemeStyles(updatedSettings)
-
-    // Intentar guardar en background
-    try {
-      if (user) {
-        updateUserSettings(user.id, { theme: newTheme })
-          .then(() => console.log("✅ Theme preference saved"))
-          .catch(() => console.log("⚠️ Could not save theme preference"))
-      }
-    } catch (error) {
-      console.error("Error saving theme preference:", error)
-    }
+    await updateSettings({ theme: newTheme })
   }
 
   const updateLogo = async (file: File): Promise<void> => {
@@ -381,7 +384,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
 
       const reader = new FileReader()
-
       reader.onload = async (e) => {
         const result = e.target?.result as string
         if (result) {
@@ -430,18 +432,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const removeLogo = async () => {
     await updateSettings({
-      company_logo: FIXED_LOGO,
-      company_logo_type: "svg",
+      company_logo: null,
+      company_logo_type: null,
     })
   }
 
-  const isDark = settings.theme === "dark"
-  const primaryColor =
-    settings.custom_color || colorSchemes[settings.color_scheme as keyof typeof colorSchemes] || "#3b82f6"
-  const companyLogo = settings.company_logo || FIXED_LOGO
-  const logoType = settings.company_logo_type || "svg"
-  const projectName = settings.project_name || "Civet"
-  const isAdmin = userRole === "admin" || userRole === "superadmin"
+  // Valores por defecto si no hay settings
+  const defaultValues = {
+    isDark: false,
+    primaryColor: "#3b82f6",
+    companyLogo: null,
+    logoType: null,
+    projectName: "Civet",
+    isAdmin: userRole === "admin" || userRole === "superadmin",
+  }
+
+  const currentValues = settings
+    ? {
+        isDark: settings.theme === "dark",
+        primaryColor: settings.custom_color || "#3b82f6",
+        companyLogo: settings.company_logo,
+        logoType: settings.company_logo_type,
+        projectName: settings.project_name || "Civet",
+        isAdmin: userRole === "admin" || userRole === "superadmin",
+      }
+    : defaultValues
 
   const isLightColor = (color: string): boolean => {
     return getLuminance(color) > 0.5
@@ -458,14 +473,28 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return (
     <ThemeContext.Provider
       value={{
-        settings,
+        settings: settings || {
+          id: "1",
+          user_id: "global",
+          project_name: "Civet",
+          api_endpoint: "",
+          api_keys: { openai: "", google_vision: "", supabase: "" },
+          theme: "light",
+          color_scheme: "blue",
+          custom_color: "#3b82f6",
+          font_family: "Inter",
+          style_mode: "flat",
+          company_logo: null,
+          company_logo_type: null,
+          updated_at: new Date().toISOString(),
+        },
         updateSettings,
-        isDark,
+        isDark: currentValues.isDark,
         toggleTheme,
-        primaryColor,
-        companyLogo,
-        logoType,
-        projectName,
+        primaryColor: currentValues.primaryColor,
+        companyLogo: currentValues.companyLogo,
+        logoType: currentValues.logoType,
+        projectName: currentValues.projectName,
         updateProjectName,
         updateLogo,
         removeLogo,
@@ -476,7 +505,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         getContrastColor,
         isLoaded,
         isLoadingSettings,
-        isAdmin,
+        isAdmin: currentValues.isAdmin,
         isSettingsReady,
         reloadSettings,
       }}

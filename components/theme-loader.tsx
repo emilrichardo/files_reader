@@ -1,40 +1,30 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useTheme } from "@/contexts/theme-context"
-import { useAuth } from "@/contexts/auth-context"
-import { useEffect, useState } from "react"
 
 export function ThemeLoader() {
-  const { isSettingsReady, isLoadingSettings } = useTheme()
-  const { loading: authLoading } = useAuth()
-  const [showContent, setShowContent] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const { isSettingsReady } = useTheme()
 
   useEffect(() => {
-    // Solo mostrar contenido cuando todo esté listo
-    if (!authLoading && isSettingsReady && !isLoadingSettings) {
-      // Pequeño delay para evitar flashes
-      setTimeout(() => {
-        setShowContent(true)
-        document.body.classList.add("theme-ready")
-        document.body.classList.remove("theme-loading")
-      }, 100)
-    } else {
-      document.body.classList.add("theme-loading")
-      document.body.classList.remove("theme-ready")
+    if (isSettingsReady) {
+      // Pequeño delay para asegurar que los estilos se apliquen
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+      }, 200)
+      return () => clearTimeout(timer)
     }
-  }, [authLoading, isSettingsReady, isLoadingSettings])
+  }, [isSettingsReady])
 
-  // Mostrar loader mientras no esté listo
-  if (!showContent) {
-    return (
-      <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="text-sm text-gray-600">Cargando configuración...</p>
-        </div>
+  if (!isLoading) return null
+
+  return (
+    <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-2">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <p className="text-sm text-gray-600">Cargando...</p>
       </div>
-    )
-  }
-
-  return null
+    </div>
+  )
 }
