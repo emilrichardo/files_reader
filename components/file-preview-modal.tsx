@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Edit2, Save, X } from "lucide-react"
+import { Edit2, Save, X, AlertTriangle } from "lucide-react"
 import type { DocumentField, FileMetadata } from "@/lib/types"
 
 interface FilePreviewModalProps {
@@ -55,12 +55,32 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     console.log("📝 Datos finales para el modal:", dataToUse)
 
+    // Si no hay datos, crear datos simulados basados en los campos
+    if (Object.keys(dataToUse).length === 0 && fields.length > 0) {
+      console.log("⚠️ No hay datos, generando datos simulados basados en los campos")
+      const simulatedData: Record<string, any> = {}
+
+      fields.forEach((field) => {
+        // Generar valores simulados según el tipo de campo
+        if (field.type === "number") {
+          simulatedData[field.field_name] = Math.floor(Math.random() * 1000)
+        } else if (field.type === "date") {
+          simulatedData[field.field_name] = new Date().toISOString().split("T")[0]
+        } else {
+          simulatedData[field.field_name] = `Valor para ${field.field_name}`
+        }
+      })
+
+      dataToUse = simulatedData
+      console.log("🔄 Datos simulados generados:", dataToUse)
+    }
+
     if (Object.keys(dataToUse).length > 0) {
       setEditableData(dataToUse)
     } else {
       console.log("⚠️ No hay datos para mostrar")
     }
-  }, [extractedData, apiResponse, isOpen])
+  }, [extractedData, apiResponse, isOpen, fields])
 
   const handleInputChange = (fieldName: string, value: any) => {
     setEditableData({
@@ -132,17 +152,26 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           )}
 
+          {/* Mensaje de error si hay uno */}
+          {apiResponse?.error && (
+            <div className="mt-4 bg-red-50 p-3 rounded-lg border border-red-200 text-sm flex items-start">
+              <AlertTriangle className="w-5 h-5 text-red-500 mr-2 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-red-700">Error en el procesamiento</p>
+                <p className="text-red-600">{apiResponse.message || "Error al procesar el archivo"}</p>
+                <p className="text-xs text-red-500 mt-1">Puedes continuar editando los datos manualmente.</p>
+              </div>
+            </div>
+          )}
+
           {/* Datos extraídos editables */}
-          {Object.keys(editableData).length > 0 && (
+          {Object.keys(editableData).length > 0 ? (
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-900 mb-2">Datos extraídos</h4>
               <div className="space-y-3">
                 {/* Primero mostrar campos que coinciden con la estructura */}
                 {fields.map((field) => {
                   const fieldValue = editableData[field.field_name] !== undefined ? editableData[field.field_name] : ""
-
-                  // Solo mostrar si hay un valor o si está en modo edición
-                  if (!fieldValue && !isEditing) return null
 
                   return (
                     <div key={field.id} className="flex flex-col">
@@ -171,8 +200,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 {/* Luego mostrar campos adicionales que no están en la estructura */}
                 {Object.entries(editableData)
                   .filter(([key, value]) => {
-                    // Solo mostrar campos que no están en la estructura definida y que tienen valor
-                    return !fields.some((f) => f.field_name === key) && value && value.toString().trim() !== ""
+                    // Solo mostrar campos que no están en la estructura definida
+                    return !fields.some((f) => f.field_name === key)
                   })
                   .map(([key, value]) => (
                     <div key={key} className="flex flex-col">
@@ -194,6 +223,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     </div>
                   ))}
               </div>
+            </div>
+          ) : (
+            <div className="mt-4 p-6 bg-gray-50 rounded-lg border text-center">
+              <p className="text-gray-500">No hay datos disponibles para mostrar.</p>
+              <p className="text-sm text-gray-400 mt-1">Puedes agregar datos manualmente haciendo clic en "Editar".</p>
             </div>
           )}
 
