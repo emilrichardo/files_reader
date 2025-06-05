@@ -109,12 +109,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { user, userRole } = useAuth()
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
   const [isSettingsReady, setIsSettingsReady] = useState(false)
+  const [hasInitialized, setHasInitialized] = useState(false)
 
   // Cargar configuración desde la base de datos
   useEffect(() => {
+    if (hasInitialized) return
+
     const loadSettings = async () => {
+      setIsLoadingSettings(true)
       try {
         console.log("🔄 [THEME] Cargando configuración...")
 
@@ -174,6 +178,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
           setSettings(loadedSettings)
           applyThemeStyles(loadedSettings)
+
+          console.log("🖼️ [THEME] Logo configurado:", loadedSettings.company_logo ? "Presente" : "Ausente")
         } else {
           console.log("⚠️ [THEME] No se encontró configuración, usando valores por defecto")
           const defaultSettings: UserSettings = {
@@ -218,17 +224,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setIsLoaded(true)
         setIsLoadingSettings(false)
         setIsSettingsReady(true)
+        setHasInitialized(true)
+        console.log("✅ [THEME] Inicialización completada")
       }
     }
 
     loadSettings()
-  }, [user?.id])
+  }, [user?.id, hasInitialized])
 
   const applyThemeStyles = (settings: UserSettings) => {
     const primaryColor = settings.custom_color || "#3b82f6"
 
     console.log("🎨 [THEME] Aplicando estilos con color:", primaryColor)
-    console.log("🖼️ [THEME] Logo disponible:", !!settings.company_logo)
 
     const root = document.documentElement
     root.style.setProperty("--primary-color", primaryColor)
@@ -299,45 +306,40 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const reloadSettings = async () => {
     setIsLoadingSettings(true)
-    // Recargar configuración
-    const loadSettings = async () => {
-      try {
-        const { createClient } = await import("@/lib/supabase")
-        const supabase = createClient()
+    try {
+      const { createClient } = await import("@/lib/supabase")
+      const supabase = createClient()
 
-        const { data: globalData } = await supabase
-          .from("user_settings")
-          .select("*")
-          .eq("user_id", GLOBAL_SETTINGS_ID)
-          .single()
+      const { data: globalData } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", GLOBAL_SETTINGS_ID)
+        .single()
 
-        if (globalData) {
-          const loadedSettings: UserSettings = {
-            id: globalData.id || "1",
-            user_id: globalData.user_id || "global",
-            project_name: globalData.project_name || "Civet",
-            api_endpoint: globalData.api_endpoint || "",
-            api_keys: globalData.api_keys || { openai: "", google_vision: "", supabase: "" },
-            theme: globalData.theme || "light",
-            color_scheme: globalData.color_scheme || "blue",
-            custom_color: globalData.custom_color || "#3b82f6",
-            font_family: globalData.font_family || "Inter",
-            style_mode: globalData.style_mode || "flat",
-            company_logo: globalData.company_logo || null,
-            company_logo_type: globalData.company_logo_type || null,
-            updated_at: globalData.updated_at || new Date().toISOString(),
-          }
-          setSettings(loadedSettings)
-          applyThemeStyles(loadedSettings)
+      if (globalData) {
+        const loadedSettings: UserSettings = {
+          id: globalData.id || "1",
+          user_id: globalData.user_id || "global",
+          project_name: globalData.project_name || "Civet",
+          api_endpoint: globalData.api_endpoint || "",
+          api_keys: globalData.api_keys || { openai: "", google_vision: "", supabase: "" },
+          theme: globalData.theme || "light",
+          color_scheme: globalData.color_scheme || "blue",
+          custom_color: globalData.custom_color || "#3b82f6",
+          font_family: globalData.font_family || "Inter",
+          style_mode: globalData.style_mode || "flat",
+          company_logo: globalData.company_logo || null,
+          company_logo_type: globalData.company_logo_type || null,
+          updated_at: globalData.updated_at || new Date().toISOString(),
         }
-      } catch (error) {
-        console.error("Error recargando configuración:", error)
-      } finally {
-        setIsLoadingSettings(false)
+        setSettings(loadedSettings)
+        applyThemeStyles(loadedSettings)
       }
+    } catch (error) {
+      console.error("Error recargando configuración:", error)
+    } finally {
+      setIsLoadingSettings(false)
     }
-
-    await loadSettings()
   }
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
