@@ -34,6 +34,10 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
+// Logo SVG por defecto
+const DEFAULT_LOGO =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIGZpbGw9IiMzYjgyZjYiIHJ4PSIxMiIgcnk9IjEyIi8+PHRleHQgeD0iMzIiIHk9IjQyIiBmb250LXNpemU9IjI4IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iYm9sZCI+QzwvdGV4dD48L3N2Zz4="
+
 const colorSchemes = {
   black: "#000000",
   slate: "#64748b",
@@ -106,131 +110,94 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { user, userRole } = useAuth()
-  const [settings, setSettings] = useState<UserSettings | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const { user, userRole, loading: authLoading } = useAuth()
+
+  // Configuración por defecto INMEDIATA
+  const [settings, setSettings] = useState<UserSettings>({
+    id: "1",
+    user_id: "global",
+    project_name: "Civet",
+    api_endpoint: "",
+    api_keys: { openai: "", google_vision: "", supabase: "" },
+    theme: "light",
+    color_scheme: "blue",
+    custom_color: "#3b82f6",
+    font_family: "Inter",
+    style_mode: "flat",
+    company_logo: DEFAULT_LOGO,
+    company_logo_type: "svg",
+    updated_at: new Date().toISOString(),
+  })
+
+  const [isLoaded, setIsLoaded] = useState(true) // SIEMPRE listo
   const [isLoadingSettings, setIsLoadingSettings] = useState(false)
-  const [isSettingsReady, setIsSettingsReady] = useState(false)
-  const [hasInitialized, setHasInitialized] = useState(false)
+  const [isSettingsReady, setIsSettingsReady] = useState(true) // SIEMPRE listo
+  const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false)
 
-  // Cargar configuración desde la base de datos
+  // Aplicar estilos inmediatamente
   useEffect(() => {
-    if (hasInitialized) return
+    applyThemeStyles(settings)
+  }, [])
 
-    const loadSettings = async () => {
-      setIsLoadingSettings(true)
+  // Cargar configuración desde BD SOLO UNA VEZ cuando el auth esté listo
+  useEffect(() => {
+    if (authLoading || hasLoadedFromDB) return
+
+    const loadSettingsFromDB = async () => {
       try {
-        console.log("🔄 [THEME] Cargando configuración...")
+        console.log("🔄 [THEME] Cargando configuración desde BD...")
 
-        // Importar supabase dinámicamente para evitar errores de SSR
         const { createClient } = await import("@/lib/supabase")
         const supabase = createClient()
 
-        // Intentar cargar configuración global
-        const { data: globalData, error: globalError } = await supabase
+        // Cargar configuración global
+        const { data: globalData } = await supabase
           .from("user_settings")
           .select("*")
           .eq("user_id", GLOBAL_SETTINGS_ID)
           .single()
 
-        if (globalError && globalError.code !== "PGRST116") {
-          console.error("❌ [THEME] Error cargando configuración global:", globalError)
-        }
-
-        // Si hay usuario, intentar cargar su configuración
-        let userData = null
-        if (user?.id) {
-          const { data, error } = await supabase.from("user_settings").select("*").eq("user_id", user.id).single()
-
-          if (error && error.code !== "PGRST116") {
-            console.error("❌ [THEME] Error cargando configuración de usuario:", error)
-          } else if (data) {
-            userData = data
-          }
-        }
-
-        // Usar configuración de usuario o global
-        const settingsData = userData || globalData
-
-        if (settingsData) {
-          console.log("✅ [THEME] Configuración cargada:", {
-            projectName: settingsData.project_name,
-            customColor: settingsData.custom_color,
-            hasLogo: !!settingsData.company_logo,
-            logoLength: settingsData.company_logo?.length || 0,
+        if (globalData) {
+          console.log("✅ [THEME] Configuración global encontrada:", {
+            projectName: globalData.project_name,
+            customColor: globalData.custom_color,
+            hasLogo: !!globalData.company_logo,
           })
 
           const loadedSettings: UserSettings = {
-            id: settingsData.id || "1",
-            user_id: settingsData.user_id || "global",
-            project_name: settingsData.project_name || "Civet",
-            api_endpoint: settingsData.api_endpoint || "",
-            api_keys: settingsData.api_keys || { openai: "", google_vision: "", supabase: "" },
-            theme: settingsData.theme || "light",
-            color_scheme: settingsData.color_scheme || "blue",
-            custom_color: settingsData.custom_color || "#3b82f6",
-            font_family: settingsData.font_family || "Inter",
-            style_mode: settingsData.style_mode || "flat",
-            company_logo: settingsData.company_logo || null,
-            company_logo_type: settingsData.company_logo_type || null,
-            updated_at: settingsData.updated_at || new Date().toISOString(),
+            id: globalData.id || "1",
+            user_id: globalData.user_id || "global",
+            project_name: globalData.project_name || "Civet",
+            api_endpoint: globalData.api_endpoint || "",
+            api_keys: globalData.api_keys || { openai: "", google_vision: "", supabase: "" },
+            theme: globalData.theme || "light",
+            color_scheme: globalData.color_scheme || "blue",
+            custom_color: globalData.custom_color || "#3b82f6",
+            font_family: globalData.font_family || "Inter",
+            style_mode: globalData.style_mode || "flat",
+            company_logo: globalData.company_logo || DEFAULT_LOGO,
+            company_logo_type: globalData.company_logo_type || "svg",
+            updated_at: globalData.updated_at || new Date().toISOString(),
           }
 
           setSettings(loadedSettings)
           applyThemeStyles(loadedSettings)
-
-          console.log("🖼️ [THEME] Logo configurado:", loadedSettings.company_logo ? "Presente" : "Ausente")
+          console.log("🖼️ [THEME] Logo actualizado:", loadedSettings.company_logo ? "Presente" : "Usando default")
         } else {
-          console.log("⚠️ [THEME] No se encontró configuración, usando valores por defecto")
-          const defaultSettings: UserSettings = {
-            id: "1",
-            user_id: "global",
-            project_name: "Civet",
-            api_endpoint: "",
-            api_keys: { openai: "", google_vision: "", supabase: "" },
-            theme: "light",
-            color_scheme: "blue",
-            custom_color: "#3b82f6",
-            font_family: "Inter",
-            style_mode: "flat",
-            company_logo: null,
-            company_logo_type: null,
-            updated_at: new Date().toISOString(),
-          }
-          setSettings(defaultSettings)
-          applyThemeStyles(defaultSettings)
+          console.log("⚠️ [THEME] No se encontró configuración global, usando defaults")
         }
       } catch (error) {
-        console.error("❌ [THEME] Error al cargar configuración:", error)
-        // Configuración por defecto en caso de error
-        const defaultSettings: UserSettings = {
-          id: "1",
-          user_id: "global",
-          project_name: "Civet",
-          api_endpoint: "",
-          api_keys: { openai: "", google_vision: "", supabase: "" },
-          theme: "light",
-          color_scheme: "blue",
-          custom_color: "#3b82f6",
-          font_family: "Inter",
-          style_mode: "flat",
-          company_logo: null,
-          company_logo_type: null,
-          updated_at: new Date().toISOString(),
-        }
-        setSettings(defaultSettings)
-        applyThemeStyles(defaultSettings)
+        console.error("❌ [THEME] Error cargando configuración:", error)
       } finally {
-        setIsLoaded(true)
-        setIsLoadingSettings(false)
-        setIsSettingsReady(true)
-        setHasInitialized(true)
-        console.log("✅ [THEME] Inicialización completada")
+        setHasLoadedFromDB(true)
+        console.log("✅ [THEME] Carga de BD completada")
       }
     }
 
-    loadSettings()
-  }, [user?.id, hasInitialized])
+    // Pequeño delay para evitar conflictos con auth
+    const timer = setTimeout(loadSettingsFromDB, 500)
+    return () => clearTimeout(timer)
+  }, [authLoading, hasLoadedFromDB])
 
   const applyThemeStyles = (settings: UserSettings) => {
     const primaryColor = settings.custom_color || "#3b82f6"
@@ -250,11 +217,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.remove("dark")
     }
 
-    // FORZAR estilos con el color real de la BD
+    // FORZAR estilos con el color real
     const style = document.getElementById("dynamic-theme-styles") || document.createElement("style")
     style.id = "dynamic-theme-styles"
     style.textContent = `
-    /* FORZAR COLOR REAL DE LA BD */
+    /* FORZAR COLOR REAL */
     button[type="submit"],
     .settings-save-button,
     button.bg-blue-600,
@@ -301,7 +268,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.head.appendChild(style)
     }
 
-    console.log("✅ [THEME] Estilos aplicados correctamente")
+    console.log("✅ [THEME] Estilos aplicados")
   }
 
   const reloadSettings = async () => {
@@ -328,8 +295,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           custom_color: globalData.custom_color || "#3b82f6",
           font_family: globalData.font_family || "Inter",
           style_mode: globalData.style_mode || "flat",
-          company_logo: globalData.company_logo || null,
-          company_logo_type: globalData.company_logo_type || null,
+          company_logo: globalData.company_logo || DEFAULT_LOGO,
+          company_logo_type: globalData.company_logo_type || "svg",
           updated_at: globalData.updated_at || new Date().toISOString(),
         }
         setSettings(loadedSettings)
@@ -343,8 +310,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const updateSettings = async (updates: Partial<UserSettings>) => {
-    if (!settings) return
-
     console.log("🔧 [THEME] Actualizando configuración:", updates)
 
     try {
@@ -365,8 +330,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
 
   const toggleTheme = async () => {
-    if (!settings) return
-
     const newTheme = settings.theme === "light" ? "dark" : "light"
     await updateSettings({ theme: newTheme })
   }
@@ -434,31 +397,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const removeLogo = async () => {
     await updateSettings({
-      company_logo: null,
-      company_logo_type: null,
+      company_logo: DEFAULT_LOGO,
+      company_logo_type: "svg",
     })
   }
 
-  // Valores por defecto si no hay settings
-  const defaultValues = {
-    isDark: false,
-    primaryColor: "#3b82f6",
-    companyLogo: null,
-    logoType: null,
-    projectName: "Civet",
-    isAdmin: userRole === "admin" || userRole === "superadmin",
-  }
-
-  const currentValues = settings
-    ? {
-        isDark: settings.theme === "dark",
-        primaryColor: settings.custom_color || "#3b82f6",
-        companyLogo: settings.company_logo,
-        logoType: settings.company_logo_type,
-        projectName: settings.project_name || "Civet",
-        isAdmin: userRole === "admin" || userRole === "superadmin",
-      }
-    : defaultValues
+  const isDark = settings.theme === "dark"
+  const primaryColor = settings.custom_color || "#3b82f6"
+  const companyLogo = settings.company_logo || DEFAULT_LOGO
+  const logoType = settings.company_logo_type || "svg"
+  const projectName = settings.project_name || "Civet"
+  const isAdmin = userRole === "admin" || userRole === "superadmin"
 
   const isLightColor = (color: string): boolean => {
     return getLuminance(color) > 0.5
@@ -475,28 +424,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return (
     <ThemeContext.Provider
       value={{
-        settings: settings || {
-          id: "1",
-          user_id: "global",
-          project_name: "Civet",
-          api_endpoint: "",
-          api_keys: { openai: "", google_vision: "", supabase: "" },
-          theme: "light",
-          color_scheme: "blue",
-          custom_color: "#3b82f6",
-          font_family: "Inter",
-          style_mode: "flat",
-          company_logo: null,
-          company_logo_type: null,
-          updated_at: new Date().toISOString(),
-        },
+        settings,
         updateSettings,
-        isDark: currentValues.isDark,
+        isDark,
         toggleTheme,
-        primaryColor: currentValues.primaryColor,
-        companyLogo: currentValues.companyLogo,
-        logoType: currentValues.logoType,
-        projectName: currentValues.projectName,
+        primaryColor,
+        companyLogo,
+        logoType,
+        projectName,
         updateProjectName,
         updateLogo,
         removeLogo,
@@ -507,7 +442,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         getContrastColor,
         isLoaded,
         isLoadingSettings,
-        isAdmin: currentValues.isAdmin,
+        isAdmin,
         isSettingsReady,
         reloadSettings,
       }}
