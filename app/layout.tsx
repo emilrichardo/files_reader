@@ -38,7 +38,9 @@ export default function RootLayout({
                 <AppProvider>
                   <div className="flex min-h-screen">
                     <Sidebar />
-                    <main className="flex-1 p-6">{children}</main>
+                    <main className="flex-1 p-6 md:ml-[255px] ">
+                      {children}
+                    </main>
                   </div>
                   <Toaster />
                 </AppProvider>
