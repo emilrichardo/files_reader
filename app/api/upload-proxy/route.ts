@@ -23,29 +23,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: true, message: "File too large (max 4MB)" }, { status: 400 })
     }
 
-    // Get endpoint from database - SIMPLE query
+    // Get endpoint from database
     const supabase = createClient()
-    const { data, error } = await supabase
-      .from("user_settings")
-      .select("api_endpoint")
-      .eq("user_id", "00000000-0000-0000-0000-000000000001")
-      .limit(1)
-      .single()
 
-    if (error || !data?.api_endpoint) {
-      console.error("❌ No endpoint configured:", error)
+    console.log("🔍 Querying database for endpoint...")
+
+    const { data, error, count } = await supabase
+      .from("user_settings")
+      .select("api_endpoint", { count: "exact" })
+      .eq("user_id", "00000000-0000-0000-0000-000000000001")
+
+    console.log("📊 Query result:", { data, error, count })
+
+    if (error) {
+      console.error("❌ Database error:", error)
       return NextResponse.json(
         {
           error: true,
-          message: "API endpoint not configured",
+          message: "Database error: " + error.message,
+          needsConfiguration: true,
+        },
+        { status: 500 },
+      )
+    }
+
+    if (!data || data.length === 0) {
+      console.error("❌ No configuration found")
+      return NextResponse.json(
+        {
+          error: true,
+          message: "No configuration found in database",
           needsConfiguration: true,
         },
         { status: 400 },
       )
     }
 
-    const apiEndpoint = data.api_endpoint
-    console.log(`📡 Sending to: ${apiEndpoint}`)
+    if (data.length > 1) {
+      console.warn("⚠️ Multiple configurations found, using first one")
+    }
+
+    const apiEndpoint = data[0]?.api_endpoint
+
+    if (!apiEndpoint || apiEndpoint.trim() === "") {
+      console.error("❌ Empty endpoint")
+      return NextResponse.json(
+        {
+          error: true,
+          message: "API endpoint is empty",
+          needsConfiguration: true,
+        },
+        { status: 400 },
+      )
+    }
+
+    console.log(`📡 Using endpoint: ${apiEndpoint}`)
 
     // Forward the request
     const proxyFormData = new FormData()
@@ -72,6 +104,8 @@ export async function POST(request: NextRequest) {
 
       clearTimeout(timeoutId)
 
+      console.log(`📊 Endpoint response: ${response.status} ${response.statusText}`)
+
       if (!response.ok) {
         console.error(`❌ Endpoint error: ${response.status}`)
         return NextResponse.json(
@@ -86,14 +120,20 @@ export async function POST(request: NextRequest) {
       let responseData
       try {
         responseData = await response.json()
+        console.log("✅ JSON response:", responseData)
       } catch (e) {
+        console.log("⚠️ Non-JSON response, creating success response")
         responseData = {
           success: true,
           message: "File processed successfully",
+          data: {
+            filename: file.name,
+            size: file.size,
+            type: file.type,
+          },
         }
       }
 
-      console.log("✅ Success:", responseData)
       return NextResponse.json(responseData)
     } catch (error: any) {
       clearTimeout(timeoutId)
@@ -103,6 +143,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           message: "File received, processing in background",
+          data: {
+            filename: file.name,
+            size: file.size,
+            type: file.type,
+          },
         })
       }
 
