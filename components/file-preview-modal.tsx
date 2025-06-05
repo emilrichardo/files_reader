@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Edit2, Save, X, AlertTriangle } from "lucide-react"
+import { Edit2, Save, X, AlertTriangle, Settings } from "lucide-react"
 import type { DocumentField, FileMetadata } from "@/lib/types"
 
 interface FilePreviewModalProps {
@@ -55,32 +55,12 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     console.log("📝 Datos finales para el modal:", dataToUse)
 
-    // Si no hay datos, crear datos simulados basados en los campos
-    if (Object.keys(dataToUse).length === 0 && fields.length > 0) {
-      console.log("⚠️ No hay datos, generando datos simulados basados en los campos")
-      const simulatedData: Record<string, any> = {}
-
-      fields.forEach((field) => {
-        // Generar valores simulados según el tipo de campo
-        if (field.type === "number") {
-          simulatedData[field.field_name] = Math.floor(Math.random() * 1000)
-        } else if (field.type === "date") {
-          simulatedData[field.field_name] = new Date().toISOString().split("T")[0]
-        } else {
-          simulatedData[field.field_name] = `Valor para ${field.field_name}`
-        }
-      })
-
-      dataToUse = simulatedData
-      console.log("🔄 Datos simulados generados:", dataToUse)
-    }
-
     if (Object.keys(dataToUse).length > 0) {
       setEditableData(dataToUse)
     } else {
       console.log("⚠️ No hay datos para mostrar")
     }
-  }, [extractedData, apiResponse, isOpen, fields])
+  }, [extractedData, apiResponse, isOpen])
 
   const handleInputChange = (fieldName: string, value: any) => {
     setEditableData({
@@ -108,6 +88,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const toggleEditing = () => {
     setIsEditing(!isEditing)
   }
+
+  const hasError = apiResponse?.error || apiResponse?.needsConfiguration
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -153,13 +135,23 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           )}
 
           {/* Mensaje de error si hay uno */}
-          {apiResponse?.error && (
+          {hasError && (
             <div className="mt-4 bg-red-50 p-3 rounded-lg border border-red-200 text-sm flex items-start">
-              <AlertTriangle className="w-5 h-5 text-red-500 mr-2 mt-0.5 flex-shrink-0" />
+              {apiResponse?.needsConfiguration ? (
+                <Settings className="w-5 h-5 text-orange-500 mr-2 mt-0.5 flex-shrink-0" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 text-red-500 mr-2 mt-0.5 flex-shrink-0" />
+              )}
               <div>
-                <p className="font-medium text-red-700">Error en el procesamiento</p>
-                <p className="text-red-600">{apiResponse.message || "Error al procesar el archivo"}</p>
-                <p className="text-xs text-red-500 mt-1">Puedes continuar editando los datos manualmente.</p>
+                <p className="font-medium text-red-700">
+                  {apiResponse?.needsConfiguration ? "Configuración requerida" : "Error en el procesamiento"}
+                </p>
+                <p className="text-red-600">{apiResponse?.message || "Error al procesar el archivo"}</p>
+                {apiResponse?.needsConfiguration && (
+                  <p className="text-xs text-orange-600 mt-1">
+                    Ve a Configuración → Avanzado para configurar el endpoint de la API.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -226,8 +218,12 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : (
             <div className="mt-4 p-6 bg-gray-50 rounded-lg border text-center">
-              <p className="text-gray-500">No hay datos disponibles para mostrar.</p>
-              <p className="text-sm text-gray-400 mt-1">Puedes agregar datos manualmente haciendo clic en "Editar".</p>
+              <p className="text-gray-500">No se pudieron extraer datos del archivo.</p>
+              <p className="text-sm text-gray-400 mt-1">
+                {hasError
+                  ? "Configura el endpoint de la API para procesar archivos automáticamente."
+                  : "Puedes agregar datos manualmente haciendo clic en 'Editar'."}
+              </p>
             </div>
           )}
 

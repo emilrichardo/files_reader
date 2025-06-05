@@ -238,6 +238,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     console.log("🔧 [THEME] Actualizando configuración:", updates)
 
     try {
+      // Validar style_mode antes de guardar
+      if (updates.style_mode && !["flat", "soft", "glass"].includes(updates.style_mode)) {
+        console.warn("⚠️ [THEME] style_mode inválido, usando 'flat'")
+        updates.style_mode = "flat"
+      }
+
       // Actualizar estado local inmediatamente
       const updatedSettings = { ...settings, ...updates }
       setSettings(updatedSettings)
@@ -246,7 +252,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Guardar en BD si es admin
       const isSuperAdmin = userRole === "superadmin"
       if (isSuperAdmin && user?.id) {
-        await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
+        // Preparar datos para la BD con nombres correctos
+        const dbUpdates = {
+          project_name: updates.project_name,
+          api_endpoint: updates.api_endpoint,
+          api_keys: updates.api_keys,
+          theme: updates.theme,
+          color_scheme: updates.color_scheme,
+          custom_color: updates.custom_color,
+          font_family: updates.font_family,
+          style_mode: updates.style_mode,
+          company_logo: updates.company_logo,
+          company_logo_type: updates.company_logo_type,
+        }
+
+        // Filtrar valores undefined
+        const cleanUpdates = Object.fromEntries(Object.entries(dbUpdates).filter(([_, value]) => value !== undefined))
+
+        await updateUserSettings(GLOBAL_SETTINGS_ID, cleanUpdates)
         console.log("✅ [THEME] Configuración guardada en BD")
       }
     } catch (error) {

@@ -4,9 +4,6 @@ import { createClient } from "@/lib/supabase"
 // Aumentar el límite de tiempo para la función
 export const maxDuration = 30 // 30 segundos
 
-// Endpoint por defecto para todos los usuarios
-const DEFAULT_API_ENDPOINT = "https://cibet.app.n8n.cloud/webhook/Civet-public-upload"
-
 export async function POST(request: NextRequest) {
   console.log("📡 Solicitud de upload recibida")
 
@@ -41,29 +38,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Obtener la URL del endpoint desde la configuración global o usar el endpoint por defecto
-    let apiEndpoint = DEFAULT_API_ENDPOINT
+    // Obtener la URL del endpoint desde la configuración global
+    const supabase = createClient()
+    const { data: settings, error: settingsError } = await supabase
+      .from("user_settings")
+      .select("api_endpoint")
+      .eq("user_id", "00000000-0000-0000-0000-000000000001")
+      .single()
 
-    try {
-      // Intentar obtener el endpoint personalizado
-      const supabase = createClient()
-      const { data: settings, error: settingsError } = await supabase
-        .from("user_settings")
-        .select("api_endpoint")
-        .eq("user_id", "00000000-0000-0000-0000-000000000001")
-        .single()
-
-      if (!settingsError && settings?.api_endpoint) {
-        apiEndpoint = settings.api_endpoint
-        console.log(`📡 Usando endpoint personalizado: ${apiEndpoint}`)
-      } else {
-        console.log(`📡 Usando endpoint por defecto: ${apiEndpoint}`)
-      }
-    } catch (error) {
-      console.warn("⚠️ Error al obtener la configuración, usando endpoint por defecto:", error)
-      // Continuar con el endpoint por defecto
+    if (settingsError || !settings?.api_endpoint) {
+      console.error("❌ Error al obtener la configuración o endpoint no configurado:", settingsError)
+      return NextResponse.json(
+        {
+          error: true,
+          message: "Endpoint no configurado. Por favor configura el endpoint en la sección de configuración avanzada.",
+          needsConfiguration: true,
+        },
+        { status: 400 },
+      )
     }
 
+    const apiEndpoint = settings.api_endpoint
     console.log(`📡 Enviando archivo a: ${apiEndpoint}`)
 
     // Crear un nuevo FormData para enviar al endpoint
