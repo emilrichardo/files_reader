@@ -9,7 +9,6 @@ import { AppProvider } from "@/contexts/app-context"
 import { Toaster } from "@/components/ui/toaster"
 import Sidebar from "@/components/sidebar"
 import { GlobalLoader } from "@/components/global-loader"
-import { ThemeLoader } from "@/components/theme-loader"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -41,11 +40,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             button[class*="bg-primary"],
             .bg-blue-600,
             .bg-primary {
-              background-color: #000000 !important;
-              background: #000000 !important;
+              background-color: #3b82f6 !important;
+              background: #3b82f6 !important;
               color: #ffffff !important;
-              border-color: #000000 !important;
-              border: 1px solid #000000 !important;
+              border-color: #3b82f6 !important;
+              border: 1px solid #3b82f6 !important;
             }
             
             button[type="submit"]:hover,
@@ -57,18 +56,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             button[class*="bg-primary"]:hover,
             .bg-blue-600:hover,
             .bg-primary:hover {
-              background-color: #333333 !important;
-              background: #333333 !important;
+              background-color: #2563eb !important;
+              background: #2563eb !important;
               color: #ffffff !important;
             }
             
             /* FORZAR CLASES DE TAILWIND */
             .bg-blue-600 {
-              background-color: #000000 !important;
+              background-color: #3b82f6 !important;
             }
             
             .hover\\:bg-blue-700:hover {
-              background-color: #333333 !important;
+              background-color: #2563eb !important;
             }
             
             .text-white {
@@ -81,7 +80,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             button.bg-blue-600 svg,
             button.bg-primary svg,
             .btn-primary svg {
-              color: #3b82f6 !important;
+              color: #ffffff !important;
             }
             
             /* Navegación activa */
@@ -91,14 +90,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               color: white !important;
             }
             
-            /* Ocultar contenido hasta que esté listo */
-            .theme-loading {
-              opacity: 0;
-              transition: opacity 0.3s ease-in-out;
-            }
-            
-            .theme-ready {
-              opacity: 1;
+            /* Asegurar que no hay loading infinito */
+            .loading-overlay {
+              display: none !important;
             }
           `,
           }}
@@ -108,7 +102,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ThemeProvider>
             <AppProvider>
-              <ThemeLoader />
               <GlobalLoader />
               <div className="flex min-h-screen">
                 <Sidebar />
