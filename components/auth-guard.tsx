@@ -12,7 +12,7 @@ interface AuthGuardProps {
   children: React.ReactNode
 }
 
-export default function AuthGuard({ children }: AuthGuardProps) {
+export function AuthGuard({ children }: AuthGuardProps) {
   const { user, loading, signInWithGoogle, signInWithGitHub } = useAuth()
   const router = useRouter()
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
@@ -85,3 +85,5 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   return <>{children}</>
 }
+
+export default AuthGuard
