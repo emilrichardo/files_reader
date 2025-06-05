@@ -39,26 +39,77 @@ export async function POST(request: NextRequest) {
     }
 
     // Obtener la URL del endpoint desde la configuración global
-    const supabase = createClient()
-    const { data: settings, error: settingsError } = await supabase
-      .from("user_settings")
-      .select("api_endpoint")
-      .eq("user_id", "00000000-0000-0000-0000-000000000001")
-      .single()
+    let apiEndpoint: string | null = null
 
-    if (settingsError || !settings?.api_endpoint) {
-      console.error("❌ Error al obtener la configuración o endpoint no configurado:", settingsError)
+    try {
+      const supabase = createClient()
+      console.log("🔍 Buscando configuración del endpoint...")
+
+      const { data: settings, error: settingsError } = await supabase
+        .from("user_settings")
+        .select("api_endpoint")
+        .eq("user_id", "00000000-0000-0000-0000-000000000001")
+        .single()
+
+      console.log("📊 Resultado de la consulta:", { settings, error: settingsError })
+
+      if (settingsError) {
+        console.error("❌ Error al consultar la configuración:", settingsError)
+        return NextResponse.json(
+          {
+            error: true,
+            message:
+              "Error al acceder a la configuración. Verifica que la base de datos esté configurada correctamente.",
+            needsConfiguration: true,
+            details: settingsError.message,
+          },
+          { status: 500 },
+        )
+      }
+
+      if (!settings || !settings.api_endpoint || settings.api_endpoint.trim() === "") {
+        console.error("❌ Endpoint no configurado en la base de datos")
+        return NextResponse.json(
+          {
+            error: true,
+            message:
+              "Endpoint no configurado. Por favor configura el endpoint en la sección de configuración avanzada.",
+            needsConfiguration: true,
+          },
+          { status: 400 },
+        )
+      }
+
+      apiEndpoint = settings.api_endpoint.trim()
+      console.log(`✅ Endpoint encontrado: ${apiEndpoint}`)
+    } catch (error: any) {
+      console.error("❌ Error inesperado al obtener la configuración:", error)
       return NextResponse.json(
         {
           error: true,
-          message: "Endpoint no configurado. Por favor configura el endpoint en la sección de configuración avanzada.",
+          message: "Error interno al obtener la configuración",
+          needsConfiguration: true,
+          details: error.message,
+        },
+        { status: 500 },
+      )
+    }
+
+    // Validar que el endpoint sea una URL válida
+    try {
+      new URL(apiEndpoint)
+    } catch (error) {
+      console.error("❌ URL del endpoint inválida:", apiEndpoint)
+      return NextResponse.json(
+        {
+          error: true,
+          message: "La URL del endpoint configurada no es válida",
           needsConfiguration: true,
         },
         { status: 400 },
       )
     }
 
-    const apiEndpoint = settings.api_endpoint
     console.log(`📡 Enviando archivo a: ${apiEndpoint}`)
 
     // Crear un nuevo FormData para enviar al endpoint
@@ -89,6 +140,8 @@ export async function POST(request: NextRequest) {
       })
 
       clearTimeout(timeoutId)
+
+      console.log(`📊 Respuesta del endpoint: ${response.status} ${response.statusText}`)
 
       if (!response.ok) {
         console.error(`❌ Error del endpoint: ${response.status} ${response.statusText}`)
@@ -121,15 +174,20 @@ export async function POST(request: NextRequest) {
       let responseData
       try {
         responseData = await response.json()
+        console.log("✅ Respuesta JSON del endpoint:", responseData)
       } catch (e) {
         console.error("❌ Error al parsear la respuesta JSON:", e)
         responseData = {
           success: true,
-          message: "Archivo procesado, pero la respuesta no es JSON válido",
+          message: "Archivo procesado correctamente",
+          data: {
+            filename: file.name,
+            size: file.size,
+            type: file.type,
+          },
         }
       }
 
-      console.log("✅ Respuesta del endpoint:", responseData)
       return NextResponse.json(responseData)
     } catch (error: any) {
       clearTimeout(timeoutId)
