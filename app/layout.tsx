@@ -8,7 +8,6 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { AppProvider } from "@/contexts/app-context"
 import { Toaster } from "@/components/ui/toaster"
 import Sidebar from "@/components/sidebar"
-import { GlobalLoader } from "@/components/global-loader"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,12 +24,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <style
           dangerouslySetInnerHTML={{
             __html: `
-            /* ESTILOS CRÍTICOS ULTRA FORZADOS */
+            /* ESTILOS CRÍTICOS INMEDIATOS */
             * {
               box-sizing: border-box;
             }
             
-            /* TODOS LOS BOTONES PRIMARIOS */
+            /* BOTONES PRIMARIOS */
             button[type="submit"],
             .settings-save-button,
             button.bg-blue-600,
@@ -61,20 +60,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               color: #ffffff !important;
             }
             
-            /* FORZAR CLASES DE TAILWIND */
-            .bg-blue-600 {
+            /* NAVEGACIÓN ACTIVA */
+            .sidebar-nav-active,
+            [data-sidebar-nav-active="true"] {
               background-color: #3b82f6 !important;
+              color: white !important;
             }
             
-            .hover\\:bg-blue-700:hover {
-              background-color: #2563eb !important;
-            }
-            
-            .text-white {
-              color: #ffffff !important;
-            }
-            
-            /* Iconos en botones */
+            /* ICONOS EN BOTONES */
             button[type="submit"] svg,
             .settings-save-button svg,
             button.bg-blue-600 svg,
@@ -83,16 +76,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               color: #ffffff !important;
             }
             
-            /* Navegación activa */
-            .sidebar-nav-active,
-            [data-sidebar-nav-active="true"] {
-              background-color: #3b82f6 !important;
-              color: white !important;
+            /* ELIMINAR CUALQUIER LOADING OVERLAY */
+            .loading-overlay,
+            .theme-loading {
+              display: none !important;
             }
             
-            /* Asegurar que no hay loading infinito */
-            .loading-overlay {
-              display: none !important;
+            /* ASEGURAR VISIBILIDAD INMEDIATA */
+            body {
+              opacity: 1 !important;
+              visibility: visible !important;
             }
           `,
           }}
@@ -102,7 +95,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ThemeProvider>
             <AppProvider>
-              <GlobalLoader />
               <div className="flex min-h-screen">
                 <Sidebar />
                 <main className="flex-1 md:ml-64">{children}</main>
