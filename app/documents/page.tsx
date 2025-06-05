@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { Search, Plus, FileText, Calendar, MoreHorizontal, Trash2, Edit, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -12,24 +12,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useApp } from "@/contexts/app-context"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import AuthGuard from "@/components/auth-guard"
 import type { Document } from "@/lib/types"
 
 export default function DocumentsPage() {
   const { documents, deleteDocument } = useApp()
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<"name" | "updated_at" | "created_at">("updated_at")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
-  const [isReady, setIsReady] = useState(false)
 
-  // Forzar que la página esté lista después de un breve tiempo
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsReady(true)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [])
+  // No mostrar contenido hasta que termine la carga de autenticación
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
+
+  // Si no hay usuario, mostrar AuthGuard
+  if (!user) {
+    return (
+      <AuthGuard>
+        <div />
+      </AuthGuard>
+    )
+  }
 
   const filteredAndSortedDocuments = useMemo(() => {
     const filtered = documents.filter(
@@ -81,15 +91,6 @@ export default function DocumentsPage() {
     const totalRows = doc.rows.length
     const filesCount = doc.rows.filter((row) => row.file_metadata).length
     return { totalRows, filesCount }
-  }
-
-  // Si no está listo, mostrar un spinner por máximo 1 segundo
-  if (!isReady) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    )
   }
 
   return (

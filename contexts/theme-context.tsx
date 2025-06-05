@@ -1,7 +1,8 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useEffect, useState } from "react"
+import { updateUserSettings, getGlobalSettings } from "@/lib/database"
 import type { UserSettings } from "@/lib/types"
 import { useAuth } from "./auth-context"
 
@@ -30,6 +31,8 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
+
+const GLOBAL_SETTINGS_ID = "00000000-0000-0000-0000-000000000001"
 
 // Logo SVG por defecto
 const DEFAULT_LOGO =
@@ -106,66 +109,242 @@ function getLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-// Configuración FIJA HARDCODEADA
-const FIXED_SETTINGS: UserSettings = {
-  id: "1",
-  user_id: "global",
-  project_name: "Civet",
-  api_endpoint: "",
-  api_keys: { openai: "", google_vision: "", supabase: "" },
-  theme: "light",
-  color_scheme: "blue",
-  custom_color: "#3b82f6",
-  font_family: "Inter",
-  style_mode: "flat",
-  company_logo: DEFAULT_LOGO,
-  company_logo_type: "svg",
-  updated_at: new Date().toISOString(),
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { userRole } = useAuth()
-  const [settings] = useState<UserSettings>(FIXED_SETTINGS)
+  const { user, userRole } = useAuth()
 
-  // TODOS LOS ESTADOS FIJOS - SIN CAMBIOS
-  const isLoaded = true
-  const isLoadingSettings = false
-  const isSettingsReady = true
-  const isAdmin = userRole === "admin" || userRole === "superadmin"
+  // Configuración por defecto INMEDIATA
+  const [settings, setSettings] = useState<UserSettings>({
+    id: "1",
+    user_id: "global",
+    project_name: "Civet",
+    api_endpoint: "",
+    api_keys: { openai: "", google_vision: "", supabase: "" },
+    theme: "light",
+    color_scheme: "blue",
+    custom_color: "#3b82f6",
+    font_family: "Inter",
+    style_mode: "flat",
+    company_logo: DEFAULT_LOGO,
+    company_logo_type: "svg",
+    updated_at: new Date().toISOString(),
+  })
 
-  // VALORES FIJOS - SIN CAMBIOS
-  const isDark = false
-  const primaryColor = "#3b82f6"
-  const companyLogo = DEFAULT_LOGO
-  const logoType = "svg"
-  const projectName = "Civet"
+  const [isLoaded, setIsLoaded] = useState(true) // SIEMPRE listo
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
+  const [isSettingsReady, setIsSettingsReady] = useState(true) // SIEMPRE listo
 
-  // FUNCIONES QUE NO HACEN NADA - SOLO PARA COMPATIBILIDAD
-  const updateSettings = async () => {
-    console.log("✅ [THEME] Configuración actualizada (simulado)")
-    return Promise.resolve()
+  // Aplicar estilos inmediatamente al cargar
+  useEffect(() => {
+    applyThemeStyles(settings)
+    loadGlobalSettings()
+  }, [])
+
+  const applyThemeStyles = (settings: UserSettings) => {
+    const primaryColor = settings.custom_color || "#3b82f6"
+    console.log("🎨 [THEME] Aplicando estilos con color:", primaryColor)
+
+    const root = document.documentElement
+    root.style.setProperty("--primary-color", primaryColor)
+    root.style.setProperty("--font-family", settings.font_family || "Inter")
+
+    // Aplicar tema
+    if (settings.theme === "dark") {
+      root.classList.add("dark")
+      root.classList.remove("light")
+    } else {
+      root.classList.add("light")
+      root.classList.remove("dark")
+    }
+
+    // Aplicar estilos CSS directamente
+    const style = document.getElementById("dynamic-theme-styles") || document.createElement("style")
+    style.id = "dynamic-theme-styles"
+    style.textContent = `
+      :root {
+        --primary: ${hexToRgb(primaryColor)};
+        --primary-foreground: 210 40% 98%;
+      }
+      
+      .bg-primary {
+        background-color: ${primaryColor} !important;
+      }
+      
+      .text-primary {
+        color: ${primaryColor} !important;
+      }
+      
+      .border-primary {
+        border-color: ${primaryColor} !important;
+      }
+      
+      button[type="submit"],
+      .btn-primary,
+      button.bg-blue-600,
+      button.bg-primary {
+        background-color: ${primaryColor} !important;
+        color: white !important;
+        border-color: ${primaryColor} !important;
+      }
+      
+      button[type="submit"]:hover,
+      .btn-primary:hover,
+      button.bg-blue-600:hover,
+      button.bg-primary:hover {
+        background-color: ${primaryColor}dd !important;
+      }
+    `
+
+    if (!document.head.contains(style)) {
+      document.head.appendChild(style)
+    }
+
+    console.log("✅ [THEME] Estilos aplicados correctamente")
+  }
+
+  const loadGlobalSettings = async () => {
+    try {
+      console.log("🔄 [THEME] Cargando configuración global...")
+      const { data, error } = await getGlobalSettings()
+
+      if (data && !error) {
+        console.log("✅ [THEME] Configuración global cargada:", data)
+        const loadedSettings: UserSettings = {
+          id: data.id || "1",
+          user_id: data.user_id || "global",
+          project_name: data.project_name || "Civet",
+          api_endpoint: data.api_endpoint || "",
+          api_keys: data.api_keys || { openai: "", google_vision: "", supabase: "" },
+          theme: data.theme || "light",
+          color_scheme: data.color_scheme || "blue",
+          custom_color: data.custom_color || "#3b82f6",
+          font_family: data.font_family || "Inter",
+          style_mode: data.style_mode || "flat",
+          company_logo: data.company_logo || DEFAULT_LOGO,
+          company_logo_type: data.company_logo_type || "svg",
+          updated_at: data.updated_at || new Date().toISOString(),
+        }
+
+        setSettings(loadedSettings)
+        applyThemeStyles(loadedSettings)
+      } else {
+        console.log("⚠️ [THEME] No se encontró configuración global, usando defaults")
+      }
+    } catch (error) {
+      console.error("❌ [THEME] Error cargando configuración:", error)
+    }
+  }
+
+  const updateSettings = async (updates: Partial<UserSettings>) => {
+    console.log("🔧 [THEME] Actualizando configuración:", updates)
+
+    try {
+      // Actualizar estado local inmediatamente
+      const updatedSettings = { ...settings, ...updates }
+      setSettings(updatedSettings)
+      applyThemeStyles(updatedSettings)
+
+      // Guardar en BD si es admin
+      const isSuperAdmin = userRole === "superadmin"
+      if (isSuperAdmin && user?.id) {
+        await updateUserSettings(GLOBAL_SETTINGS_ID, updates)
+        console.log("✅ [THEME] Configuración guardada en BD")
+      }
+    } catch (error) {
+      console.error("❌ [THEME] Error actualizando configuración:", error)
+      throw error
+    }
   }
 
   const toggleTheme = async () => {
-    console.log("✅ [THEME] Tema cambiado (simulado)")
+    const newTheme = settings.theme === "light" ? "dark" : "light"
+    await updateSettings({ theme: newTheme })
   }
 
-  const updateLogo = async () => {
-    console.log("✅ [THEME] Logo actualizado (simulado)")
-    return Promise.resolve()
+  const updateLogo = async (file: File): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/svg+xml"]
+      if (!allowedTypes.includes(file.type)) {
+        reject(new Error("Formato de archivo no soportado. Use JPG, PNG o SVG."))
+        return
+      }
+
+      const maxSize = 5 * 1024 * 1024
+      if (file.size > maxSize) {
+        reject(new Error("El archivo es demasiado grande. Máximo 5MB."))
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const result = e.target?.result as string
+        if (result) {
+          let logoType: "jpg" | "png" | "svg"
+          switch (file.type) {
+            case "image/jpeg":
+            case "image/jpg":
+              logoType = "jpg"
+              break
+            case "image/png":
+              logoType = "png"
+              break
+            case "image/svg+xml":
+              logoType = "svg"
+              break
+            default:
+              logoType = "png"
+          }
+
+          try {
+            await updateSettings({
+              company_logo: result,
+              company_logo_type: logoType,
+            })
+            resolve()
+          } catch (error) {
+            reject(error)
+          }
+        } else {
+          reject(new Error("Error al leer el archivo"))
+        }
+      }
+
+      reader.onerror = () => {
+        reject(new Error("Error al leer el archivo"))
+      }
+
+      reader.readAsDataURL(file)
+    })
   }
 
-  const updateProjectName = async () => {
-    console.log("✅ [THEME] Nombre actualizado (simulado)")
+  const updateProjectName = async (name: string) => {
+    const newName = name.trim() || "Civet"
+    await updateSettings({ project_name: newName })
   }
 
   const removeLogo = async () => {
-    console.log("✅ [THEME] Logo eliminado (simulado)")
+    await updateSettings({
+      company_logo: DEFAULT_LOGO,
+      company_logo_type: "svg",
+    })
   }
 
   const reloadSettings = async () => {
-    console.log("✅ [THEME] Configuración recargada (simulado)")
+    setIsLoadingSettings(true)
+    try {
+      await loadGlobalSettings()
+    } catch (error) {
+      console.error("Error recargando configuración:", error)
+    } finally {
+      setIsLoadingSettings(false)
+    }
   }
+
+  const isDark = settings.theme === "dark"
+  const primaryColor = settings.custom_color || "#3b82f6"
+  const companyLogo = settings.company_logo || DEFAULT_LOGO
+  const logoType = settings.company_logo_type || "svg"
+  const projectName = settings.project_name || "Civet"
+  const isAdmin = userRole === "admin" || userRole === "superadmin"
 
   const isLightColor = (color: string): boolean => {
     return getLuminance(color) > 0.5
